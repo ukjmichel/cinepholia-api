@@ -1,0 +1,55 @@
+# Dependency directories
+node_modules/
+npm-debug.log
+yarn-debug.log
+yarn-error.log
+
+# Build output
+# We're not ignoring dist/ since we need to copy it in production
+# dist/
+
+# Environment variables
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+
+# Version control
+.git/
+.gitignore
+.gitattributes
+
+# Docker
+Dockerfile
+docker-compose.yml
+.docker/
+
+# Logs
+logs/
+*.log
+
+# Testing
+coverage/
+.nyc_output/
+jest-report/
+
+# IDE specific files
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Documentation
+README.md
+LICENSE
+docs/
+
+# Temporary files
+tmp/
+temp/
+
+# PM2 specific
+.pm2/
+pm2.log

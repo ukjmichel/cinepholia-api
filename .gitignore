@@ -1,0 +1,30 @@
+# Node.js
+node_modules/
+
+# TypeScript
+dist/
+*.tsbuildinfo
+
+# Log files
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Dependency directories
+bower_components/
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Environment files
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+
+# IDE-specific files
+.vscode/
+.idea/

@@ -1,0 +1,93 @@
+name: Run Node.js Tests
+
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+    branches: [main, master, develop]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ROOT_PASSWORD: cinepholia_root_password
+          MYSQL_DATABASE: cinepholia_db
+          MYSQL_USER: cinepholia_admin
+          MYSQL_PASSWORD: cinepholia_password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+      mongodb:
+        image: mongo:6
+        env:
+          MONGO_INITDB_ROOT_USERNAME: cinepholia_root
+          MONGO_INITDB_ROOT_PASSWORD: cinepholia_root_password
+          MONGO_INITDB_DATABASE: cinepholia_db
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd="echo 'db.runCommand({ ping: 1 })' | mongosh localhost:27017/cinepholia_db -u cinepholia_root -p cinepholia_root_password --authenticationDatabase admin --quiet"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    env:
+      NODE_ENV: test
+      PORT: 3000
+      MYSQL_HOST: 127.0.0.1
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: cinepholia_db
+      MYSQL_USER: cinepholia_admin
+      MYSQL_PASSWORD: cinepholia_password
+      MONGODB_URI: mongodb://cinepholia_root:cinepholia_root_password@localhost:27017/cinepholia_db?authSource=admin
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Use Node.js 20.x
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Wait for MySQL to be ready
+      run: |
+        for i in {1..30}; do
+          if mysqladmin ping -h"127.0.0.1" -ucinepholia_admin -pcinepholia_password --silent; then
+            echo "MySQL is up!";
+            break;
+          fi;
+          echo "Waiting for MySQL... ($i/30)";
+          sleep 2;
+        done
+
+    - name: Wait for MongoDB to be ready
+      run: |
+        for i in {1..30}; do
+          if mongosh "mongodb://cinepholia_root:cinepholia_root_password@localhost:27017/cinepholia_db?authSource=admin" --quiet --eval "db.runCommand({ ping: 1 })" > /dev/null; then
+            echo "MongoDB is up!";
+            break;
+          fi;
+          echo "Waiting for MongoDB... ($i/30)";
+          sleep 2;
+        done
+
+    - name: Build TypeScript (if needed)
+      run: |
+        if [ -f tsconfig.json ]; then
+          npm run build || true
+        fi
+
+    - name: Run Jest tests
+      run: npm test

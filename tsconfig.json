@@ -1,0 +1,42 @@
+{
+  "compilerOptions": {
+    // Set the ECMAScript target version
+    "target": "ES2020",
+
+    // Specify module code generation
+    "module": "commonjs",
+
+    // Use Node's module resolution strategy
+    "moduleResolution": "node",
+
+    // Allow default imports from modules with no default export
+    "esModuleInterop": true,
+
+    // Enable support for decorators (used in frameworks like TypeORM, NestJS, etc.)
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+
+    // Ensure strict type-checking options
+    "strict": true,
+
+    // Skip checking of declaration files
+    "skipLibCheck": true,
+
+    // Disable error on class properties not initialized in the constructor
+    "strictPropertyInitialization": false,
+
+    // Specify the root directory of input files
+    "rootDir": "./src",
+
+    // Redirect output structure to the directory
+    "outDir": "./dist"
+  },
+  "include": [
+    "src/**/*", // Include all TypeScript files in the src directory
+    "src/config/swagger.ts", // Explicitly include this config file
+    "types"
+  ],
+  "exclude": [
+    "node_modules" // Exclude dependencies
+  ]
+}
