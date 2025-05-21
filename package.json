@@ -8,14 +8,15 @@
   "main": "src/server.ts",
   "scripts": {
     "build": "tsc",
-    "start": "pm2 start dist/server.js",
+    "start": "pm2 start dist/server.js && pm2 start dist/scripts/clean-old-bookings-cron.js",
     "deploy": "tsc && pm2 start dist/server.js",
-    "dev": "pm2 start pm2-wrapper.js --watch --name server",
+    "dev": "pm2 start pm2-wrapper.js --watch --name server && npm run clean-data",
     "clean": "pm2 stop all && pm2 delete all",
     "redev": "npm run clean && npm run dev",
     "test": "jest",
     "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage"
+    "test:coverage": "jest --coverage",
+    "clean-data": "pm2 start src/scripts/clean-old-bookings-cron.ts --name clean-old-bookings-cron --interpreter ./node_modules/.bin/ts-node"
   },
   "devDependencies": {
     "@types/bcrypt": "^5.0.2",
@@ -51,6 +52,7 @@
     "mongoose": "^8.14.2",
     "morgan": "^1.10.0",
     "mysql2": "^3.14.0",
+    "node-cron": "^4.0.6",
     "resend": "^4.5.0",
     "sequelize": "^6.37.7",
     "sequelize-typescript": "^2.1.6",
