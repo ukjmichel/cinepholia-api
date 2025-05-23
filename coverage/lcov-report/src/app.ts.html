@@ -23,30 +23,30 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/23</span>
+                <span class='fraction'>23/23</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/7</span>
+                <span class='fraction'>7/7</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>0/1</span>
+                <span class='fraction'>1/1</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/23</span>
+                <span class='fraction'>23/23</span>
             </div>
         
             
@@ -61,7 +61,7 @@
             </div>
         </template>
     </div>
-    <div class='status-line low'></div>
+    <div class='status-line high'></div>
     <pre><table class="coverage">
 <tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
 <a name='L2'></a><a href='#L2'>2</a>
@@ -94,64 +94,64 @@
 <a name='L29'></a><a href='#L29'>29</a>
 <a name='L30'></a><a href='#L30'>30</a>
 <a name='L31'></a><a href='#L31'>31</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">7x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">import express, { Request, Response } from 'express';
-import helmet from 'he<span class="cstat-no" title="statement not covered" >lmet';<span class="fstat-no" title="function not covered" ></span></span>
-impo<span class="cstat-no" title="statement not covered" >rt cors from 'cors';</span>
+import helmet from 'helmet';
+import cors from 'cors';
 import morgan from 'morgan';
-<span class="cstat-no" title="statement not covered" >import { setupSwagger } from './config/swagger.js';</span>
-import { errorHand<span class="cstat-no" title="statement not covered" >ler } from './middlewares/errorHandl</span>er.js';
-<span class="cstat-no" title="statement not covered" ></span>
-import rootRout<span class="cstat-no" title="statement not covered" >er from './routes/root.route.js';</span>
-import testRouter<span class="cstat-no" title="statement not covered" > from './routes/test.route.js';</span>
-import userRouter fro<span class="cstat-no" title="statement not covered" >m './routes/user.route.js';</span>
-<span class="cstat-no" title="statement not covered" ></span>
-const app = express();<span class="cstat-no" title="statement not covered" ></span>
-<span class="cstat-no" title="statement not covered" ></span>
-// ─────── Middleware ──<span class="cstat-no" title="statement not covered" >───────────────────────────────────────</span>
-app.use(expr<span class="cstat-no" title="statement not covered" >ess.json());</span>
+import { setupSwagger } from './config/swagger.js';
+import { errorHandler } from './middlewares/errorHandler.js';
+&nbsp;
+import rootRouter from './routes/root.route.js';
+import testRouter from './routes/test.route.js';
+import userRouter from './routes/user.route.js';
+&nbsp;
+const app = express();
+&nbsp;
+// ─────── Middleware ─────────────────────────────────────────
+app.use(express.json());
 app.use(helmet());
-<span class="cstat-no" title="statement not covered" >app.use(cors());</span>
-<span class="cstat-no" title="statement not covered" >app.use(morgan('dev'));</span>
-<span class="cstat-no" title="statement not covered" ></span>
-<span class="cstat-no" title="statement not covered" >// ─────── Swagger Setup ──────────────</span>────────────────────────
+app.use(cors());
+app.use(morgan('dev'));
+&nbsp;
+// ─────── Swagger Setup ──────────────────────────────────────
 setupSwagger(app);
-<span class="cstat-no" title="statement not covered" ></span>
+&nbsp;
 // ─────── Endpoint ──────────────────────────────
-<span class="cstat-no" title="statement not covered" >app.use('/', rootRouter);</span>
-<span class="cstat-no" title="statement not covered" >app.use('/tests', testRouter);</span>
-<span class="cstat-no" title="statement not covered" >app.use('/users', userRouter);</span>
+app.use('/', rootRouter);
+app.use('/tests', testRouter);
+app.use('/users', userRouter);
 // ─────── Error Handling ──────────────────────────────────────
-<span class="cstat-no" title="statement not covered" >app.use(errorHandler);</span>
-<span class="cstat-no" title="statement not covered" ></span>
+app.use(errorHandler);
+&nbsp;
 export default app;
 &nbsp;</pre></td></tr></table></pre>
 
@@ -160,7 +160,7 @@ export default app;
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-05-22T21:00:39.200Z
+                at 2025-05-23T09:57:25.322Z
             </div>
         <script src="../prettify.js"></script>
         <script>

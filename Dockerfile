@@ -5,8 +5,10 @@ FROM node:24-slim AS build
 
 WORKDIR /usr/src/app
 
-# Install build dependencies
-RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+# Install build dependencies 
+RUN apt-get update \
+  && apt-get install -y curl libcurl4 \
+  && rm -rf /var/lib/apt/lists/*
 
 # Copy package files and TypeScript config
 COPY package*.json ./

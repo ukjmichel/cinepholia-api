@@ -1,13 +1,14 @@
 import { Request, Response, NextFunction } from 'express';
 import { userService } from '../services/user.service.js';
 import { UserAttributes } from '../models/user.model.js';
-
 import { authorizationService } from '../services/authorization.service.js';
 import { BadRequestError } from '../errors/bad-request-error.js';
 import { NotFoundError } from '../errors/not-found-error.js';
 import { UnauthorizedError } from '../errors/unauthorized-error.js';
 import { sequelize } from '../config/db.js';
-import { emailService } from '../services/email.service.js';
+import { EmailService } from '../services/email.service.js';
+
+export const emailService = new EmailService();
 
 export const createUser = async (
   req: Request,
@@ -29,10 +30,7 @@ export const createUser = async (
     );
 
     // Envoi de l'email de bienvenue
-    await emailService.sendWelcomeEmail(
-      'jmichel.uk@outlook.fr',
-      user.firstName
-    );
+    await emailService.sendWelcomeEmail(user.email, user.firstName);
 
     // Commit si tout est OK
     await transaction.commit();

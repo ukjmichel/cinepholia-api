@@ -168,11 +168,11 @@ export class UserService {
 
     if (filters.username) {
       where.username = {
-        [Op.iLike]: `%${filters.username.trim().toLowerCase()}%`,
+        [Op.like]: `%${filters.username.trim().toLowerCase()}%`, // <-- corrigé
       };
     }
     if (filters.email) {
-      where.email = { [Op.iLike]: `%${filters.email.trim().toLowerCase()}%` };
+      where.email = { [Op.like]: `%${filters.email.trim().toLowerCase()}%` }; // <-- corrigé
     }
     if (filters.verified !== undefined) {
       where.verified = filters.verified;

@@ -1,53 +1,28 @@
-// src/__tests__/controllers/user.controller.spec.ts
-
-import request from 'supertest';
-import express, { NextFunction, Request, Response } from 'express';
 import * as userController from '../../controllers/user.controller.js';
 import { userService } from '../../services/user.service.js';
 import { authorizationService } from '../../services/authorization.service.js';
-import { emailService } from '../../services/email.service.js';
+import { emailService } from '../../controllers/user.controller.js';
 import { NotFoundError } from '../../errors/not-found-error.js';
+import { BadRequestError } from '../../errors/bad-request-error.js';
+import { UnauthorizedError } from '../../errors/unauthorized-error.js';
 
-
-// ---- Important: MOCK emailClient to avoid API key issues ----
-jest.mock(
-  '../../config/emailClient',
-  () => ({
-    __esModule: true,
-    default: {
-      emails: { send: jest.fn() },
-    },
-  }),
-  { virtual: true }
-);
-
-// ---- MOCK dependencies ----
 jest.mock('../../services/user.service.js');
 jest.mock('../../services/authorization.service.js');
 jest.mock('../../services/email.service.js');
-jest.mock('../../config/env.js', () => ({
-  config: { sendWelcomeEmail: true },
-}));
 
-// ----- Setup Express app with error handler -----
-const app = express();
-app.use(express.json());
-
-app.post('/users', userController.createUser);
-app.get('/users/:userId', userController.getUserById);
-app.put('/users/:userId', userController.updateUser);
-app.delete('/users/:userId', userController.deleteUser);
-app.get('/users', userController.listUsers);
-app.patch('/users/:userId/password', userController.changePassword);
-app.patch('/users/:userId/verify', userController.verifyUser);
-app.post('/users/validate-password', userController.validatePassword);
-
-app.use((err: any, req: Request, res: Response, next: NextFunction) => {
-  // Express error handler for testing
-  res.status(err.status || 500).json({ message: err.message, data: null });
+const mockRequest = (body = {}, params = {}, query = {}) => ({
+  body,
+  params,
+  query,
 });
+const mockResponse = () => {
+  const res: any = {};
+  res.status = jest.fn().mockReturnValue(res);
+  res.json = jest.fn().mockReturnValue(res);
+  return res;
+};
+const mockNext = jest.fn();
 
-// ----- Common Mocks -----
 const mockUser = {
   userId: '1',
   username: 'test',
@@ -57,216 +32,382 @@ const mockUser = {
   verified: false,
 };
 
-// ----- TESTS -----
-describe('User Controller', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
+beforeEach(() => {
+  jest.clearAllMocks();
+});
+
+describe('userController.createUser', () => {
+  it('should create user, create authorization, send email, and return 201', async () => {
+    (userService.createUser as jest.Mock).mockResolvedValue(mockUser);
+    (authorizationService.createAuthorization as jest.Mock).mockResolvedValue({
+      userId: '1',
+      role: 'utilisateur',
+    });
+    jest.spyOn(emailService, 'sendWelcomeEmail').mockResolvedValue(undefined);
+
+    const req = mockRequest({
+      ...mockUser,
+      password: 'pass',
+      role: 'utilisateur',
+    });
+    const res = mockResponse();
+
+    await userController.createUser(req as any, res as any, mockNext);
+
+    expect(userService.createUser).toHaveBeenCalled();
+    expect(authorizationService.createAuthorization).toHaveBeenCalled();
+    expect(emailService.sendWelcomeEmail).toHaveBeenCalledWith(
+      mockUser.email,
+      mockUser.firstName
+    );
+    expect(res.status).toHaveBeenCalledWith(201);
+    expect(res.json).toHaveBeenCalledWith({
+      message: 'User created successfully',
+      data: mockUser,
+    });
+    expect(mockNext).not.toHaveBeenCalled();
   });
 
-  describe('createUser', () => {
-    it('should create user, authorization, and send email', async () => {
-      (userService.createUser as jest.Mock).mockResolvedValue(mockUser);
-      (authorizationService.createAuthorization as jest.Mock).mockResolvedValue(
-        { userId: '1', role: 'utilisateur' }
-      );
-      (emailService.sendWelcomeEmail as jest.Mock).mockResolvedValue(undefined);
+  it('should call next with error if userService.createUser fails', async () => {
+    (userService.createUser as jest.Mock).mockRejectedValue(
+      new Error('DB error')
+    );
+    const req = mockRequest({ ...mockUser, password: 'pass' });
+    const res = mockResponse();
 
-      const res = await request(app)
-        .post('/users')
-        .send({ ...mockUser, password: 'pass', role: 'utilisateur' });
+    await userController.createUser(req as any, res as any, mockNext);
 
-      expect(res.status).toBe(201);
-      expect(res.body.message).toMatch(/created/i);
-      expect(res.body.data).toMatchObject({ userId: '1', username: 'test' });
-      expect(userService.createUser).toHaveBeenCalled();
-      expect(authorizationService.createAuthorization).toHaveBeenCalled();
-      expect(emailService.sendWelcomeEmail).toHaveBeenCalled();
-    });
-
-    it('should handle error from userService.createUser', async () => {
-      (userService.createUser as jest.Mock).mockRejectedValue(
-        new Error('DB Error')
-      );
-
-      const res = await request(app)
-        .post('/users')
-        .send({ ...mockUser, password: 'pass', role: 'utilisateur' });
-
-      expect(res.status).toBe(500);
-      expect(res.body.message).toMatch(/db error/i);
-    });
-
-    it('should handle error from authorizationService.createAuthorization', async () => {
-      (userService.createUser as jest.Mock).mockResolvedValue(mockUser);
-      (authorizationService.createAuthorization as jest.Mock).mockRejectedValue(
-        new Error('Auth Error')
-      );
-
-      const res = await request(app)
-        .post('/users')
-        .send({ ...mockUser, password: 'pass', role: 'utilisateur' });
-
-      expect(res.status).toBe(500);
-      expect(res.body.message).toMatch(/auth error/i);
-    });
+    expect(mockNext).toHaveBeenCalledWith(expect.any(Error));
+    expect(res.status).not.toHaveBeenCalled();
+    expect(res.json).not.toHaveBeenCalled();
   });
 
-  describe('getUserById', () => {
-    it('should return user', async () => {
-      (userService.getUserById as jest.Mock).mockResolvedValue(mockUser);
-      const res = await request(app).get('/users/1');
-      expect(res.status).toBe(200);
-      expect(res.body.data.userId).toBe('1');
-    });
+  it('should call next with error if authorizationService.createAuthorization fails', async () => {
+    (userService.createUser as jest.Mock).mockResolvedValue(mockUser);
+    (authorizationService.createAuthorization as jest.Mock).mockRejectedValue(
+      new Error('Auth error')
+    );
+    jest.spyOn(emailService, 'sendWelcomeEmail').mockResolvedValue(undefined);
 
-    it('should return 404 if not found', async () => {
-      (userService.getUserById as jest.Mock).mockResolvedValue(null);
-      const res = await request(app).get('/users/999');
-      expect(res.status).toBe(404);
-      expect(res.body.message).toMatch(/not found/i);
+    const req = mockRequest({
+      ...mockUser,
+      password: 'pass',
+      role: 'utilisateur',
     });
+    const res = mockResponse();
+
+    await userController.createUser(req as any, res as any, mockNext);
+
+    expect(mockNext).toHaveBeenCalledWith(expect.any(Error));
+    expect(res.status).not.toHaveBeenCalled();
+    expect(res.json).not.toHaveBeenCalled();
+  });
+});
+
+describe('userController.getUserById', () => {
+  it('should return user and 200', async () => {
+    (userService.getUserById as jest.Mock).mockResolvedValue(mockUser);
+    const req = mockRequest({}, { userId: '1' });
+    const res = mockResponse();
+
+    await userController.getUserById(req as any, res as any, mockNext);
+
+    expect(userService.getUserById).toHaveBeenCalledWith('1');
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({
+      message: 'User found successfully',
+      data: mockUser,
+    });
+    expect(mockNext).not.toHaveBeenCalled();
   });
 
-  describe('updateUser', () => {
-    it('should update and return user', async () => {
-      (userService.updateUser as jest.Mock).mockResolvedValue({
-        ...mockUser,
-        firstName: 'Changed',
-      });
-      const res = await request(app)
-        .put('/users/1')
-        .send({ firstName: 'Changed' });
-      expect(res.status).toBe(200);
-      expect(res.body.data.firstName).toBe('Changed');
-    });
+  it('should call next with NotFoundError if user not found', async () => {
+    (userService.getUserById as jest.Mock).mockResolvedValue(null);
+    const req = mockRequest({}, { userId: '999' });
+    const res = mockResponse();
 
-    it('should handle error from userService.updateUser', async () => {
-      (userService.updateUser as jest.Mock).mockRejectedValue(
-        new NotFoundError('User not found')
-      );
-      const res = await request(app)
-        .put('/users/999')
-        .send({ firstName: 'New' });
-      expect(res.status).toBe(404);
-      expect(res.body.message).toMatch(/not found/i);
+    await userController.getUserById(req as any, res as any, mockNext);
+
+    expect(mockNext).toHaveBeenCalledWith(expect.any(NotFoundError));
+    expect(res.status).not.toHaveBeenCalled();
+    expect(res.json).not.toHaveBeenCalled();
+  });
+});
+
+describe('userController.updateUser', () => {
+  it('should update and return user', async () => {
+    (userService.updateUser as jest.Mock).mockResolvedValue({
+      ...mockUser,
+      firstName: 'Changed',
     });
+    const req = mockRequest({ firstName: 'Changed' }, { userId: '1' });
+    const res = mockResponse();
+
+    await userController.updateUser(req as any, res as any, mockNext);
+
+    expect(userService.updateUser).toHaveBeenCalledWith('1', {
+      firstName: 'Changed',
+    });
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({
+      message: 'User updated successfully',
+      data: { ...mockUser, firstName: 'Changed' },
+    });
+    expect(mockNext).not.toHaveBeenCalled();
   });
 
-  describe('deleteUser', () => {
-    it('should delete user', async () => {
-      (userService.deleteUser as jest.Mock).mockResolvedValue(true);
-      const res = await request(app).delete('/users/1');
-      expect(res.status).toBe(200);
-      expect(res.body.message).toMatch(/deleted/i);
-    });
+  it('should call next if update fails', async () => {
+    (userService.updateUser as jest.Mock).mockRejectedValue(
+      new NotFoundError('User not found')
+    );
+    const req = mockRequest({ firstName: 'Changed' }, { userId: '2' });
+    const res = mockResponse();
 
-    it('should return 404 if not found', async () => {
-      (userService.deleteUser as jest.Mock).mockResolvedValue(false);
-      const res = await request(app).delete('/users/2');
-      expect(res.status).toBe(404);
-      expect(res.body.message).toMatch(/not found/i);
+    await userController.updateUser(req as any, res as any, mockNext);
+
+    expect(mockNext).toHaveBeenCalledWith(expect.any(NotFoundError));
+    expect(res.status).not.toHaveBeenCalled();
+    expect(res.json).not.toHaveBeenCalled();
+  });
+});
+
+describe('userController.changePassword', () => {
+  it('should change password and return 200', async () => {
+    (userService.changePassword as jest.Mock).mockResolvedValue(mockUser);
+    const req = mockRequest({ newPassword: 'newpass' }, { userId: '1' });
+    const res = mockResponse();
+
+    await userController.changePassword(req as any, res as any, mockNext);
+
+    expect(userService.changePassword).toHaveBeenCalledWith('1', 'newpass');
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({
+      message: 'Password changed successfully',
+      data: mockUser,
     });
+    expect(mockNext).not.toHaveBeenCalled();
   });
 
-  describe('listUsers', () => {
-    it('should list users', async () => {
-      (userService.listUsers as jest.Mock).mockResolvedValue({
+  it('should call next with BadRequestError if no password', async () => {
+    const req = mockRequest({}, { userId: '1' });
+    const res = mockResponse();
+
+    await userController.changePassword(req as any, res as any, mockNext);
+
+    expect(mockNext).toHaveBeenCalledWith(expect.any(BadRequestError));
+    expect(userService.changePassword).not.toHaveBeenCalled();
+    expect(res.status).not.toHaveBeenCalled();
+  });
+
+  it('should call next if changePassword fails', async () => {
+    (userService.changePassword as jest.Mock).mockRejectedValue(
+      new Error('Fail')
+    );
+    const req = mockRequest({ newPassword: 'x' }, { userId: '1' });
+    const res = mockResponse();
+
+    await userController.changePassword(req as any, res as any, mockNext);
+
+    expect(mockNext).toHaveBeenCalledWith(expect.any(Error));
+    expect(res.status).not.toHaveBeenCalled();
+  });
+});
+
+describe('userController.verifyUser', () => {
+  it('should verify and return user', async () => {
+    (userService.verifyUser as jest.Mock).mockResolvedValue({
+      ...mockUser,
+      verified: true,
+    });
+    const req = mockRequest({}, { userId: '1' });
+    const res = mockResponse();
+
+    await userController.verifyUser(req as any, res as any, mockNext);
+
+    expect(userService.verifyUser).toHaveBeenCalledWith('1');
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({
+      message: 'User verified',
+      data: { ...mockUser, verified: true },
+    });
+    expect(mockNext).not.toHaveBeenCalled();
+  });
+
+  it('should call next if verifyUser fails', async () => {
+    (userService.verifyUser as jest.Mock).mockRejectedValue(
+      new NotFoundError('User not found')
+    );
+    const req = mockRequest({}, { userId: '2' });
+    const res = mockResponse();
+
+    await userController.verifyUser(req as any, res as any, mockNext);
+
+    expect(mockNext).toHaveBeenCalledWith(expect.any(NotFoundError));
+    expect(res.status).not.toHaveBeenCalled();
+  });
+});
+
+describe('userController.deleteUser', () => {
+  it('should delete user and return 200', async () => {
+    (userService.deleteUser as jest.Mock).mockResolvedValue(true);
+    const req = mockRequest({}, { userId: '1' });
+    const res = mockResponse();
+
+    await userController.deleteUser(req as any, res as any, mockNext);
+
+    expect(userService.deleteUser).toHaveBeenCalledWith('1');
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({
+      message: 'User deleted',
+      data: null,
+    });
+    expect(mockNext).not.toHaveBeenCalled();
+  });
+
+  it('should call next with NotFoundError if user not found', async () => {
+    (userService.deleteUser as jest.Mock).mockResolvedValue(false);
+    const req = mockRequest({}, { userId: '2' });
+    const res = mockResponse();
+
+    await userController.deleteUser(req as any, res as any, mockNext);
+
+    expect(mockNext).toHaveBeenCalledWith(expect.any(NotFoundError));
+    expect(res.status).not.toHaveBeenCalled();
+  });
+
+  it('should call next if deleteUser fails', async () => {
+    (userService.deleteUser as jest.Mock).mockRejectedValue(new Error('Fail'));
+    const req = mockRequest({}, { userId: '3' });
+    const res = mockResponse();
+
+    await userController.deleteUser(req as any, res as any, mockNext);
+
+    expect(mockNext).toHaveBeenCalledWith(expect.any(Error));
+    expect(res.status).not.toHaveBeenCalled();
+  });
+});
+
+describe('userController.listUsers', () => {
+  it('should list users and return 200', async () => {
+    (userService.listUsers as jest.Mock).mockResolvedValue({
+      users: [mockUser],
+      total: 1,
+      page: 1,
+      pageSize: 10,
+    });
+    const req = mockRequest({}, {}, {});
+    const res = mockResponse();
+
+    await userController.listUsers(req as any, res as any, mockNext);
+
+    expect(userService.listUsers).toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({
+      message: 'Users found successfully',
+      data: {
         users: [mockUser],
         total: 1,
         page: 1,
         pageSize: 10,
-      });
-      const res = await request(app).get('/users');
-      expect(res.status).toBe(200);
-      expect(res.body.data.users.length).toBe(1);
-      expect(res.body.data.total).toBe(1);
+      },
     });
+    expect(mockNext).not.toHaveBeenCalled();
+  });
 
-    it('should handle filters', async () => {
-      (userService.listUsers as jest.Mock).mockResolvedValue({
+  it('should handle filters', async () => {
+    (userService.listUsers as jest.Mock).mockResolvedValue({
+      users: [],
+      total: 0,
+      page: 1,
+      pageSize: 10,
+    });
+    const req = mockRequest({}, {}, { username: 'noone', verified: 'false' });
+    const res = mockResponse();
+
+    await userController.listUsers(req as any, res as any, mockNext);
+
+    expect(userService.listUsers).toHaveBeenCalledWith({
+      page: undefined,
+      pageSize: undefined,
+      filters: {
+        username: 'noone',
+        email: undefined,
+        verified: false,
+      },
+    });
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({
+      message: 'Users found successfully',
+      data: {
         users: [],
         total: 0,
         page: 1,
         pageSize: 10,
-      });
-      const res = await request(app).get(
-        '/users?username=noone&verified=false'
-      );
-      expect(res.status).toBe(200);
-      expect(res.body.data.users.length).toBe(0);
-      expect(userService.listUsers).toHaveBeenCalledWith({
-        page: undefined,
-        pageSize: undefined,
-        filters: {
-          username: 'noone',
-          email: undefined,
-          verified: false,
-        },
-      });
+      },
     });
   });
 
-  describe('changePassword', () => {
-    it('should change password', async () => {
-      (userService.changePassword as jest.Mock).mockResolvedValue(mockUser);
-      const res = await request(app)
-        .patch('/users/1/password')
-        .send({ newPassword: 'newPass' });
-      expect(res.status).toBe(200);
-      expect(res.body.message).toMatch(/changed/i);
-    });
+  it('should call next if listUsers fails', async () => {
+    (userService.listUsers as jest.Mock).mockRejectedValue(new Error('Fail'));
+    const req = mockRequest({}, {}, {});
+    const res = mockResponse();
 
-    it('should fail if missing password', async () => {
-      const res = await request(app).patch('/users/1/password').send({});
-      expect(res.status).toBe(400);
-      expect(res.body.message).toMatch(/required/i);
+    await userController.listUsers(req as any, res as any, mockNext);
+
+    expect(mockNext).toHaveBeenCalledWith(expect.any(Error));
+    expect(res.status).not.toHaveBeenCalled();
+  });
+});
+
+describe('userController.validatePassword', () => {
+  it('should validate and return user', async () => {
+    (userService.validatePassword as jest.Mock).mockResolvedValue(mockUser);
+    const req = mockRequest({ emailOrUsername: 'test', password: 'pass' }, {});
+    const res = mockResponse();
+
+    await userController.validatePassword(req as any, res as any, mockNext);
+
+    expect(userService.validatePassword).toHaveBeenCalledWith('test', 'pass');
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({
+      message: 'User validated successfully',
+      data: mockUser,
     });
+    expect(mockNext).not.toHaveBeenCalled();
   });
 
-  describe('verifyUser', () => {
-    it('should verify user', async () => {
-      (userService.verifyUser as jest.Mock).mockResolvedValue({
-        ...mockUser,
-        verified: true,
-      });
-      const res = await request(app).patch('/users/1/verify');
-      expect(res.status).toBe(200);
-      expect(res.body.data.verified).toBe(true);
-    });
+  it('should call next with UnauthorizedError if credentials invalid', async () => {
+    (userService.validatePassword as jest.Mock).mockResolvedValue(null);
+    const req = mockRequest({ emailOrUsername: 'wrong', password: 'fail' }, {});
+    const res = mockResponse();
 
-    it('should handle error from userService.verifyUser', async () => {
-      (userService.verifyUser as jest.Mock).mockRejectedValue(
-        new NotFoundError('User not found')
-      );
-      const res = await request(app).patch('/users/999/verify');
-      expect(res.status).toBe(404);
-      expect(res.body.message).toMatch(/not found/i);
-    });
+    await userController.validatePassword(req as any, res as any, mockNext);
+
+    expect(mockNext).toHaveBeenCalledWith(expect.any(UnauthorizedError));
+    expect(res.status).not.toHaveBeenCalled();
   });
 
-  describe('validatePassword', () => {
-    it('should validate and return user', async () => {
-      (userService.validatePassword as jest.Mock).mockResolvedValue(mockUser);
-      const res = await request(app)
-        .post('/users/validate-password')
-        .send({ emailOrUsername: 'test', password: 'pass' });
-      expect(res.status).toBe(200);
-      expect(res.body.data.userId).toBe('1');
-    });
+  it('should call next with BadRequestError if missing params', async () => {
+    const req = mockRequest({}, {});
+    const res = mockResponse();
 
-    it('should return 401 on invalid credentials', async () => {
-      (userService.validatePassword as jest.Mock).mockResolvedValue(null);
-      const res = await request(app)
-        .post('/users/validate-password')
-        .send({ emailOrUsername: 'test', password: 'bad' });
-      expect(res.status).toBe(401);
-      expect(res.body.message).toMatch(/invalid/i);
-    });
+    await userController.validatePassword(req as any, res as any, mockNext);
 
-    it('should return 400 if missing params', async () => {
-      const res = await request(app).post('/users/validate-password').send({});
-      expect(res.status).toBe(400);
-      expect(res.body.message).toMatch(/required/i);
-    });
+    expect(mockNext).toHaveBeenCalledWith(expect.any(BadRequestError));
+    expect(userService.validatePassword).not.toHaveBeenCalled();
+    expect(res.status).not.toHaveBeenCalled();
+  });
+
+  it('should call next if validatePassword throws', async () => {
+    (userService.validatePassword as jest.Mock).mockRejectedValue(
+      new Error('Unexpected')
+    );
+    const req = mockRequest({ emailOrUsername: 'test', password: 'pass' }, {});
+    const res = mockResponse();
+
+    await userController.validatePassword(req as any, res as any, mockNext);
+
+    expect(mockNext).toHaveBeenCalledWith(expect.any(Error));
+    expect(res.status).not.toHaveBeenCalled();
   });
 });

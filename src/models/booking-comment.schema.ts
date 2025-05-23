@@ -1,18 +1,19 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
-export interface CommentDocument extends Document {
+export interface Comment {
   bookingId: string;
   comment: string;
   rating: number;
   status: 'pending' | 'confirmed';
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt?: Date;
+  updatedAt?: Date;
 }
+
 
 const uuidRegex =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-const BookingCommentSchema = new Schema<CommentDocument>(
+const BookingCommentSchema = new Schema<Comment>(
   {
     bookingId: {
       type: String,
@@ -60,7 +61,7 @@ const BookingCommentSchema = new Schema<CommentDocument>(
 // Ensure one comment per booking
 BookingCommentSchema.index({ bookingId: 1 }, { unique: true });
 
-export const BookingCommentModel = mongoose.model<CommentDocument>(
+export const BookingCommentModel = mongoose.model<Comment>(
   'Comment',
   BookingCommentSchema
 );

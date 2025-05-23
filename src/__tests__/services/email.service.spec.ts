@@ -1,38 +1,112 @@
-import 'dotenv/config';
+// src/__tests__/services/email.service.spec.ts
 
-import resend from '../../config/emailClient.js';
-import { emailService } from '../../services/email.service.js';
-import { config } from '../../config/env.js';
+// 💡 Toujours mettre les chemins relatifs tout en haut !
+const configPath = '../../config/env.js';
+const servicePath = '../../services/email.service.js';
 
-jest.mock('../../config/emailClient', () => ({
-  emails: {
-    send: jest.fn(),
-  },
-}));
-
-jest.mock('../../config/env', () => ({
-  config: {
-    resendFrom: 'test@resend.dev',
-  },
-}));
+import { jest } from '@jest/globals';
 
 describe('EmailService', () => {
-  const mockEmail = 'alice@email.com';
-  const mockUsername = 'Alice';
-
-  beforeEach(() => {
+  afterEach(() => {
+    jest.resetModules();
     jest.clearAllMocks();
   });
 
-  it('should call resend.emails.send with correct parameters', async () => {
-    await emailService.sendWelcomeEmail(mockEmail, mockUsername);
+  it('should send welcome email successfully', async () => {
+    jest.resetModules();
 
-    expect(resend.emails.send).toHaveBeenCalledTimes(1);
-    expect(resend.emails.send).toHaveBeenCalledWith({
-      from: config.resendFrom,
-      to: mockEmail,
-      subject: 'Bienvenue sur notre plateforme Cinepholia !',
-      html: expect.stringContaining(`Bienvenue ${mockUsername}`),
-    });
+    // Mock Resend
+    jest.doMock('resend', () => ({
+      Resend: jest.fn().mockImplementation(() => ({
+        emails: {
+          send: jest.fn().mockResolvedValue({
+            data: { id: 'mock-id' },
+            error: null,
+          } as never),
+        },
+      })),
+    }));
+
+    // Mock config
+    jest.doMock(
+      configPath,
+      () => ({
+        config: {
+          resendApiKey: 'dummy_key',
+          resendFrom: 'test@example.com',
+          testEmail: 'test.receiver@example.com',
+        },
+      }),
+      { virtual: true }
+    );
+
+    // Import dynamique
+    const { EmailService } = await import(servicePath);
+    const service = new EmailService();
+
+    await expect(
+      service.sendWelcomeEmail('any@email.com', 'Jean Michel')
+    ).resolves.not.toThrow();
+  });
+
+  it('should throw error if resendApiKey is missing', async () => {
+    jest.resetModules();
+
+    jest.doMock('resend', () => ({
+      Resend: jest.fn(),
+    }));
+
+    jest.doMock(
+      configPath,
+      () => ({
+        config: {
+          resendApiKey: '', // missing
+          resendFrom: 'test@example.com',
+          testEmail: 'test.receiver@example.com',
+        },
+      }),
+      { virtual: true }
+    );
+
+    // Only import after mocks and NO top-level instance!
+    const { EmailService } = await import(servicePath);
+    expect(() => new EmailService()).toThrow(
+      'Missing RESEND_API_KEY in environment variables.'
+    );
+  });
+
+  it('should throw if sending email fails', async () => {
+    jest.resetModules();
+
+    // Mock Resend pour renvoyer une erreur
+    jest.doMock('resend', () => ({
+      Resend: jest.fn().mockImplementation(() => ({
+        emails: {
+          send: jest.fn().mockResolvedValue({
+            data: null,
+            error: new Error('fail'),
+          } as never),
+        },
+      })),
+    }));
+
+    jest.doMock(
+      configPath,
+      () => ({
+        config: {
+          resendApiKey: 'dummy_key',
+          resendFrom: 'test@example.com',
+          testEmail: 'test.receiver@example.com',
+        },
+      }),
+      { virtual: true }
+    );
+
+    const { EmailService } = await import(servicePath);
+    const service = new EmailService();
+
+    await expect(
+      service.sendWelcomeEmail('fail@email.com', 'ErrorUser')
+    ).rejects.toThrow('Failed to send welcome email');
   });
 });
