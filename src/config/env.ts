@@ -29,12 +29,25 @@ export const config = {
     : requireEnv('MYSQL_PASSWORD'),
 
   // ─── MongoDB Configuration ───────────────────
-  mongoInitDbDatabase: requireEnv('MONGO_INITDB_DATABASE'),
-  mongoPort: Number(process.env.MONGO_PORT) || 27017,
-  hostMongoPort: Number(process.env.HOST_MONGO_PORT) || 27017,
-  mongoInitDbRootUsername: requireEnv('MONGO_INITDB_ROOT_USERNAME'),
-  mongoInitDbRootPassword: requireEnv('MONGO_INITDB_ROOT_PASSWORD'),
-  mongodbUri: requireEnv('MONGODB_URI'),
+  mongoInitDbDatabase: isTest
+    ? requireEnv('TEST_MONGO_INITDB_DATABASE')
+    : requireEnv('MONGO_INITDB_DATABASE'),
+  mongoPort:
+    Number(isTest ? process.env.TEST_MONGO_PORT : process.env.MONGO_PORT) ||
+    27017,
+  hostMongoPort:
+    Number(
+      isTest ? process.env.TEST_HOST_MONGO_PORT : process.env.HOST_MONGO_PORT
+    ) || 27017,
+  mongoInitDbRootUsername: isTest
+    ? requireEnv('TEST_MONGO_INITDB_ROOT_USERNAME')
+    : requireEnv('MONGO_INITDB_ROOT_USERNAME'),
+  mongoInitDbRootPassword: isTest
+    ? requireEnv('TEST_MONGO_INITDB_ROOT_PASSWORD')
+    : requireEnv('MONGO_INITDB_ROOT_PASSWORD'),
+  mongodbUri: isTest
+    ? requireEnv('TEST_MONGODB_URI')
+    : requireEnv('MONGODB_URI'),
 
   // ─── Mongo Express Configuration ─────────────
   mongoExpressPort:
@@ -51,8 +64,29 @@ export const config = {
     ) || 8081,
 
   // ─── Resend email configuration ──────────────
-  resendApiKey: requireEnv('RESEND_API_KEY'),
-  resendFrom: process.env.RESEND_FROM || 'no-reply@yourdomain.com',
-  sendWelcomeEmail: envToBool(process.env.SEND_WELCOME_EMAIL, false),
+  resendApiKey: isTest
+    ? requireEnv('TEST_RESEND_API_KEY')
+    : requireEnv('RESEND_API_KEY'),
+  resendFrom: isTest
+    ? process.env.TEST_RESEND_FROM || 'no-reply@yourdomain.com'
+    : process.env.RESEND_FROM || 'no-reply@yourdomain.com',
+  sendWelcomeEmail: envToBool(
+    isTest
+      ? process.env.TEST_SEND_WELCOME_EMAIL
+      : process.env.SEND_WELCOME_EMAIL,
+    false
+  ),
   testEmail: process.env.TEST_EMAIL,
+
+  // ─── JWT Auth Configuration ──────────────────
+  jwtSecret: isTest ? requireEnv('TEST_JWT_SECRET') : requireEnv('JWT_SECRET'),
+  jwtRefreshSecret: isTest
+    ? requireEnv('TEST_JWT_REFRESH_SECRET')
+    : requireEnv('JWT_REFRESH_SECRET'),
+  jwtExpiresIn: isTest
+    ? requireEnv('TEST_JWT_EXPIRES_IN')
+    : requireEnv('JWT_EXPIRES_IN'),
+  jwtRefreshExpiresIn: isTest
+    ? requireEnv('TEST_JWT_REFRESH_EXPIRES_IN')
+    : requireEnv('JWT_REFRESH_EXPIRES_IN'),
 };

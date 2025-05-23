@@ -18,7 +18,6 @@ export class AuthorizationService {
     data: AuthorizationAttributes,
     options?: ServiceOptions
   ): Promise<AuthorizationModel> {
-    // Vérifier s'il existe déjà une autorisation pour cet utilisateur
     const existing = await AuthorizationModel.findOne({
       where: { userId: data.userId },
       transaction: options?.transaction,
@@ -27,7 +26,6 @@ export class AuthorizationService {
       throw new ConflictError('Authorization already exists for this user');
     }
 
-    // Vérifier que l'utilisateur existe
     const user = await UserModel.findByPk(data.userId, {
       transaction: options?.transaction,
     });
@@ -35,7 +33,6 @@ export class AuthorizationService {
       throw new NotFoundError('User not found');
     }
 
-    // Créer l'autorisation dans la transaction
     return AuthorizationModel.create(
       {
         userId: data.userId,
@@ -46,10 +43,14 @@ export class AuthorizationService {
   }
 
   // Get authorization by user ID
-  async getAuthorizationByUserId(userId: string): Promise<AuthorizationModel> {
+  async getAuthorizationByUserId(
+    userId: string,
+    options?: ServiceOptions
+  ): Promise<AuthorizationModel> {
     const auth = await AuthorizationModel.findOne({
       where: { userId },
       include: [UserModel],
+      transaction: options?.transaction,
     });
     if (!auth) {
       throw new NotFoundError('Authorization not found for this user');
@@ -60,31 +61,58 @@ export class AuthorizationService {
   // Update authorization role
   async updateAuthorizationRole(
     userId: string,
-    role: Role
+    role: Role,
+    options?: ServiceOptions
   ): Promise<AuthorizationModel> {
-    const auth = await AuthorizationModel.findOne({ where: { userId } });
+    const auth = await AuthorizationModel.findOne({
+      where: { userId },
+      transaction: options?.transaction,
+    });
     if (!auth) {
       throw new NotFoundError('Authorization not found for this user');
     }
     auth.role = role;
-    await auth.save();
+    await auth.save({ transaction: options?.transaction });
     return auth;
   }
 
   // Delete authorization for a user
-  async deleteAuthorization(userId: string): Promise<void> {
-    const deleted = await AuthorizationModel.destroy({ where: { userId } });
+  async deleteAuthorization(
+    userId: string,
+    options?: ServiceOptions
+  ): Promise<void> {
+    const deleted = await AuthorizationModel.destroy({
+      where: { userId },
+      transaction: options?.transaction,
+    });
     if (!deleted) {
       throw new NotFoundError('Authorization not found for this user');
     }
   }
 
-  // List all authorizations, optionally filtered by role
-  async listAuthorizations(role?: Role): Promise<AuthorizationModel[]> {
+  // List all authorizations, optionally filtered by role and paginated
+  async listAuthorizations(
+    role?: Role,
+    page: number = 1,
+    pageSize: number = 10
+  ): Promise<{
+    authorizations: AuthorizationModel[];
+    total: number;
+    page: number;
+    pageSize: number;
+  }> {
     const where = role ? { role } : undefined;
-    return AuthorizationModel.findAll({ where, include: [UserModel] });
+    const offset = (page - 1) * pageSize;
+    const { rows: authorizations, count: total } =
+      await AuthorizationModel.findAndCountAll({
+        where,
+        include: [UserModel],
+        offset,
+        limit: pageSize,
+        order: [['createdAt', 'DESC']],
+      });
+    return { authorizations, total, page, pageSize };
   }
 }
 
-// Singleton export
-export const authorizationService = new AuthorizationService();
+

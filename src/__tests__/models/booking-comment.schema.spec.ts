@@ -1,6 +1,9 @@
 import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
-import { BookingCommentModel } from '../../models/booking-comment.schema';
+import {
+  BookingCommentModel,
+  Comment,
+} from '../../models/booking-comment.schema';
 
 let mongoServer: MongoMemoryServer;
 
@@ -20,19 +23,21 @@ afterEach(async () => {
 
 describe('BookingCommentModel', () => {
   it('should create a comment with valid data', async () => {
-    const doc = await BookingCommentModel.create({
+    const input: Omit<Comment, 'createdAt' | 'updatedAt'> = {
       bookingId: 'e27163b0-08d7-47d0-bb62-b48d312c919f',
       comment: 'Great!',
       rating: 5,
       status: 'confirmed',
-    });
+    };
+    const doc = await BookingCommentModel.create(input);
 
-    expect(doc.bookingId).toBe('e27163b0-08d7-47d0-bb62-b48d312c919f');
-    expect(doc.comment).toBe('Great!');
-    expect(doc.rating).toBe(5);
-    expect(doc.status).toBe('confirmed');
+    expect(doc.bookingId).toBe(input.bookingId);
+    expect(doc.comment).toBe(input.comment);
+    expect(doc.rating).toBe(input.rating);
+    expect(doc.status).toBe(input.status);
     expect(doc.createdAt).toBeInstanceOf(Date);
     expect(doc.updatedAt).toBeInstanceOf(Date);
+
     // toJSON
     const json = doc.toJSON() as any;
     expect(json.id).toBeDefined();

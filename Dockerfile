@@ -7,7 +7,7 @@ WORKDIR /usr/src/app
 
 # Install build dependencies 
 RUN apt-get update \
-  && apt-get install -y curl libcurl4 \
+  && apt-get install -y libcurl4 \
   && rm -rf /var/lib/apt/lists/*
 
 # Copy package files and TypeScript config

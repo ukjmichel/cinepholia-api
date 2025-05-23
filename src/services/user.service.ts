@@ -37,7 +37,7 @@ export class UserService {
   // Create a new user
   async createUser(
     data: UserCreationAttributes,
-    options?: ServiceOptions
+    options?: ServiceOptions // <- added
   ): Promise<UserModel> {
     const existingUser = await UserModel.findOne({
       where: {
@@ -46,7 +46,7 @@ export class UserService {
           { username: data.username.toLowerCase() },
         ],
       },
-      transaction: options?.transaction, // passer la transaction ici aussi
+      transaction: options?.transaction, // <- pass transaction
     });
 
     if (existingUser) {
@@ -56,7 +56,7 @@ export class UserService {
     }
 
     const user = await UserModel.create(data, {
-      transaction: options?.transaction,
+      transaction: options?.transaction, // <- pass transaction
     });
 
     return user;
@@ -84,9 +84,12 @@ export class UserService {
   // Update user info (not password)
   async updateUser(
     userId: string,
-    updates: Partial<UserAttributes>
+    updates: Partial<UserAttributes>,
+    options?: ServiceOptions // <- added
   ): Promise<UserModel> {
-    const user = await UserModel.findByPk(userId);
+    const user = await UserModel.findByPk(userId, {
+      transaction: options?.transaction, // <- pass transaction
+    });
     if (!user) {
       throw new NotFoundError('User not found');
     }
@@ -106,6 +109,7 @@ export class UserService {
           [Op.or]: orConditions,
           userId: { [Op.ne]: userId }, // exclude self
         },
+        transaction: options?.transaction, // <- pass transaction
       });
       if (conflictUser) {
         throw new ConflictError(
@@ -114,42 +118,58 @@ export class UserService {
       }
     }
 
-    await user.update(updates);
+    await user.update(updates, { transaction: options?.transaction }); // <- pass transaction
     return user;
   }
 
   // Change password (with hash automatically handled by model hook)
   async changePassword(
     userId: string,
-    newPassword: string
+    newPassword: string,
+    options?: ServiceOptions // <- added
   ): Promise<UserModel> {
-    const user = await UserModel.findByPk(userId);
+    const user = await UserModel.findByPk(userId, {
+      transaction: options?.transaction, // <- pass transaction
+    });
     if (!user) {
       throw new NotFoundError('User not found');
     }
     user.password = newPassword;
-    await user.save();
+    await user.save({ transaction: options?.transaction }); // <- pass transaction
     return user;
   }
 
   // Verify user (set verified: true)
-  async verifyUser(userId: string): Promise<UserModel> {
-    const user = await UserModel.findByPk(userId);
+  async verifyUser(
+    userId: string,
+    options?: ServiceOptions // <- added
+  ): Promise<UserModel> {
+    const user = await UserModel.findByPk(userId, {
+      transaction: options?.transaction, // <- pass transaction
+    });
     if (!user) {
       throw new NotFoundError('User not found');
     }
     user.verified = true;
-    await user.save();
+    await user.save({ transaction: options?.transaction }); // <- pass transaction
     return user;
   }
 
   // Delete user
-  async deleteUser(userId: string): Promise<boolean> {
-    const user = await UserModel.findByPk(userId);
+  async deleteUser(
+    userId: string,
+    options?: ServiceOptions // <- added
+  ): Promise<boolean> {
+    const user = await UserModel.findByPk(userId, {
+      transaction: options?.transaction, // <- pass transaction
+    });
     if (!user) {
       throw new NotFoundError('User not found');
     }
-    const deleted = await UserModel.destroy({ where: { userId } });
+    const deleted = await UserModel.destroy({
+      where: { userId },
+      transaction: options?.transaction, // <- pass transaction
+    });
     return deleted > 0;
   }
 
@@ -160,19 +180,22 @@ export class UserService {
     filters = {},
   }: ListUsersOptions = {}): Promise<ListUsersResult> {
     // Always ensure positive integers for page and pageSize
+    const MAX_PAGE_SIZE = 100;
     const _page = Number.isInteger(page) && page > 0 ? page : 1;
     const _pageSize =
-      Number.isInteger(pageSize) && pageSize > 0 ? pageSize : 10;
+      Number.isInteger(pageSize) && pageSize > 0
+        ? Math.min(pageSize, MAX_PAGE_SIZE)
+        : 10;
 
     const where: WhereOptions<UserAttributes> = {};
 
     if (filters.username) {
       where.username = {
-        [Op.like]: `%${filters.username.trim().toLowerCase()}%`, // <-- corrigé
+        [Op.like]: `%${filters.username.trim().toLowerCase()}%`,
       };
     }
     if (filters.email) {
-      where.email = { [Op.like]: `%${filters.email.trim().toLowerCase()}%` }; // <-- corrigé
+      where.email = { [Op.like]: `%${filters.email.trim().toLowerCase()}%` };
     }
     if (filters.verified !== undefined) {
       where.verified = filters.verified;

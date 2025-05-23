@@ -1,14 +1,27 @@
 import * as userController from '../../controllers/user.controller.js';
 import { userService } from '../../services/user.service.js';
-import { authorizationService } from '../../services/authorization.service.js';
-import { emailService } from '../../controllers/user.controller.js';
+import { config } from '../../config/env.js';
+import { sequelize } from '../../config/db.js';
+
 import { NotFoundError } from '../../errors/not-found-error.js';
 import { BadRequestError } from '../../errors/bad-request-error.js';
 import { UnauthorizedError } from '../../errors/unauthorized-error.js';
 
+// Mock all external services
 jest.mock('../../services/user.service.js');
 jest.mock('../../services/authorization.service.js');
 jest.mock('../../services/email.service.js');
+
+// Mock Sequelize transaction to avoid "Transaction finished" errors
+beforeAll(() => {
+  jest.spyOn(sequelize, 'transaction').mockImplementation(
+    async () =>
+      ({
+        commit: jest.fn().mockResolvedValue(undefined),
+        rollback: jest.fn().mockResolvedValue(undefined),
+      }) as any
+  );
+});
 
 const mockRequest = (body = {}, params = {}, query = {}) => ({
   body,
@@ -30,40 +43,73 @@ const mockUser = {
   lastName: 'User',
   email: 'test@email.com',
   verified: false,
+  toJSON: function () {
+    return {
+      userId: this.userId,
+      username: this.username,
+      firstName: this.firstName,
+      lastName: this.lastName,
+      email: this.email,
+      verified: this.verified,
+    };
+  },
 };
 
 beforeEach(() => {
   jest.clearAllMocks();
+  // Force welcome email to be sent in all tests
+  config.sendWelcomeEmail = true;
 });
 
-describe('userController.createUser', () => {
+describe('userController.createAccount (controller factory)', () => {
+  const handler = userController.createAccount('utilisateur');
+
   it('should create user, create authorization, send email, and return 201', async () => {
     (userService.createUser as jest.Mock).mockResolvedValue(mockUser);
-    (authorizationService.createAuthorization as jest.Mock).mockResolvedValue({
+    (
+      userController.authorizationService.createAuthorization as jest.Mock
+    ).mockResolvedValue({
       userId: '1',
       role: 'utilisateur',
     });
-    jest.spyOn(emailService, 'sendWelcomeEmail').mockResolvedValue(undefined);
+    jest
+      .spyOn(userController.emailService, 'sendWelcomeEmail')
+      .mockResolvedValue(undefined);
 
     const req = mockRequest({
       ...mockUser,
       password: 'pass',
-      role: 'utilisateur',
     });
     const res = mockResponse();
 
-    await userController.createUser(req as any, res as any, mockNext);
+    await handler(req as any, res as any, mockNext);
+    console.log('mockNext:', mockNext.mock.calls);
+    console.log('res.status:', res.status.mock.calls);
+    console.log('res.json:', res.json.mock.calls);
 
     expect(userService.createUser).toHaveBeenCalled();
-    expect(authorizationService.createAuthorization).toHaveBeenCalled();
-    expect(emailService.sendWelcomeEmail).toHaveBeenCalledWith(
+    expect(
+      userController.authorizationService.createAuthorization
+    ).toHaveBeenCalledWith(
+      { userId: mockUser.userId, role: 'utilisateur' },
+      expect.any(Object)
+    );
+    expect(userController.emailService.sendWelcomeEmail).toHaveBeenCalledWith(
       mockUser.email,
       mockUser.firstName
     );
     expect(res.status).toHaveBeenCalledWith(201);
     expect(res.json).toHaveBeenCalledWith({
       message: 'User created successfully',
-      data: mockUser,
+      data: expect.objectContaining({
+        userId: '1',
+        username: 'test',
+        firstName: 'Test',
+        lastName: 'User',
+        email: 'test@email.com',
+        verified: false,
+        role: 'utilisateur',
+      }),
     });
     expect(mockNext).not.toHaveBeenCalled();
   });
@@ -75,7 +121,7 @@ describe('userController.createUser', () => {
     const req = mockRequest({ ...mockUser, password: 'pass' });
     const res = mockResponse();
 
-    await userController.createUser(req as any, res as any, mockNext);
+    await handler(req as any, res as any, mockNext);
 
     expect(mockNext).toHaveBeenCalledWith(expect.any(Error));
     expect(res.status).not.toHaveBeenCalled();
@@ -84,19 +130,20 @@ describe('userController.createUser', () => {
 
   it('should call next with error if authorizationService.createAuthorization fails', async () => {
     (userService.createUser as jest.Mock).mockResolvedValue(mockUser);
-    (authorizationService.createAuthorization as jest.Mock).mockRejectedValue(
-      new Error('Auth error')
-    );
-    jest.spyOn(emailService, 'sendWelcomeEmail').mockResolvedValue(undefined);
+    (
+      userController.authorizationService.createAuthorization as jest.Mock
+    ).mockRejectedValue(new Error('Auth error'));
+    jest
+      .spyOn(userController.emailService, 'sendWelcomeEmail')
+      .mockResolvedValue(undefined);
 
     const req = mockRequest({
       ...mockUser,
       password: 'pass',
-      role: 'utilisateur',
     });
     const res = mockResponse();
 
-    await userController.createUser(req as any, res as any, mockNext);
+    await handler(req as any, res as any, mockNext);
 
     expect(mockNext).toHaveBeenCalledWith(expect.any(Error));
     expect(res.status).not.toHaveBeenCalled();

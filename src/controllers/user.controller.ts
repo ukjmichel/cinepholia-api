@@ -1,50 +1,63 @@
 import { Request, Response, NextFunction } from 'express';
 import { userService } from '../services/user.service.js';
 import { UserAttributes } from '../models/user.model.js';
-import { authorizationService } from '../services/authorization.service.js';
 import { BadRequestError } from '../errors/bad-request-error.js';
 import { NotFoundError } from '../errors/not-found-error.js';
 import { UnauthorizedError } from '../errors/unauthorized-error.js';
 import { sequelize } from '../config/db.js';
 import { EmailService } from '../services/email.service.js';
+import { config } from '../config/env.js';
+import { AuthorizationService } from '../services/authorization.service.js';
+import { Role } from '../models/authorization.model.js';
+import { AuthService } from '../services/auth.service.js';
 
 export const emailService = new EmailService();
+export const authorizationService = new AuthorizationService();
+export const authService = new AuthService();
 
-export const createUser = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-): Promise<void> => {
-  const transaction = await sequelize.transaction();
+export const createAccount =
+  (role: Role) =>
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    const transaction = await sequelize.transaction();
 
-  try {
-    const { role, ...userData } = req.body;
+    try {
+      const userData = req.body;
 
-    // Création utilisateur dans la transaction
-    const user = await userService.createUser(userData, { transaction });
+      // Create user in transaction
+      const user = await userService.createUser(userData, { transaction });
 
-    // Création autorisation dans la transaction
-    await authorizationService.createAuthorization(
-      { userId: user.userId, role: role ?? 'utilisateur' },
-      { transaction }
-    );
+      // Create authorization in transaction, with fixed role
+      const authorization = await authorizationService.createAuthorization(
+        { userId: user.userId, role },
+        { transaction }
+      );
 
-    // Envoi de l'email de bienvenue
-    await emailService.sendWelcomeEmail(user.email, user.firstName);
+      // Send welcome email if enabled
+      if (config.sendWelcomeEmail) {
+        await emailService.sendWelcomeEmail(user.email, user.firstName);
+      }
 
-    // Commit si tout est OK
-    await transaction.commit();
+      await transaction.commit();
 
-    res.status(201).json({
-      message: 'User created successfully',
-      data: user,
-    });
-  } catch (error) {
-    // Rollback en cas d'erreur
-    await transaction.rollback();
-    next(error);
-  }
-};
+      // If role is 'utilisateur', generate both access and refresh tokens
+      let tokens = undefined;
+      if (role === 'utilisateur') {
+        tokens = authService.generateTokens(user);
+      }
+
+      res.status(201).json({
+        message: 'User created successfully',
+        data: {
+          ...user.toJSON(),
+          role: authorization.role,
+          ...(tokens ? { tokens } : {}),
+        },
+      });
+    } catch (error) {
+      await transaction.rollback();
+      next(error);
+    }
+  };
 
 export const getUserById = async (
   req: Request,

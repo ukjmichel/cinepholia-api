@@ -1,34 +1,35 @@
 import { Request, Response, NextFunction } from 'express';
-import { Role } from '../models/authorization.model';
-import { UnauthorizedError } from '../errors/unauthorized-error';
-
-type UserReq = Request & { user?: { role?: Role } };
+import { Role } from '../models/authorization.model.js';
+import { UnauthorizedError } from '../errors/unauthorized-error.js';
 
 class Permission {
-  isUser(req: UserReq, res: Response, next: NextFunction) {
-    if (!req.user?.role) {
+  isUser(req: Request, res: Response, next: NextFunction) {
+    const role = req.userRole as Role | undefined;
+    if (!role) {
       return next(new UnauthorizedError('Authentication required'));
     }
     next();
   }
 
-  isEmployee(req: UserReq, res: Response, next: NextFunction) {
-    if (req.user?.role !== 'employé') {
+  isEmployee(req: Request, res: Response, next: NextFunction) {
+    const role = req.userRole as Role | undefined;
+    if (role !== 'employé') {
       return next(new UnauthorizedError('Employee access required'));
     }
     next();
   }
 
-  isAdmin(req: UserReq, res: Response, next: NextFunction) {
-    if (req.user?.role !== 'administrateur') {
+  isAdmin(req: Request, res: Response, next: NextFunction) {
+    const role = req.userRole as Role | undefined;
+    if (role !== 'administrateur') {
       return next(new UnauthorizedError('Admin access required'));
     }
     next();
   }
 
-  // Staff = Employee OR Admin
-  isStaff(req: UserReq, res: Response, next: NextFunction) {
-    if (req.user?.role !== 'employé' && req.user?.role !== 'administrateur') {
+  isStaff(req: Request, res: Response, next: NextFunction) {
+    const role = req.userRole as Role | undefined;
+    if (role !== 'employé' && role !== 'administrateur') {
       return next(
         new UnauthorizedError('Staff (Employee or Admin) access required')
       );
@@ -36,14 +37,34 @@ class Permission {
     next();
   }
 
-  // Only users who are NOT staff (not Employee, not Admin)
-  isNotStaff(req: UserReq, res: Response, next: NextFunction) {
-    if (req.user?.role === 'employé' || req.user?.role === 'administrateur') {
+  isNotStaff(req: Request, res: Response, next: NextFunction) {
+    const role = req.userRole as Role | undefined;
+    if (role === 'employé' || role === 'administrateur') {
       return next(new UnauthorizedError('Only non-staff users allowed'));
     }
     next();
   }
+  isSelfOrStaff(req: Request, res: Response, next: NextFunction) {
+    const paramUserId = req.params.userId;
+    const tokenUserId = req.userJwtPayload?.userId;
+    const role = req.userRole as Role | undefined;
+
+    if (!tokenUserId) {
+      return next(new UnauthorizedError('No user information in token'));
+    }
+
+    // Allow if staff, or if userId matches
+    if (
+      role === 'employé' ||
+      role === 'administrateur' ||
+      paramUserId === tokenUserId
+    ) {
+      return next();
+    }
+    return next(
+      new UnauthorizedError('You are not allowed to access this resource')
+    );
+  }
 }
 
-// Singleton export
 export const permission = new Permission();
