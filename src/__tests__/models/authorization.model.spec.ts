@@ -1,6 +1,6 @@
 import { Sequelize } from 'sequelize-typescript';
-import { AuthorizationModel } from '../../models/authorization.model';
-import { UserModel } from '../../models/user.model';
+import { AuthorizationModel } from '../../models/authorization.model.js';
+import { UserModel } from '../../models/user.model.js';
 
 describe('AuthorizationModel', () => {
   let sequelize: Sequelize;

@@ -8,8 +8,8 @@ import {
   ForeignKey,
   BelongsTo,
 } from 'sequelize-typescript';
-import { ScreeningModel } from './screening.model';
-import { MovieTheaterModel } from './movie-theater.model';
+import { ScreeningModel } from './screening.model.js';
+import { MovieTheaterModel } from './movie-theater.model.js';
 
 export interface MovieHallAttributes {
   theaterId: string;

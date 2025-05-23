@@ -1,28 +1,44 @@
-FROM node:23-slim
+# =====================
+# 1. Build Stage
+# =====================
+FROM node:24-slim AS build
 
-# Create app directory
 WORKDIR /usr/src/app
 
-# Install curl 
-RUN apt update && apt install -y curl
+# Install build dependencies
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 
-# Install app dependencies
-# A wildcard is used to ensure both package.json AND package-lock.json are copied
+# Copy package files and TypeScript config
 COPY package*.json ./
+COPY tsconfig.json ./
 
-# Install dependencies
+# Install dependencies (including dev)
 RUN npm install
 
-RUN npm install -g pm2
-
-# Bundle app source
+# Copy source code
 COPY . .
 
-# Build TypeScript code
+# Build the app
 RUN npm run build
 
-# Expose the port your app runs on
+# =====================
+# 2. Production Stage
+# =====================
+FROM node:24-slim
+
+WORKDIR /usr/src/app
+
+# Only install production dependencies
+COPY package*.json ./
+RUN npm install --omit=dev
+
+# Install PM2 globally for process management
+RUN npm install -g pm2
+
+# Copy built files from build stage
+COPY --from=build /usr/src/app/dist ./dist
+
 EXPOSE 3000
 
-# Use PM2 runtime to start the built app directly
-CMD [ "pm2-runtime", "dist/server.js" ]
+# Start the app with PM2
+CMD ["pm2-runtime", "dist/src/server.js"]

@@ -1,5 +1,5 @@
 import { Sequelize } from 'sequelize-typescript';
-import { MovieModel } from '../../models/movie.model'; // Adjust the import path as needed
+import { MovieModel } from '../../models/movie.model.js'; // Adjust the import path as needed
 
 let sequelize: Sequelize;
 

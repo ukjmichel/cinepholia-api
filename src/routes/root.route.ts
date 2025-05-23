@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import mongoose from 'mongoose';
-import { sequelize } from '../config/db';
+import { sequelize } from '../config/db.js';
 
 const router = Router();
 

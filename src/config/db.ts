@@ -1,18 +1,17 @@
 import { Sequelize } from 'sequelize-typescript';
-import dotenv from 'dotenv';
-
-dotenv.config();
+import { UserModel } from '../models/user.model.js';
+import { AuthorizationModel } from '../models/authorization.model.js';
+import { UserTokenModel } from '../models/user-token.model.js';
+import { config } from './env.js'; 
 
 export const sequelize = new Sequelize({
   dialect: 'mysql',
-  host: process.env.MYSQL_HOST,
-  port: Number(process.env.MYSQL_PORT),
-  username: process.env.MYSQL_USER,
-  password: process.env.MYSQL_PASSWORD,
-  database: process.env.MYSQL_DATABASE,
-  models: [
-    // Add your models here
-  ],
+  host: config.mysqlHost,
+  port: config.mysqlPort,
+  username: config.mysqlUser,
+  password: config.mysqlPassword,
+  database: config.mysqlDatabase,
+  models: [UserModel, AuthorizationModel, UserTokenModel],
   logging: false,
   pool: {
     max: 10,
@@ -22,7 +21,17 @@ export const sequelize = new Sequelize({
   },
 });
 
-sequelize
-  .sync({ alter: true })
-  .then(() => console.log('Database synced!'))
-  .catch((err) => console.error('Error syncing database:', err));
+export async function syncDB() {
+  try {
+    if (config.nodeEnv === 'test') {
+      await sequelize.sync({ force: true });
+      console.log('Test DB synced with force:true');
+    } else {
+      await sequelize.sync({ alter: true });
+      console.log('Database synced with alter:true');
+    }
+  } catch (err) {
+    console.error('Error syncing database:', err);
+    throw err;
+  }
+}

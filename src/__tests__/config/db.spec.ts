@@ -1,20 +1,29 @@
-jest.mock('dotenv', () => ({
-  config: jest.fn(),
+// src/__tests__/config/db.spec.ts
+
+// Mock env module
+jest.mock('../../config/env.js', () => ({
+  config: {
+    mysqlHost: 'localhost',
+    mysqlPort: 3306,
+    mysqlUser: 'root',
+    mysqlPassword: 'pw',
+    mysqlDatabase: 'testdb',
+    get nodeEnv() {
+      return process.env.NODE_ENV || 'development';
+    },
+  },
 }));
 
+// Partial mock sequelize-typescript
+const actualSequelizeTs = jest.requireActual('sequelize-typescript');
 const mockSync = jest.fn();
-const mockThen = jest.fn(() => ({ catch: mockCatch }));
-const mockCatch = jest.fn();
 
-jest.mock('sequelize-typescript', () => {
-  return {
-    Sequelize: jest.fn().mockImplementation((options) => {
-      return {
-        sync: mockSync,
-      };
-    }),
-  };
-});
+jest.mock('sequelize-typescript', () => ({
+  ...actualSequelizeTs,
+  Sequelize: jest.fn().mockImplementation(() => ({
+    sync: mockSync,
+  })),
+}));
 
 describe('Sequelize DB config', () => {
   const OLD_ENV = process.env;
@@ -28,13 +37,9 @@ describe('Sequelize DB config', () => {
       MYSQL_USER: 'root',
       MYSQL_PASSWORD: 'pw',
       MYSQL_DATABASE: 'testdb',
+      NODE_ENV: 'development',
     };
-
-    // Reset all mocks
-    (require('dotenv').config as jest.Mock).mockClear();
     mockSync.mockClear();
-    mockThen.mockClear();
-    mockCatch.mockClear();
     jest.spyOn(console, 'log').mockImplementation(() => {});
     jest.spyOn(console, 'error').mockImplementation(() => {});
   });
@@ -42,15 +47,13 @@ describe('Sequelize DB config', () => {
   afterEach(() => {
     process.env = OLD_ENV;
     jest.restoreAllMocks();
-    jest.resetModules();
   });
 
-  it('should create Sequelize instance with correct config and call sync (success)', async () => {
-    mockSync.mockReturnValueOnce(Promise.resolve()); // simulate sync success
+  it('should create Sequelize instance with correct config and call sync (alter:true) in development', async () => {
+    mockSync.mockResolvedValueOnce(undefined);
 
-    await import('../../config/db');
-
-    expect(require('dotenv').config).toHaveBeenCalled();
+    const dbModule = await import('../../config/db.js');
+    await dbModule.syncDB();
 
     const { Sequelize } = require('sequelize-typescript');
     expect(Sequelize).toHaveBeenCalledWith({
@@ -60,7 +63,7 @@ describe('Sequelize DB config', () => {
       username: 'root',
       password: 'pw',
       database: 'testdb',
-      models: [],
+      models: expect.any(Array),
       logging: false,
       pool: {
         max: 10,
@@ -71,19 +74,28 @@ describe('Sequelize DB config', () => {
     });
 
     expect(mockSync).toHaveBeenCalledWith({ alter: true });
-    // Give time for promise
-    await Promise.resolve();
-    expect(console.log).toHaveBeenCalledWith('Database synced!');
+    expect(console.log).toHaveBeenCalledWith('Database synced with alter:true');
+  });
+
+  it('should call sync with force:true if NODE_ENV=test', async () => {
+    process.env.NODE_ENV = 'test';
+    mockSync.mockResolvedValueOnce(undefined);
+
+    const dbModule = await import('../../config/db.js');
+
+    await dbModule.syncDB();
+
+    expect(mockSync).toHaveBeenCalledWith({ force: true });
+    expect(console.log).toHaveBeenCalledWith('Test DB synced with force:true');
   });
 
   it('should log error if sync fails', async () => {
     const err = new Error('sync fail');
-    mockSync.mockReturnValueOnce(Promise.reject(err));
+    mockSync.mockRejectedValueOnce(err);
 
-    await import('../../config/db');
+    const dbModule = await import('../../config/db.js');
 
-    // Give time for promise
-    await Promise.resolve();
+    await expect(dbModule.syncDB()).rejects.toThrow('sync fail');
     expect(console.error).toHaveBeenCalledWith('Error syncing database:', err);
   });
 });

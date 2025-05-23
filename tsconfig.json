@@ -1,42 +1,28 @@
 {
   "compilerOptions": {
-    // Set the ECMAScript target version
-    "target": "es2022",
-
-    // Specify module code generation
-    "module": "es2022",
-
-    // Use Node's module resolution strategy
+    "target": "ES2022",
+    "module": "ESNext",
     "moduleResolution": "node",
-
-    // Allow default imports from modules with no default export
     "esModuleInterop": true,
-
-    // Enable support for decorators (used in frameworks like TypeORM, NestJS, etc.)
+    "allowSyntheticDefaultImports": true,
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
-
-    // Ensure strict type-checking options
     "strict": true,
-
-    // Skip checking of declaration files
     "skipLibCheck": true,
-
-    // Disable error on class properties not initialized in the constructor
     "strictPropertyInitialization": false,
-
-    // Specify the root directory of input files
-    "rootDir": "./src",
-
-    // Redirect output structure to the directory
-    "outDir": "./dist"
+    "rootDir": "./",
+    "outDir": "./dist",
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "declaration": false,
+    "sourceMap": false
   },
-  "include": [
-    "src/**/*", // Include all TypeScript files in the src directory
-    "src/config/swagger.ts", // Explicitly include this config file
-    "types"
-  ],
+  "include": ["*.ts", "**/*.ts", "src/**/*"],
   "exclude": [
-    "node_modules" // Exclude dependencies
+    "node_modules",
+    "dist",
+    "**/__tests__/**",
+    "**/*.test.ts",
+    "**/*.spec.ts"
   ]
 }

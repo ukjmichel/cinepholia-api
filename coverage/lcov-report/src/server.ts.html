@@ -25,28 +25,28 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/17</span>
+                <span class='fraction'>0/31</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/2</span>
+                <span class='fraction'>0/11</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>0/4</span>
+                <span class='fraction'>0/5</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/17</span>
+                <span class='fraction'>0/29</span>
             </div>
         
             
@@ -97,27 +97,31 @@
 <a name='L32'></a><a href='#L32'>32</a>
 <a name='L33'></a><a href='#L33'>33</a>
 <a name='L34'></a><a href='#L34'>34</a>
-<a name='L35'></a><a href='#L35'>35</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L35'></a><a href='#L35'>35</a>
+<a name='L36'></a><a href='#L36'>36</a>
+<a name='L37'></a><a href='#L37'>37</a>
+<a name='L38'></a><a href='#L38'>38</a>
+<a name='L39'></a><a href='#L39'>39</a>
+<a name='L40'></a><a href='#L40'>40</a>
+<a name='L41'></a><a href='#L41'>41</a>
+<a name='L42'></a><a href='#L42'>42</a>
+<a name='L43'></a><a href='#L43'>43</a>
+<a name='L44'></a><a href='#L44'>44</a>
+<a name='L45'></a><a href='#L45'>45</a>
+<a name='L46'></a><a href='#L46'>46</a>
+<a name='L47'></a><a href='#L47'>47</a>
+<a name='L48'></a><a href='#L48'>48</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -127,44 +131,79 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">// src/server.ts
-<span class="cstat-no" title="statement not covered" >import dotenv from 'dotenv';</span>
-<span class="cstat-no" title="statement not covered" >import app from './app';</span>
-<span class="cstat-no" title="statement not covered" >import { sequelize } from './config/db';</span>
-<span class="cstat-no" title="statement not covered" >import connectMongoDB from './config/mongo';</span>
-&nbsp;
-<span class="cstat-no" title="statement not covered" >dotenv.config();</span>
-&nbsp;
-const port = <span class="cstat-no" title="statement not covered" >Number(process.env.PORT) || 3000;</span>
-&nbsp;
-async function <span class="fstat-no" title="function not covered" >startServer(</span>) {
-<span class="cstat-no" title="statement not covered" >  try {</span>
-<span class="cstat-no" title="statement not covered" >    await Promise.all([</span>
-      sequelize.authenticate().then(<span class="fstat-no" title="function not covered" >() =</span>&gt; {
-<span class="cstat-no" title="statement not covered" >        console.log('✅ MySQL connection successful');</span>
-      }),
-      connectMongoDB().then(<span class="fstat-no" title="function not covered" >() =</span>&gt; {
-<span class="cstat-no" title="statement not covered" >        console.log('✅ MongoDB connection successful');</span>
-      }),
-    ]);
-  } catch (err) {
-<span class="cstat-no" title="statement not covered" >    console.error('❌ Error during DB connections:', err);</span>
-<span class="cstat-no" title="statement not covered" >    process.exit(1);</span>
-<span class="cstat-no" title="statement not covered" >    return;</span>
-  }
-&nbsp;
-<span class="cstat-no" title="statement not covered" >  app.listen(port, '0.0.0.0', <span class="fstat-no" title="function not covered" >() =</span>&gt; {</span>
-<span class="cstat-no" title="statement not covered" >    console.log(`🚀 Server running at http://0.0.0.0:${port}/`);</span>
-  });
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">import app from './app.js';
+import { sequelize, sy<span class="cstat-no" title="statement not covered" >ncDB } from './config/db.js';<span class="fstat-no" title="function not covered" ></span></span>
+impo<span class="cstat-no" title="statement not covered" >rt { config } from './config/env.js';</span>
+import connectMongoDB from './config/mongo.js';
+<span class="cstat-no" title="statement not covered" ></span>
+<span class="cstat-no" title="statement not covered" ></span>
+<span class="cstat-no" title="statement not covered" ></span>
+const port = Numb<span class="cstat-no" title="statement not covered" >er(config.port) || 3000;</span>
+<span class="cstat-no" title="statement not covered" ></span>
+async functio<span class="cstat-no" title="statement not covered" >n waitForMySQL(retries = 5, delayMs =</span> 3000) {
+  for (let i = <span class="fstat-no" title="function not covered" >0; i &lt; retrie</span>s; i++) {<span class="branch-0 cbranch-no" title="branch not covered" ><span class="branch-0 cbranch-no" title="branch not covered" ></span></span>
+<span class="cstat-no" title="statement not covered" >    try {<span class="cstat-no" title="statement not covered" ></span></span>
+      aw<span class="cstat-no" title="statement not covered" >ait sequelize.authenticate();</span>
+      return<span class="cstat-no" title="statement not covered" >;</span>
+    } catch <span class="cstat-no" title="statement not covered" >{</span>
+      console.log(`Waiting for MySQL... (${i + 1}/${retries})`);
+      await new Promise((r) =&gt; setTimeout(r, delayMs));
+    }<span class="cstat-no" title="statement not covered" ></span>
+  }<span class="cstat-no" title="statement not covered" ><span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span></span>
+  throw new Error('MySQL connection failed after retries');
 }
+<span class="cstat-no" title="statement not covered" ></span>
+async function startServer() {
+  try {<span class="fstat-no" title="function not covered" ></span>
+<span class="cstat-no" title="statement not covered" >    await waitForMySQL();</span>
+    cons<span class="cstat-no" title="statement not covered" >ole.log('✅ MySQL conne</span>ction successful');
+<span class="cstat-no" title="statement not covered" ></span>
+    awai<span class="cstat-no" title="statement not covered" >t syncDB();</span>
+    cons<span class="cstat-no" title="statement not covered" >ole.log('✅ Database synced');</span>
+<span class="cstat-no" title="statement not covered" ></span>
+    awai<span class="cstat-no" title="statement not covered" >t connectMongoDB();</span>
+    console.log('✅ MongoDB connection successful');
+  } catch (err) {
+    cons<span class="cstat-no" title="statement not covered" >ole.error('❌ Error during DB connections:', err);</span>
+    proc<span class="cstat-no" title="statement not covered" >ess.exit(1);</span>
+    retu<span class="cstat-no" title="statement not covered" >rn;</span>
+    
+  }<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span>
+<span class="cstat-no" title="statement not covered" ></span>
+  app.listen(port, '0.0.0.0', () =&gt; {
+    console.log(`🚀 Server running at http://0.0.0.0:${port}/`);
+<span class="cstat-no" title="statement not covered" >  });</span>
+<span class="cstat-no" title="statement not covered" >}</span>
 &nbsp;
-<span class="cstat-no" title="statement not covered" >startServer();</span>
+startServer();
 &nbsp;
-<span class="cstat-no" title="statement not covered" >export default app;</span>
+export default app;
 &nbsp;</pre></td></tr></table></pre>
 
                 <div class='push'></div><!-- for sticky footer -->
@@ -172,7 +211,7 @@ async function <span class="fstat-no" title="function not covered" >startServer(
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-05-21T22:05:44.603Z
+                at 2025-05-22T21:00:39.200Z
             </div>
         <script src="../prettify.js"></script>
         <script>

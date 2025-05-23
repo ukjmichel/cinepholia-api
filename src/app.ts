@@ -2,13 +2,12 @@ import express, { Request, Response } from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
 import morgan from 'morgan';
-import mongoose from 'mongoose';
-import { sequelize } from './config/db';
-import { setupSwagger } from './config/swagger';
-import { errorHandler } from './middlewares/errorHandler';
+import { setupSwagger } from './config/swagger.js';
+import { errorHandler } from './middlewares/errorHandler.js';
 
-import rootRouter from './routes/root.route';
-import testRouter from './routes/test.route';
+import rootRouter from './routes/root.route.js';
+import testRouter from './routes/test.route.js';
+import userRouter from './routes/user.route.js';
 
 const app = express();
 
@@ -23,7 +22,8 @@ setupSwagger(app);
 
 // ─────── Endpoint ──────────────────────────────
 app.use('/', rootRouter);
-app.use('/tests',testRouter)
+app.use('/tests', testRouter);
+app.use('/users', userRouter);
 // ─────── Error Handling ──────────────────────────────────────
 app.use(errorHandler);
 

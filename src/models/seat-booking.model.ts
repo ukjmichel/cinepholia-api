@@ -8,8 +8,8 @@ import {
   ForeignKey,
   BelongsTo,
 } from 'sequelize-typescript';
-import { ScreeningModel } from './screening.model';
-import { BookingModel } from './booking.model';
+import { ScreeningModel } from './screening.model.js';
+import { BookingModel } from './booking.model.js';
 
 export interface SeatBookingAttributes {
   screeningId: string;

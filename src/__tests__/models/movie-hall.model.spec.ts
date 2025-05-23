@@ -1,8 +1,8 @@
 import { Sequelize } from 'sequelize-typescript';
-import { MovieHallModel } from '../../models/movie-hall.model';
-import { MovieTheaterModel } from '../../models/movie-theater.model';
-import { ScreeningModel } from '../../models/screening.model';
-import { MovieModel } from '../../models/movie.model';
+import { MovieHallModel } from '../../models/movie-hall.model.js';
+import { MovieTheaterModel } from '../../models/movie-theater.model.js';
+import { ScreeningModel } from '../../models/screening.model.js';
+import { MovieModel } from '../../models/movie.model.js';
 
 describe('MovieHallModel', () => {
   let sequelize: Sequelize;

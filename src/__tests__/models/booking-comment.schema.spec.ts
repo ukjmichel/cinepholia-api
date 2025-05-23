@@ -1,44 +1,76 @@
 import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
-import {
-  Sequelize,
-  Table,
-  Column,
-  Model,
-  PrimaryKey,
-  DataType,
-} from 'sequelize-typescript';
+import { Sequelize, DataTypes, Model } from 'sequelize';
 import { v4 as uuidv4 } from 'uuid';
-import { BookingCommentModel } from '../../models/booking-comment.schema';
-import { BookingModel } from '../../models/booking.model';
+import { BookingCommentModel } from '../../models/booking-comment.schema.js';
+// BookingModel will be defined below
 
-// --- Stub UserModel ---
-@Table({ tableName: 'users', timestamps: false })
-class UserModel extends Model {
-  @PrimaryKey
-  @Column(DataType.UUID)
-  userId!: string;
+// ---- Sequelize Stub Models ----
+class UserModel extends Model {}
+class MovieModel extends Model {}
+class ScreeningModel extends Model {}
+class BookingModel extends Model {}
+
+function defineTestModels(sequelize: Sequelize) {
+  UserModel.init(
+    {
+      userId: {
+        type: DataTypes.UUID,
+        primaryKey: true,
+        allowNull: false,
+      },
+    },
+    { sequelize, tableName: 'users', timestamps: false }
+  );
+
+  MovieModel.init(
+    {
+      movieId: {
+        type: DataTypes.UUID,
+        primaryKey: true,
+        allowNull: false,
+      },
+    },
+    { sequelize, tableName: 'movies', timestamps: false }
+  );
+
+  ScreeningModel.init(
+    {
+      screeningId: {
+        type: DataTypes.UUID,
+        primaryKey: true,
+        allowNull: false,
+      },
+      movieId: DataTypes.UUID,
+    },
+    { sequelize, tableName: 'screenings', timestamps: false }
+  );
+
+  BookingModel.init(
+    {
+      bookingId: {
+        type: DataTypes.UUID,
+        primaryKey: true,
+        allowNull: false,
+      },
+      userId: {
+        type: DataTypes.UUID,
+        allowNull: false,
+      },
+      screeningId: {
+        type: DataTypes.UUID,
+        allowNull: false,
+      },
+      seatsNumber: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+      },
+    },
+    { sequelize, tableName: 'bookings', timestamps: false }
+  );
 }
 
-// --- Stub MovieModel ---
-@Table({ tableName: 'movies', timestamps: false })
-class MovieModel extends Model {
-  @PrimaryKey
-  @Column(DataType.UUID)
-  movieId!: string;
-}
-
-// --- Stub ScreeningModel ---
-@Table({ tableName: 'screenings', timestamps: false })
-class ScreeningModel extends Model {
-  @PrimaryKey
-  @Column(DataType.UUID)
-  screeningId!: string;
-
-  @Column(DataType.UUID)
-  movieId!: string;
-}
-
+// ---- TESTS ----
 describe('CommentModel (integration with BookingModel)', () => {
   let mongo: MongoMemoryServer;
   let sequelize: Sequelize;
@@ -51,8 +83,9 @@ describe('CommentModel (integration with BookingModel)', () => {
       dialect: 'sqlite',
       storage: ':memory:',
       logging: false,
-      models: [BookingModel, UserModel, ScreeningModel, MovieModel],
     });
+
+    defineTestModels(sequelize);
 
     await sequelize.sync({ force: true });
   });
@@ -60,7 +93,6 @@ describe('CommentModel (integration with BookingModel)', () => {
   afterAll(async () => {
     await mongoose.disconnect();
     await mongo.stop();
-
     if (sequelize) {
       await sequelize.close();
     }
@@ -71,21 +103,23 @@ describe('CommentModel (integration with BookingModel)', () => {
     await BookingModel.destroy({ where: {} });
   });
 
-  it('should create a comment with valid data if booking exists', async () => {
+  async function createBookingWithUserAndScreening() {
     const bookingId = uuidv4();
     const userId = uuidv4();
     const screeningId = uuidv4();
-
-    // Create related User and Screening first
     await UserModel.create({ userId });
     await ScreeningModel.create({ screeningId, movieId: uuidv4() });
-
     await BookingModel.create({
       bookingId,
       userId,
       screeningId,
       seatsNumber: 2,
     });
+    return bookingId;
+  }
+
+  it('should create a comment with valid data if booking exists', async () => {
+    const bookingId = await createBookingWithUserAndScreening();
 
     const comment = await BookingCommentModel.create({
       bookingId,
@@ -99,20 +133,7 @@ describe('CommentModel (integration with BookingModel)', () => {
   });
 
   it('should reject non-integer rating', async () => {
-    const bookingId = uuidv4();
-    const userId = uuidv4();
-    const screeningId = uuidv4();
-
-    // Create related User and Screening first
-    await UserModel.create({ userId });
-    await ScreeningModel.create({ screeningId, movieId: uuidv4() });
-
-    await BookingModel.create({
-      bookingId,
-      userId,
-      screeningId,
-      seatsNumber: 2,
-    });
+    const bookingId = await createBookingWithUserAndScreening();
 
     await expect(
       BookingCommentModel.create({
@@ -134,20 +155,7 @@ describe('CommentModel (integration with BookingModel)', () => {
   });
 
   it('should reject rating > 5', async () => {
-    const bookingId = uuidv4();
-    const userId = uuidv4();
-    const screeningId = uuidv4();
-
-    // Create related User and Screening first
-    await UserModel.create({ userId });
-    await ScreeningModel.create({ screeningId, movieId: uuidv4() });
-
-    await BookingModel.create({
-      bookingId,
-      userId,
-      screeningId,
-      seatsNumber: 2,
-    });
+    const bookingId = await createBookingWithUserAndScreening();
 
     await expect(
       BookingCommentModel.create({
@@ -159,20 +167,7 @@ describe('CommentModel (integration with BookingModel)', () => {
   });
 
   it('should enforce unique bookingId (one comment per booking)', async () => {
-    const bookingId = uuidv4();
-    const userId = uuidv4();
-    const screeningId = uuidv4();
-
-    // Create related User and Screening first
-    await UserModel.create({ userId });
-    await ScreeningModel.create({ screeningId, movieId: uuidv4() });
-
-    await BookingModel.create({
-      bookingId,
-      userId,
-      screeningId,
-      seatsNumber: 2,
-    });
+    const bookingId = await createBookingWithUserAndScreening();
 
     await BookingCommentModel.create({
       bookingId,

@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
-import MovieStats from '../../models/movie-stats.schema';
+import MovieStats from '../../models/movie-stats.schema.js';
 
 describe('MovieStats Model', () => {
   let mongoServer: MongoMemoryServer;

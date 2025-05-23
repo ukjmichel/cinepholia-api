@@ -13,9 +13,9 @@ const options: swaggerJSDoc.Options = {
     },
   },
   apis: [
-    path.join(process.cwd(), 'src', 'routes', '**', '*.ts'),
-    path.join(process.cwd(), 'src', 'routes', '**', '*.js'),
-    path.join(process.cwd(), 'dist', 'routes', '**', '*.js'),
+    path.join(process.cwd(), 'src', 'routes', '**', '*'),
+    path.join(process.cwd(), 'src', 'routes', '**', '*'),
+    path.join(process.cwd(), 'dist', 'routes', '**', '*'),
   ],
 };
 

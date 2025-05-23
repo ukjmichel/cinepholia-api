@@ -1,15 +1,12 @@
-// config/__tests__/mongo.spec.ts
-
-jest.mock('mongoose', () => ({
-  connect: jest.fn(),
-}));
-
 describe('connectMongoDB', () => {
   const OLD_ENV = process.env;
+  let connectMongoDB: () => Promise<void>;
+  const mockConnect = jest.fn();
 
   beforeEach(() => {
-    jest.resetModules();
+    jest.resetModules(); // Clear module cache
     process.env = { ...OLD_ENV };
+
     jest.spyOn(console, 'log').mockImplementation(() => {});
     jest.spyOn(console, 'error').mockImplementation(() => {});
     jest
@@ -24,45 +21,62 @@ describe('connectMongoDB', () => {
   });
 
   it('connects successfully and logs on success', async () => {
-    process.env.MONGODB_URI = 'mongodb://testhost:27017/testdb';
-    const { connect } = require('mongoose');
-    (connect as jest.Mock).mockResolvedValueOnce({});
-    const connectMongoDB = (await import('../../config/mongo')).default;
+    // Mock mongoose
+    jest.doMock('mongoose', () => ({
+      connect: mockConnect.mockResolvedValue({}),
+    }));
+
+    // Mock config module
+    jest.doMock('../../config/env.js', () => ({
+      config: {
+        mongodbUri: 'mongodb://testhost:27017/testdb',
+      },
+    }));
+
+    // Import module AFTER mocks applied
+    connectMongoDB = (await import('../../config/mongo.js')).default;
 
     await connectMongoDB();
 
-    expect(connect).toHaveBeenCalledWith(
-      'mongodb://testhost:27017/testdb',
-      expect.objectContaining({
-        useNewUrlParser: true,
-        useUnifiedTopology: true,
-      })
-    );
+    expect(mockConnect).toHaveBeenCalledWith('mongodb://testhost:27017/testdb');
     expect(console.log).toHaveBeenCalledWith('✅ Connected to MongoDB');
     expect(console.error).not.toHaveBeenCalled();
     expect(process.exit).not.toHaveBeenCalled();
   });
 
   it('logs error and exits if connect throws', async () => {
-    process.env.MONGODB_URI = 'mongodb://fail:27017/faildb';
-    const { connect } = require('mongoose');
-    const err = new Error('nope');
-    (connect as jest.Mock).mockRejectedValueOnce(err);
-    const connectMongoDB = (await import('../../config/mongo')).default;
+    const error = new Error('fail');
+    // Mock mongoose connect to reject
+    jest.doMock('mongoose', () => ({
+      connect: mockConnect.mockRejectedValue(error),
+    }));
+
+    jest.doMock('../../config/env.js', () => ({
+      config: {
+        mongodbUri: 'mongodb://failhost:27017/faildb',
+      },
+    }));
+
+    connectMongoDB = (await import('../../config/mongo.js')).default;
 
     await connectMongoDB();
 
-    expect(connect).toHaveBeenCalled();
+    expect(mockConnect).toHaveBeenCalled();
     expect(console.error).toHaveBeenCalledWith(
       '❌ MongoDB connection error:',
-      err
+      error
     );
     expect(process.exit).toHaveBeenCalledWith(1);
   });
 
-  it('throws and logs if MONGODB_URI is missing', async () => {
-    delete process.env.MONGODB_URI;
-    const connectMongoDB = (await import('../../config/mongo')).default;
+  it('logs error and exits if MONGODB_URI is missing', async () => {
+    jest.doMock('../../config/env', () => ({
+      config: {
+        mongodbUri: undefined,
+      },
+    }));
+
+    connectMongoDB = (await import('../../config/mongo.js')).default;
 
     await connectMongoDB();
 

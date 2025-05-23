@@ -1,7 +1,7 @@
 import request from 'supertest';
 import express, { NextFunction, Request, Response } from 'express';
-import testErrorRouter from '../../routes/test.route';
-import { errorHandler } from '../../middlewares/errorHandler';
+import testErrorRouter from '../../routes/test.route.js';
+import { errorHandler } from '../../middlewares/errorHandler.js';
 
 const app = express();
 app.use('/', testErrorRouter);

@@ -1,5 +1,5 @@
 import { Sequelize } from 'sequelize-typescript';
-import { MovieTheaterModel } from '../../models/movie-theater.model';
+import { MovieTheaterModel } from '../../models/movie-theater.model.js';
 
 describe('MovieTheaterModel', () => {
   let sequelize: Sequelize;

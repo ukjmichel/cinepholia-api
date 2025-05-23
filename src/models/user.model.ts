@@ -110,7 +110,6 @@ export class UserModel
   })
   declare verified: boolean;
 
-  // --- Add these for full TypeScript typing support
   declare readonly createdAt: Date;
   declare readonly updatedAt: Date;
 
@@ -122,8 +121,6 @@ export class UserModel
   @BeforeUpdate
   static async hashPassword(instance: UserModel) {
     if (instance.changed('password')) {
-      // Uncomment for production only when debugging:
-      // console.log('Password before hashing:', instance.password);
       const salt = await bcrypt.genSalt(10);
       instance.password = await bcrypt.hash(instance.password, salt);
     }
@@ -131,9 +128,21 @@ export class UserModel
 
   @BeforeCreate
   @BeforeUpdate
-  static normalizeEmail(instance: UserModel) {
+  static normalizeFields(instance: UserModel) {
     if (instance.changed('email') && typeof instance.email === 'string') {
-      instance.email = instance.email.toLowerCase();
+      instance.email = instance.email.trim().toLowerCase();
+    }
+    if (instance.changed('username') && typeof instance.username === 'string') {
+      instance.username = instance.username.trim().toLowerCase();
+    }
+    if (
+      instance.changed('firstName') &&
+      typeof instance.firstName === 'string'
+    ) {
+      instance.firstName = instance.firstName.trim();
+    }
+    if (instance.changed('lastName') && typeof instance.lastName === 'string') {
+      instance.lastName = instance.lastName.trim();
     }
   }
 

@@ -1,6 +1,6 @@
 import { Sequelize } from 'sequelize-typescript';
 import bcrypt from 'bcrypt';
-import { UserModel } from '../../models/user.model';
+import { UserModel } from '../../models/user.model.js';
 
 describe('UserModel', () => {
   let sequelize: Sequelize;

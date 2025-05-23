@@ -8,7 +8,7 @@ import {
   PrimaryKey,
 } from 'sequelize-typescript';
 import { Optional } from 'sequelize';
-import { UserModel } from './user.model';
+import { UserModel } from './user.model.js';
 
 export type UserTokenType = 'verify_email' | 'reset_password' | '2fa';
 

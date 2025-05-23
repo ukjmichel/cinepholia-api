@@ -10,9 +10,9 @@ import {
 } from 'sequelize-typescript';
 import { Optional } from 'sequelize';
 
-import { MovieModel } from './movie.model';
-import { MovieTheaterModel } from './movie-theater.model';
-import { MovieHallModel } from './movie-hall.model';
+import { MovieModel } from './movie.model.js';
+import { MovieTheaterModel } from './movie-theater.model.js';
+import { MovieHallModel } from './movie-hall.model.js';
 
 export interface ScreeningAttributes {
   screeningId: string;

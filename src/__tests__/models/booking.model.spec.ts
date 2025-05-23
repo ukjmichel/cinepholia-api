@@ -1,11 +1,11 @@
 import { Sequelize } from 'sequelize-typescript';
 import { v4 as uuidv4 } from 'uuid';
-import { BookingModel, BookingStatus } from '../../models/booking.model';
-import { UserModel } from '../../models/user.model';
-import { ScreeningModel } from '../../models/screening.model';
-import { MovieModel } from '../../models/movie.model';
-import { MovieTheaterModel } from '../../models/movie-theater.model';
-import { MovieHallModel } from '../../models/movie-hall.model';
+import { BookingModel, BookingStatus } from '../../models/booking.model.js';
+import { UserModel } from '../../models/user.model.js';
+import { ScreeningModel } from '../../models/screening.model.js';
+import { MovieModel } from '../../models/movie.model.js';
+import { MovieTheaterModel } from '../../models/movie-theater.model.js';
+import { MovieHallModel } from '../../models/movie-hall.model.js';
 
 describe('BookingModel', () => {
   let sequelize: Sequelize;

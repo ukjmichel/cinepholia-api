@@ -1,9 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
-import { NotFoundError } from '../../errors/not-found-error';
-import { BadRequestError } from '../../errors/bad-request-error';
-import { ConflictError } from '../../errors/conflict-error';
-import { NotAuthorizedError } from '../../errors/not-authorized-error';
-import { errorHandler } from '../../middlewares/errorHandler';
+import { NotFoundError } from '../../errors/not-found-error.js';
+import { BadRequestError } from '../../errors/bad-request-error.js';
+import { ConflictError } from '../../errors/conflict-error.js';
+import { NotAuthorizedError } from '../../errors/not-authorized-error.js';
+import { errorHandler } from '../../middlewares/errorHandler.js';
 
 describe('Custom Error Classes', () => {
   describe('NotFoundError', () => {

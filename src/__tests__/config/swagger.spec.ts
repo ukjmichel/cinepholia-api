@@ -1,4 +1,4 @@
-import { setupSwagger } from '../../config/swagger';
+import { setupSwagger } from '../../config/swagger.js';
 
 jest.mock('swagger-jsdoc', () => jest.fn(() => 'mockSwaggerSpec'));
 jest.mock('swagger-ui-express', () => ({

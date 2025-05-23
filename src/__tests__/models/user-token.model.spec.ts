@@ -1,7 +1,7 @@
 import { Sequelize } from 'sequelize-typescript';
 import { UniqueConstraintError, ForeignKeyConstraintError } from 'sequelize';
-import { UserModel } from '../../models/user.model';
-import { UserTokenModel } from '../../models/user-token.model';
+import { UserModel } from '../../models/user.model.js';
+import { UserTokenModel } from '../../models/user-token.model.js';
 
 describe('UserTokenModel (single token per user)', () => {
   let sequelize: Sequelize;

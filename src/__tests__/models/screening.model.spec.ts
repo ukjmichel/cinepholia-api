@@ -1,9 +1,9 @@
 import { Sequelize } from 'sequelize-typescript';
 import { v4 as uuidv4 } from 'uuid';
-import { ScreeningModel } from '../../models/screening.model';
-import { MovieModel } from '../../models/movie.model';
-import { MovieTheaterModel } from '../../models/movie-theater.model';
-import { MovieHallModel } from '../../models/movie-hall.model';
+import { ScreeningModel } from '../../models/screening.model.js';
+import { MovieModel } from '../../models/movie.model.js';
+import { MovieTheaterModel } from '../../models/movie-theater.model.js';
+import { MovieHallModel } from '../../models/movie-hall.model.js';
 import { ValidationError } from 'sequelize';
 
 describe('ScreeningModel', () => {

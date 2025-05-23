@@ -10,8 +10,8 @@ import {
   Default,
 } from 'sequelize-typescript';
 import { Optional } from 'sequelize';
-import { UserModel } from './user.model';
-import { ScreeningModel } from './screening.model';
+import { UserModel } from './user.model.js';
+import { ScreeningModel } from './screening.model.js';
 
 export type BookingStatus = 'pending' | 'used' | 'canceled';
 

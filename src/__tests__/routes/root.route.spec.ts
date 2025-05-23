@@ -1,6 +1,6 @@
 import request from 'supertest';
 import express from 'express';
-import rootRouter from '../../routes/root.route';
+import rootRouter from '../../routes/root.route.js';
 
 jest.mock('../../config/db', () => ({
   sequelize: {
@@ -8,7 +8,7 @@ jest.mock('../../config/db', () => ({
   },
 }));
 
-import { sequelize } from '../../config/db';
+import { sequelize } from '../../config/db.js';
 import mongoose from 'mongoose';
 
 // Helper to mock mongoose connection state and db

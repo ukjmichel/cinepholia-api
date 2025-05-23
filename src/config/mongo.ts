@@ -1,18 +1,16 @@
-// config/mongo.ts
 import mongoose from 'mongoose';
+import { config } from './env.js'; // adjust path as needed
 
 const connectMongoDB = async () => {
   try {
-    const uri = process.env.MONGODB_URI as string;
+    const uri = config.mongodbUri;
 
     if (!uri) {
-      throw new Error('MONGODB_URI not defined in environment variables');
+      throw new Error('MongoDB URI not defined in config');
     }
 
-    await mongoose.connect(uri, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-    } as mongoose.ConnectOptions);
+    // Remove deprecated options - they're no longer needed in mongoose 6+
+    await mongoose.connect(uri);
 
     console.log('✅ Connected to MongoDB');
   } catch (error) {

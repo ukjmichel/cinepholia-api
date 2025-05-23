@@ -6,17 +6,17 @@ import {
   Model,
   Table,
 } from 'sequelize-typescript';
-import { UserModel } from './user.model';
+import { UserModel } from './user.model.js';
 
-type Role = 'utilisateur' | 'employé' | 'administrateur';
+export type Role = 'utilisateur' | 'employé' | 'administrateur';
 
-interface AuthorizationAttributes {
+export interface AuthorizationAttributes {
   userId: string;
   role: Role;
 }
 
 @Table({ tableName: 'authorization', timestamps: true })
-class AuthorizationModel
+export class AuthorizationModel
   extends Model<AuthorizationAttributes>
   implements AuthorizationAttributes
 {
@@ -40,7 +40,7 @@ class AuthorizationModel
     foreignKey: 'userId',
     targetKey: 'userId',
   })
-  user!: UserModel;
+  declare user: UserModel;
 }
 
-export { AuthorizationModel, Role };
+
