@@ -5,6 +5,7 @@ import {
   PrimaryKey,
   Table,
 } from 'sequelize-typescript';
+// import { v4 as uuidv4 } from 'uuid'; // Uncomment if auto-generating IDs
 
 export interface MovieTheaterAttributes {
   theaterId: string;
@@ -17,7 +18,7 @@ export interface MovieTheaterAttributes {
 
 @Table({ tableName: 'movie_theater', timestamps: true })
 export class MovieTheaterModel
-  extends Model<MovieTheaterAttributes>
+  extends Model<MovieTheaterAttributes, MovieTheaterAttributes>
   implements MovieTheaterAttributes
 {
   @PrimaryKey
@@ -25,6 +26,7 @@ export class MovieTheaterModel
     type: DataType.STRING,
     allowNull: false,
     unique: true,
+    // defaultValue: () => uuidv4(), // Uncomment for auto-ID
     validate: {
       len: {
         args: [2, 36],
@@ -83,7 +85,6 @@ export class MovieTheaterModel
     allowNull: false,
     validate: {
       is: {
-        // French/European and international formats, adjust as needed
         args: /^(\+?\d{1,3})?[-. ]?(\d{2,4}[-. ]?){2,5}\d{2,4}$/,
         msg: 'Phone number format is invalid',
       },
@@ -106,7 +107,6 @@ export class MovieTheaterModel
   })
   declare email: string;
 
-  // These are provided automatically by Sequelize with `timestamps: true`
   declare readonly createdAt: Date;
   declare readonly updatedAt: Date;
 }

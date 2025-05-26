@@ -10,6 +10,7 @@ import testRouter from './routes/test.route.js';
 import userRouter from './routes/user.route.js';
 import authRouter from './routes/auth.route.js';
 import userToken from './routes/user-token.route.js';
+import movieTheaterRouter from './routes/movie-theater.route.js';
 
 const app = express();
 
@@ -28,6 +29,7 @@ app.use('/tests', testRouter);
 app.use('/users', userRouter);
 app.use('/auth', authRouter);
 app.use('/auth', userToken);
+app.use('/movie-theaters', movieTheaterRouter);
 // ─────── Error Handling ──────────────────────────────────────
 app.use(errorHandler);
 
