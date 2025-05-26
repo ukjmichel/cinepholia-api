@@ -49,6 +49,7 @@ jobs:
       TEST_MYSQL_DATABASE: cinepholia_test_db
       TEST_MYSQL_USER: cinepholia_admin
       TEST_MYSQL_PASSWORD: cinepholia_password
+      TEST_MYSQL_ROOT_PASSWORD: cinepholia_root_password
       # MongoDB Test Configuration
       TEST_MONGO_INITDB_DATABASE: cinepholia_test_db
       TEST_MONGODB_URI: mongodb://cinepholia_root:cinepholia_root_password@localhost:27017/cinepholia_test_db?authSource=admin
