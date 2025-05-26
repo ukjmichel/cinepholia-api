@@ -6,10 +6,10 @@ import {
   searchMovieTheaterValidator,
   movieTheaterIdParamValidator,
 } from '../validators/movie-theater.validator.js';
-
 import { decodeJwtToken } from '../middlewares/auth.middleware.js';
 import { permission } from '../middlewares/permission.js';
 import { handleValidationError } from '../middlewares/handleValidatonError.middleware.js';
+
 
 const router = Router();
 
