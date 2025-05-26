@@ -1,21 +1,23 @@
 import mongoose from 'mongoose';
-import { MongoMemoryServer } from 'mongodb-memory-server';
 import MovieStats from '../../models/movie-stats.schema.js';
+import { config } from '../../config/env.js';
 
 describe('MovieStats Model', () => {
-  let mongoServer: MongoMemoryServer;
-
   beforeAll(async () => {
-    mongoServer = await MongoMemoryServer.create();
-    await mongoose.connect(mongoServer.getUri());
+    // Connect using the test MongoDB URI from config
+    await mongoose.connect(config.mongodbUri);
   });
 
   afterAll(async () => {
+    // Clean up the test database completely
+    if (mongoose.connection.db) {
+      await mongoose.connection.db.dropDatabase();
+    }
     await mongoose.disconnect();
-    await mongoServer.stop();
   });
 
-  afterEach(async () => {
+  beforeEach(async () => {
+    // Clean the collection before each test
     await MovieStats.deleteMany({});
   });
 
@@ -87,5 +89,93 @@ describe('MovieStats Model', () => {
     const doc = await MovieStats.create({ movieId: 'movie-4', bookings: [] });
     expect(doc.movieId).toBe('movie-4');
     expect(doc.bookings.length).toBe(0);
+  });
+
+  it('validates required fields', async () => {
+    // Test missing movieId
+    const docWithoutMovieId = new MovieStats({
+      bookings: [
+        {
+          bookingId: 'booking-5',
+          userId: 'user-1',
+          bookedAt: new Date(),
+          seatsNumber: 1,
+        },
+      ],
+    });
+
+    await expect(docWithoutMovieId.save()).rejects.toThrow();
+  });
+
+  it('validates booking fields', async () => {
+    // Test booking with missing required fields
+    const docWithInvalidBooking = new MovieStats({
+      movieId: 'movie-6',
+      bookings: [
+        {
+          bookingId: 'booking-6',
+          // Missing userId, bookedAt, seatsNumber
+        },
+      ],
+    });
+
+    await expect(docWithInvalidBooking.save()).rejects.toThrow();
+  });
+
+  it('handles concurrent access correctly', async () => {
+    // Create initial document
+    await MovieStats.create({
+      movieId: 'movie-7',
+      bookings: [
+        {
+          bookingId: 'booking-7a',
+          userId: 'user-1',
+          bookedAt: new Date(),
+          seatsNumber: 2,
+        },
+      ],
+    });
+
+    // Simulate concurrent updates
+    const updates = [
+      MovieStats.findOneAndUpdate(
+        { movieId: 'movie-7' },
+        {
+          $push: {
+            bookings: {
+              bookingId: 'booking-7b',
+              userId: 'user-2',
+              bookedAt: new Date(),
+              seatsNumber: 3,
+            },
+          },
+        },
+        { new: true }
+      ),
+      MovieStats.findOneAndUpdate(
+        { movieId: 'movie-7' },
+        {
+          $push: {
+            bookings: {
+              bookingId: 'booking-7c',
+              userId: 'user-3',
+              bookedAt: new Date(),
+              seatsNumber: 1,
+            },
+          },
+        },
+        { new: true }
+      ),
+    ];
+
+    const results = await Promise.all(updates);
+
+    // Verify both updates succeeded
+    expect(results[0]).toBeTruthy();
+    expect(results[1]).toBeTruthy();
+
+    // Get final state
+    const finalDoc = await MovieStats.findOne({ movieId: 'movie-7' });
+    expect(finalDoc!.bookings.length).toBeGreaterThanOrEqual(2);
   });
 });

@@ -147,11 +147,11 @@ describe('AuthorizationService', () => {
     });
 
     const all = await authorizationService.listAuthorizations();
-    expect(all.length).toBe(2);
+    expect(all.authorizations.length).toBe(2);
 
     const admins =
       await authorizationService.listAuthorizations('administrateur');
-    expect(admins.length).toBe(1);
-    expect(admins[0].userId).toBe('test2');
+    expect(admins.authorizations.length).toBe(1);
+    expect(admins.authorizations[0].userId).toBe('test2');
   });
 });
