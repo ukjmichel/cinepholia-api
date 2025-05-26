@@ -15,7 +15,7 @@ jobs:
         image: mysql:8
         env:
           MYSQL_ROOT_PASSWORD: cinepholia_root_password
-          MYSQL_DATABASE: cinepholia_db
+          MYSQL_DATABASE: cinepholia_test_db
           MYSQL_USER: cinepholia_admin
           MYSQL_PASSWORD: cinepholia_password
         ports:
@@ -31,63 +31,158 @@ jobs:
         env:
           MONGO_INITDB_ROOT_USERNAME: cinepholia_root
           MONGO_INITDB_ROOT_PASSWORD: cinepholia_root_password
-          MONGO_INITDB_DATABASE: cinepholia_db
+          MONGO_INITDB_DATABASE: cinepholia_test_db
         ports:
           - 27017:27017
         options: >-
-          --health-cmd="echo 'db.runCommand({ ping: 1 })' | mongosh localhost:27017/cinepholia_db -u cinepholia_root -p cinepholia_root_password --authenticationDatabase admin --quiet"
+          --health-cmd="mongosh --eval 'db.runCommand({ ping: 1 })' --quiet || mongo --eval 'db.runCommand({ ping: 1 })' --quiet"
           --health-interval=10s
           --health-timeout=5s
           --health-retries=5
 
     env:
+      # ─── Application ────────────────────────────────────────────────────────
       NODE_ENV: test
-      PORT: 3000
+      PORT: ${{ secrets.PORT }}
+      HOST_APP_PORT: ${{ secrets.HOST_APP_PORT }}
+
+      # ─── MySQL Database Configuration ───────────────────────────────────────
       MYSQL_HOST: 127.0.0.1
-      MYSQL_PORT: 3306
-      MYSQL_DATABASE: cinepholia_db
-      MYSQL_USER: cinepholia_admin
-      MYSQL_PASSWORD: cinepholia_password
-      MONGODB_URI: mongodb://cinepholia_root:cinepholia_root_password@localhost:27017/cinepholia_db?authSource=admin
+      MYSQL_PORT: ${{ secrets.MYSQL_PORT }}
+      HOST_MYSQL_PORT: ${{ secrets.HOST_MYSQL_PORT }}
+      MYSQL_DATABASE: ${{ secrets.MYSQL_DATABASE }}
+      MYSQL_ROOT_PASSWORD: ${{ secrets.MYSQL_ROOT_PASSWORD }}
+      MYSQL_USER: ${{ secrets.MYSQL_USER }}
+      MYSQL_PASSWORD: ${{ secrets.MYSQL_PASSWORD }}
+
+      # ─── MongoDB Configuration ──────────────────────────────────────────────
+      MONGO_INITDB_DATABASE: ${{ secrets.MONGO_INITDB_DATABASE }}
+      MONGO_PORT: ${{ secrets.MONGO_PORT }}
+      HOST_MONGO_PORT: ${{ secrets.HOST_MONGO_PORT }}
+      MONGO_INITDB_ROOT_USERNAME: ${{ secrets.MONGO_INITDB_ROOT_USERNAME }}
+      MONGO_INITDB_ROOT_PASSWORD: ${{ secrets.MONGO_INITDB_ROOT_PASSWORD }}
+      MONGODB_URI: mongodb://${{ secrets.MONGO_INITDB_ROOT_USERNAME }}:${{ secrets.MONGO_INITDB_ROOT_PASSWORD }}@localhost:27017/${{ secrets.MONGO_INITDB_DATABASE }}?authSource=admin
+
+      # ─── Mongo Express Configuration ────────────────────────────────────────
+      MONGO_EXPRESS_PORT: ${{ secrets.MONGO_EXPRESS_PORT }}
+      HOST_MONGO_EXPRESS_PORT: ${{ secrets.HOST_MONGO_EXPRESS_PORT }}
+
+      # ─── Resend email configuration ─────────────────────────────────────────
+      RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+      RESEND_FROM: ${{ secrets.RESEND_FROM }}
+      SEND_WELCOME_EMAIL: ${{ secrets.SEND_WELCOME_EMAIL }}
+
+      # ─── JWT Auth Configuration ──────────────────────────────────────────────
+      JWT_SECRET: ${{ secrets.JWT_SECRET }}
+      JWT_REFRESH_SECRET: ${{ secrets.JWT_REFRESH_SECRET }}
+      JWT_EXPIRES_IN: ${{ secrets.JWT_EXPIRES_IN }}
+      JWT_REFRESH_EXPIRES_IN: ${{ secrets.JWT_REFRESH_EXPIRES_IN }}
+
+      # ─── Test MySQL Database Configuration ─────────────────────────────────────
+      TEST_MYSQL_HOST: 127.0.0.1
+      TEST_MYSQL_PORT: ${{ secrets.TEST_MYSQL_PORT }}
+      TEST_HOST_MYSQL_PORT: ${{ secrets.TEST_HOST_MYSQL_PORT }}
+      TEST_MYSQL_DATABASE: ${{ secrets.TEST_MYSQL_DATABASE }}
+      TEST_MYSQL_ROOT_PASSWORD: ${{ secrets.TEST_MYSQL_ROOT_PASSWORD }}
+      TEST_MYSQL_USER: ${{ secrets.TEST_MYSQL_USER }}
+      TEST_MYSQL_PASSWORD: ${{ secrets.TEST_MYSQL_PASSWORD }}
+
+      # ─── Test MongoDB Configuration ───────────────────────────────────────────
+      TEST_MONGO_INITDB_DATABASE: ${{ secrets.TEST_MONGO_INITDB_DATABASE }}
+      TEST_MONGO_PORT: ${{ secrets.TEST_MONGO_PORT }}
+      TEST_HOST_MONGO_PORT: ${{ secrets.TEST_HOST_MONGO_PORT }}
+      TEST_MONGO_INITDB_ROOT_USERNAME: ${{ secrets.TEST_MONGO_INITDB_ROOT_USERNAME }}
+      TEST_MONGO_INITDB_ROOT_PASSWORD: ${{ secrets.TEST_MONGO_INITDB_ROOT_PASSWORD }}
+      TEST_MONGODB_URI: mongodb://${{ secrets.TEST_MONGO_INITDB_ROOT_USERNAME }}:${{ secrets.TEST_MONGO_INITDB_ROOT_PASSWORD }}@localhost:27017/${{ secrets.TEST_MONGO_INITDB_DATABASE }}?authSource=admin
+
+      # ─── Test Mongo Express Configuration ─────────────────────────────────────
+      TEST_MONGO_EXPRESS_PORT: ${{ secrets.TEST_MONGO_EXPRESS_PORT }}
+
+      # ─── Test Resend email configuration (optional) ─────────────────────────
+      TEST_RESEND_API_KEY: ${{ secrets.TEST_RESEND_API_KEY }}
+      TEST_RESEND_FROM: ${{ secrets.TEST_RESEND_FROM }}
+      TEST_SEND_WELCOME_EMAIL: ${{ secrets.TEST_SEND_WELCOME_EMAIL }}
+      TEST_EMAIL: ${{ secrets.TEST_EMAIL }}
+
+      # ─── Test JWT Auth Configuration ─────────────────────────────────────────
+      TEST_JWT_SECRET: ${{ secrets.TEST_JWT_SECRET }}
+      TEST_JWT_REFRESH_SECRET: ${{ secrets.TEST_JWT_REFRESH_SECRET }}
+      TEST_JWT_EXPIRES_IN: ${{ secrets.TEST_JWT_EXPIRES_IN }}
+      TEST_JWT_REFRESH_EXPIRES_IN: ${{ secrets.TEST_JWT_REFRESH_EXPIRES_IN }}
 
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Use Node.js 20.x
-      uses: actions/setup-node@v4
-      with:
-        node-version: 20
+      - name: Use Node.js 20.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
 
-    - name: Install dependencies
-      run: npm ci
+      - name: Install MongoDB tools
+        run: |
+          # Install MongoDB shell (mongosh)
+          wget -qO - https://www.mongodb.org/static/pgp/server-6.0.asc | sudo apt-key add -
+          echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/6.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-6.0.list
+          sudo apt-get update
+          sudo apt-get install -y mongodb-mongosh
 
-    - name: Wait for MySQL to be ready
-      run: |
-        for i in {1..30}; do
-          if mysqladmin ping -h"127.0.0.1" -ucinepholia_admin -pcinepholia_password --silent; then
-            echo "MySQL is up!";
-            break;
-          fi;
-          echo "Waiting for MySQL... ($i/30)";
-          sleep 2;
-        done
+      - name: Install dependencies
+        run: npm ci
 
-    - name: Wait for MongoDB to be ready
-      run: |
-        for i in {1..30}; do
-          if mongosh "mongodb://cinepholia_root:cinepholia_root_password@localhost:27017/cinepholia_db?authSource=admin" --quiet --eval "db.runCommand({ ping: 1 })" > /dev/null; then
-            echo "MongoDB is up!";
-            break;
-          fi;
-          echo "Waiting for MongoDB... ($i/30)";
-          sleep 2;
-        done
+      - name: Wait for MySQL to be ready
+        run: |
+          echo "Waiting for MySQL to be ready..."
+          for i in {1..30}; do
+            if mysqladmin ping -h"127.0.0.1" -ucinepholia_admin -pcinepholia_password --silent; then
+              echo "MySQL is ready!";
+              break;
+            fi;
+            echo "Waiting for MySQL... ($i/30)";
+            sleep 2;
+          done
+          # Verify test database exists
+          mysql -h127.0.0.1 -ucinepholia_admin -pcinepholia_password -e "CREATE DATABASE IF NOT EXISTS cinepholia_test_db;"
 
-    - name: Build TypeScript (if needed)
-      run: |
-        if [ -f tsconfig.json ]; then
-          npm run build || true
-        fi
+      - name: Wait for MongoDB to be ready
+        run: |
+          echo "Waiting for MongoDB to be ready..."
+          for i in {1..30}; do
+            if mongosh "mongodb://cinepholia_root:cinepholia_root_password@localhost:27017/admin" --quiet --eval "db.runCommand({ ping: 1 })" > /dev/null 2>&1; then
+              echo "MongoDB is ready!";
+              break;
+            fi;
+            echo "Waiting for MongoDB... ($i/30)";
+            sleep 2;
+          done
 
-    - name: Run Jest tests
-      run: npm test
+      - name: Setup test databases
+        run: |
+          echo "Setting up test databases..."
+          # Create MySQL test database if it doesn't exist
+          mysql -h127.0.0.1 -ucinepholia_admin -pcinepholia_password -e "CREATE DATABASE IF NOT EXISTS cinepholia_test_db;"
+
+          # Verify MongoDB test database access
+          mongosh "mongodb://cinepholia_root:cinepholia_root_password@localhost:27017/cinepholia_test_db?authSource=admin" --quiet --eval "db.runCommand({ ping: 1 })"
+
+      - name: Build TypeScript (if needed)
+        run: |
+          if [ -f tsconfig.json ]; then
+            echo "Building TypeScript..."
+            npm run build || echo "Build failed or no build script available"
+          fi
+
+      - name: Run tests
+        run: |
+          echo "Running tests..."
+          npm test
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: |
+            coverage/
+            test-results.xml
+          retention-days: 30

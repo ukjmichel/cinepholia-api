@@ -9,35 +9,67 @@ import {
 } from '../models/user.model.js';
 import { Op, Transaction, WhereOptions } from 'sequelize';
 
-// Interfaces
+/**
+ * Filters for listing users
+ */
 export interface ListUsersFilters {
+  /** Filter by username (partial match, case-insensitive) */
   username?: string;
+  /** Filter by email (partial match, case-insensitive) */
   email?: string;
+  /** Filter by verification status */
   verified?: boolean;
 }
 
+/**
+ * Options for listing users with pagination and filtering
+ */
 export interface ListUsersOptions {
+  /** Page number (1-based, defaults to 1) */
   page?: number;
+  /** Number of items per page (max 100, defaults to 10) */
   pageSize?: number;
+  /** Filters to apply to the user list */
   filters?: ListUsersFilters;
 }
 
+/**
+ * Result object for paginated user listing
+ */
 export interface ListUsersResult {
+  /** Array of user models matching the criteria */
   users: UserModel[];
+  /** Total number of users matching the filters */
   total: number;
+  /** Current page number */
   page: number;
+  /** Number of items per page */
   pageSize: number;
 }
 
+/**
+ * Service options for database operations
+ */
 interface ServiceOptions {
+  /** Database transaction to use for the operation */
   transaction?: Transaction;
 }
 
+/**
+ * Service class for managing user-related operations
+ * Provides CRUD operations and business logic for user management
+ */
 export class UserService {
-  // Create a new user
+  /**
+   * Creates a new user in the database
+   * @param data - User creation data including email, username, and password
+   * @param options - Optional service options including database transaction
+   * @returns Promise resolving to the created user model
+   * @throws {ConflictError} When a user with the same email or username already exists
+   */
   async createUser(
     data: UserCreationAttributes,
-    options?: ServiceOptions // <- added
+    options?: ServiceOptions
   ): Promise<UserModel> {
     const existingUser = await UserModel.findOne({
       where: {
@@ -46,7 +78,7 @@ export class UserService {
           { username: data.username.toLowerCase() },
         ],
       },
-      transaction: options?.transaction, // <- pass transaction
+      transaction: options?.transaction,
     });
 
     if (existingUser) {
@@ -56,18 +88,26 @@ export class UserService {
     }
 
     const user = await UserModel.create(data, {
-      transaction: options?.transaction, // <- pass transaction
+      transaction: options?.transaction,
     });
 
     return user;
   }
 
-  // Find a user by ID
+  /**
+   * Retrieves a user by their unique ID
+   * @param userId - The unique identifier of the user
+   * @returns Promise resolving to the user model or null if not found
+   */
   async getUserById(userId: string): Promise<UserModel | null> {
     return UserModel.findByPk(userId);
   }
 
-  // Find a user by username or email
+  /**
+   * Finds a user by their username or email address
+   * @param identifier - Username or email to search for (case-insensitive)
+   * @returns Promise resolving to the user model or null if not found
+   */
   async getUserByUsernameOrEmail(
     identifier: string
   ): Promise<UserModel | null> {
@@ -81,14 +121,22 @@ export class UserService {
     });
   }
 
-  // Update user info (not password)
+  /**
+   * Updates user information (excluding password)
+   * @param userId - The unique identifier of the user to update
+   * @param updates - Partial user attributes to update
+   * @param options - Optional service options including database transaction
+   * @returns Promise resolving to the updated user model
+   * @throws {NotFoundError} When the user is not found
+   * @throws {ConflictError} When updated email/username conflicts with existing user
+   */
   async updateUser(
     userId: string,
     updates: Partial<UserAttributes>,
-    options?: ServiceOptions // <- added
+    options?: ServiceOptions
   ): Promise<UserModel> {
     const user = await UserModel.findByPk(userId, {
-      transaction: options?.transaction, // <- pass transaction
+      transaction: options?.transaction,
     });
     if (!user) {
       throw new NotFoundError('User not found');
@@ -109,7 +157,7 @@ export class UserService {
           [Op.or]: orConditions,
           userId: { [Op.ne]: userId }, // exclude self
         },
-        transaction: options?.transaction, // <- pass transaction
+        transaction: options?.transaction,
       });
       if (conflictUser) {
         throw new ConflictError(
@@ -118,62 +166,83 @@ export class UserService {
       }
     }
 
-    await user.update(updates, { transaction: options?.transaction }); // <- pass transaction
+    await user.update(updates, { transaction: options?.transaction });
     return user;
   }
 
-  // Change password (with hash automatically handled by model hook)
+  /**
+   * Changes a user's password
+   * Password hashing is automatically handled by the model hook
+   * @param userId - The unique identifier of the user
+   * @param newPassword - The new password (will be hashed automatically)
+   * @param options - Optional service options including database transaction
+   * @returns Promise resolving to the updated user model
+   * @throws {NotFoundError} When the user is not found
+   */
   async changePassword(
     userId: string,
     newPassword: string,
-    options?: ServiceOptions // <- added
+    options?: ServiceOptions
   ): Promise<UserModel> {
     const user = await UserModel.findByPk(userId, {
-      transaction: options?.transaction, // <- pass transaction
+      transaction: options?.transaction,
     });
     if (!user) {
       throw new NotFoundError('User not found');
     }
     user.password = newPassword;
-    await user.save({ transaction: options?.transaction }); // <- pass transaction
+    await user.save({ transaction: options?.transaction });
     return user;
   }
 
-  // Verify user (set verified: true)
+  /**
+   * Marks a user as verified
+   * @param userId - The unique identifier of the user to verify
+   * @param options - Optional service options including database transaction
+   * @returns Promise resolving to the updated user model
+   * @throws {NotFoundError} When the user is not found
+   */
   async verifyUser(
     userId: string,
-    options?: ServiceOptions // <- added
+    options?: ServiceOptions
   ): Promise<UserModel> {
     const user = await UserModel.findByPk(userId, {
-      transaction: options?.transaction, // <- pass transaction
+      transaction: options?.transaction,
     });
     if (!user) {
       throw new NotFoundError('User not found');
     }
     user.verified = true;
-    await user.save({ transaction: options?.transaction }); // <- pass transaction
+    await user.save({ transaction: options?.transaction });
     return user;
   }
 
-  // Delete user
-  async deleteUser(
-    userId: string,
-    options?: ServiceOptions // <- added
-  ): Promise<boolean> {
+  /**
+   * Deletes a user from the database
+   * @param userId - The unique identifier of the user to delete
+   * @param options - Optional service options including database transaction
+   * @returns Promise resolving to true if user was deleted, false otherwise
+   * @throws {NotFoundError} When the user is not found
+   */
+  async deleteUser(userId: string, options?: ServiceOptions): Promise<boolean> {
     const user = await UserModel.findByPk(userId, {
-      transaction: options?.transaction, // <- pass transaction
+      transaction: options?.transaction,
     });
     if (!user) {
       throw new NotFoundError('User not found');
     }
     const deleted = await UserModel.destroy({
       where: { userId },
-      transaction: options?.transaction, // <- pass transaction
+      transaction: options?.transaction,
     });
     return deleted > 0;
   }
 
-  // List users with pagination and filters
+  /**
+   * Retrieves a paginated list of users with optional filtering
+   * @param options - Pagination and filtering options
+   * @returns Promise resolving to paginated user results
+   */
   async listUsers({
     page = 1,
     pageSize = 10,
@@ -216,7 +285,13 @@ export class UserService {
     };
   }
 
-  // Check password for login
+  /**
+   * Validates a user's password for authentication
+   * @param emailOrUsername - Email address or username to authenticate
+   * @param password - Password to validate
+   * @returns Promise resolving to the user model if valid, null if invalid password
+   * @throws {NotFoundError} When the user is not found
+   */
   async validatePassword(
     emailOrUsername: string,
     password: string
@@ -230,5 +305,10 @@ export class UserService {
   }
 }
 
-// Singleton export (optional)
+/**
+ * Singleton instance of UserService for convenient access
+ * @example
+ * import { userService } from './services/user.service.js';
+ * const user = await userService.createUser(userData);
+ */
 export const userService = new UserService();
