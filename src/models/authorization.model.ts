@@ -26,6 +26,8 @@ export class AuthorizationModel
     primaryKey: true,
     unique: true,
     allowNull: false,
+    onDelete: 'CASCADE', // CASCADE delete
+    onUpdate: 'CASCADE',
   })
   declare userId: string;
 
@@ -42,5 +44,3 @@ export class AuthorizationModel
   })
   declare user: UserModel;
 }
-
-

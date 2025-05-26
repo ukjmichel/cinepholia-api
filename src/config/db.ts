@@ -3,6 +3,7 @@ import { UserModel } from '../models/user.model.js';
 import { AuthorizationModel } from '../models/authorization.model.js';
 import { UserTokenModel } from '../models/user-token.model.js';
 import { config } from './env.js'; 
+import { MovieTheaterModel } from '../models/movie-theater.model.js';
 
 export const sequelize = new Sequelize({
   dialect: 'mysql',
@@ -11,7 +12,7 @@ export const sequelize = new Sequelize({
   username: config.mysqlUser,
   password: config.mysqlPassword,
   database: config.mysqlDatabase,
-  models: [UserModel, AuthorizationModel, UserTokenModel],
+  models: [UserModel, AuthorizationModel, UserTokenModel, MovieTheaterModel],
   logging: false,
   pool: {
     max: 10,
