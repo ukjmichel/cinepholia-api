@@ -43,6 +43,7 @@ jobs:
     env:
       # ─── Application ────────────────────────────────────────────────────────
       NODE_ENV: test
+<<<<<<< HEAD
       PORT: ${{ secrets.PORT || '3000' }}
       HOST_APP_PORT: ${{ secrets.HOST_APP_PORT || '3000' }}
 
@@ -109,6 +110,74 @@ jobs:
       TEST_JWT_REFRESH_SECRET: ${{ secrets.TEST_JWT_REFRESH_SECRET || 'testing_jwt_refresh_secret' }}
       TEST_JWT_EXPIRES_IN: ${{ secrets.TEST_JWT_EXPIRES_IN || '15m' }}
       TEST_JWT_REFRESH_EXPIRES_IN: ${{ secrets.TEST_JWT_REFRESH_EXPIRES_IN || '7d' }}
+=======
+      PORT: ${{ secrets.PORT }}
+      HOST_APP_PORT: ${{ secrets.HOST_APP_PORT }}
+
+      # ─── MySQL Database Configuration ───────────────────────────────────────
+      MYSQL_HOST: 127.0.0.1
+      MYSQL_PORT: ${{ secrets.MYSQL_PORT }}
+      HOST_MYSQL_PORT: ${{ secrets.HOST_MYSQL_PORT }}
+      MYSQL_DATABASE: ${{ secrets.MYSQL_DATABASE }}
+      MYSQL_ROOT_PASSWORD: ${{ secrets.MYSQL_ROOT_PASSWORD }}
+      MYSQL_USER: ${{ secrets.MYSQL_USER }}
+      MYSQL_PASSWORD: ${{ secrets.MYSQL_PASSWORD }}
+
+      # ─── MongoDB Configuration ──────────────────────────────────────────────
+      MONGO_INITDB_DATABASE: ${{ secrets.MONGO_INITDB_DATABASE }}
+      MONGO_PORT: ${{ secrets.MONGO_PORT }}
+      HOST_MONGO_PORT: ${{ secrets.HOST_MONGO_PORT }}
+      MONGO_INITDB_ROOT_USERNAME: ${{ secrets.MONGO_INITDB_ROOT_USERNAME }}
+      MONGO_INITDB_ROOT_PASSWORD: ${{ secrets.MONGO_INITDB_ROOT_PASSWORD }}
+      MONGODB_URI: mongodb://${{ secrets.MONGO_INITDB_ROOT_USERNAME }}:${{ secrets.MONGO_INITDB_ROOT_PASSWORD }}@localhost:27017/${{ secrets.MONGO_INITDB_DATABASE }}?authSource=admin
+
+      # ─── Mongo Express Configuration ────────────────────────────────────────
+      MONGO_EXPRESS_PORT: ${{ secrets.MONGO_EXPRESS_PORT }}
+      HOST_MONGO_EXPRESS_PORT: ${{ secrets.HOST_MONGO_EXPRESS_PORT }}
+
+      # ─── Resend email configuration ─────────────────────────────────────────
+      RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+      RESEND_FROM: ${{ secrets.RESEND_FROM }}
+      SEND_WELCOME_EMAIL: ${{ secrets.SEND_WELCOME_EMAIL }}
+
+      # ─── JWT Auth Configuration ──────────────────────────────────────────────
+      JWT_SECRET: ${{ secrets.JWT_SECRET }}
+      JWT_REFRESH_SECRET: ${{ secrets.JWT_REFRESH_SECRET }}
+      JWT_EXPIRES_IN: ${{ secrets.JWT_EXPIRES_IN }}
+      JWT_REFRESH_EXPIRES_IN: ${{ secrets.JWT_REFRESH_EXPIRES_IN }}
+
+      # ─── Test MySQL Database Configuration ─────────────────────────────────────
+      TEST_MYSQL_HOST: 127.0.0.1
+      TEST_MYSQL_PORT: ${{ secrets.TEST_MYSQL_PORT }}
+      TEST_HOST_MYSQL_PORT: ${{ secrets.TEST_HOST_MYSQL_PORT }}
+      TEST_MYSQL_DATABASE: ${{ secrets.TEST_MYSQL_DATABASE }}
+      TEST_MYSQL_ROOT_PASSWORD: ${{ secrets.TEST_MYSQL_ROOT_PASSWORD }}
+      TEST_MYSQL_USER: ${{ secrets.TEST_MYSQL_USER }}
+      TEST_MYSQL_PASSWORD: ${{ secrets.TEST_MYSQL_PASSWORD }}
+
+      # ─── Test MongoDB Configuration ───────────────────────────────────────────
+      TEST_MONGO_INITDB_DATABASE: ${{ secrets.TEST_MONGO_INITDB_DATABASE }}
+      TEST_MONGO_PORT: ${{ secrets.TEST_MONGO_PORT }}
+      TEST_HOST_MONGO_PORT: ${{ secrets.TEST_HOST_MONGO_PORT }}
+      TEST_MONGO_INITDB_ROOT_USERNAME: ${{ secrets.TEST_MONGO_INITDB_ROOT_USERNAME }}
+      TEST_MONGO_INITDB_ROOT_PASSWORD: ${{ secrets.TEST_MONGO_INITDB_ROOT_PASSWORD }}
+      TEST_MONGODB_URI: mongodb://${{ secrets.TEST_MONGO_INITDB_ROOT_USERNAME }}:${{ secrets.TEST_MONGO_INITDB_ROOT_PASSWORD }}@localhost:27017/${{ secrets.TEST_MONGO_INITDB_DATABASE }}?authSource=admin
+
+      # ─── Test Mongo Express Configuration ─────────────────────────────────────
+      TEST_MONGO_EXPRESS_PORT: ${{ secrets.TEST_MONGO_EXPRESS_PORT }}
+
+      # ─── Test Resend email configuration (optional) ─────────────────────────
+      TEST_RESEND_API_KEY: ${{ secrets.TEST_RESEND_API_KEY }}
+      TEST_RESEND_FROM: ${{ secrets.TEST_RESEND_FROM }}
+      TEST_SEND_WELCOME_EMAIL: ${{ secrets.TEST_SEND_WELCOME_EMAIL }}
+      TEST_EMAIL: ${{ secrets.TEST_EMAIL }}
+
+      # ─── Test JWT Auth Configuration ─────────────────────────────────────────
+      TEST_JWT_SECRET: ${{ secrets.TEST_JWT_SECRET }}
+      TEST_JWT_REFRESH_SECRET: ${{ secrets.TEST_JWT_REFRESH_SECRET }}
+      TEST_JWT_EXPIRES_IN: ${{ secrets.TEST_JWT_EXPIRES_IN }}
+      TEST_JWT_REFRESH_EXPIRES_IN: ${{ secrets.TEST_JWT_REFRESH_EXPIRES_IN }}
+>>>>>>> 9502644 (130- Gestion profil utilisateur)
 
     steps:
       - uses: actions/checkout@v4
@@ -185,4 +254,8 @@ jobs:
           path: |
             coverage/
             test-results.xml
+<<<<<<< HEAD
           retention-days: 30
+=======
+          retention-days: 30
+>>>>>>> 9502644 (130- Gestion profil utilisateur)
