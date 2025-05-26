@@ -15,7 +15,7 @@ jobs:
         image: mysql:8
         env:
           MYSQL_ROOT_PASSWORD: cinepholia_root_password
-          MYSQL_DATABASE: cinepholia_db
+          MYSQL_DATABASE: cinepholia_test_db
           MYSQL_USER: cinepholia_admin
           MYSQL_PASSWORD: cinepholia_password
         ports:
@@ -31,11 +31,11 @@ jobs:
         env:
           MONGO_INITDB_ROOT_USERNAME: cinepholia_root
           MONGO_INITDB_ROOT_PASSWORD: cinepholia_root_password
-          MONGO_INITDB_DATABASE: cinepholia_db
+          MONGO_INITDB_DATABASE: cinepholia_test_db
         ports:
           - 27017:27017
         options: >-
-          --health-cmd="echo 'db.runCommand({ ping: 1 })' | mongosh localhost:27017/cinepholia_db -u cinepholia_root -p cinepholia_root_password --authenticationDatabase admin --quiet"
+          --health-cmd="echo 'db.runCommand({ ping: 1 })' | mongosh localhost:27017/test --quiet"
           --health-interval=10s
           --health-timeout=5s
           --health-retries=5
@@ -43,12 +43,25 @@ jobs:
     env:
       NODE_ENV: test
       PORT: 3000
-      MYSQL_HOST: 127.0.0.1
-      MYSQL_PORT: 3306
-      MYSQL_DATABASE: cinepholia_db
-      MYSQL_USER: cinepholia_admin
-      MYSQL_PASSWORD: cinepholia_password
-      MONGODB_URI: mongodb://cinepholia_root:cinepholia_root_password@localhost:27017/cinepholia_db?authSource=admin
+      # MySQL Test Configuration
+      TEST_MYSQL_HOST: 127.0.0.1
+      TEST_MYSQL_PORT: 3306
+      TEST_MYSQL_DATABASE: cinepholia_test_db
+      TEST_MYSQL_USER: cinepholia_admin
+      TEST_MYSQL_PASSWORD: cinepholia_password
+      # MongoDB Test Configuration
+      TEST_MONGO_INITDB_DATABASE: cinepholia_test_db
+      TEST_MONGODB_URI: mongodb://cinepholia_root:cinepholia_root_password@localhost:27017/cinepholia_test_db?authSource=admin
+      # JWT Test Configuration
+      TEST_JWT_SECRET: testing_jwt_secret
+      TEST_JWT_REFRESH_SECRET: testing_jwt_refresh_secret
+      TEST_JWT_EXPIRES_IN: 15m
+      TEST_JWT_REFRESH_EXPIRES_IN: 7d
+      # Email Test Configuration
+      TEST_SEND_WELCOME_EMAIL: true
+      TEST_EMAIL: jmichel.uk@outlook.fr
+      TEST_RESEND_API_KEY: ${{ secrets.TEST_RESEND_API_KEY }}
+      TEST_RESEND_FROM: onboarding-test@resend.dev
 
     steps:
     - uses: actions/checkout@v4
@@ -57,37 +70,64 @@ jobs:
       uses: actions/setup-node@v4
       with:
         node-version: 20
+        cache: 'npm'
 
     - name: Install dependencies
       run: npm ci
 
     - name: Wait for MySQL to be ready
       run: |
+        echo "Waiting for MySQL to be ready..."
         for i in {1..30}; do
           if mysqladmin ping -h"127.0.0.1" -ucinepholia_admin -pcinepholia_password --silent; then
-            echo "MySQL is up!";
+            echo "MySQL is ready!";
             break;
           fi;
           echo "Waiting for MySQL... ($i/30)";
           sleep 2;
         done
+        # Verify test database exists
+        mysql -h127.0.0.1 -ucinepholia_admin -pcinepholia_password -e "CREATE DATABASE IF NOT EXISTS cinepholia_test_db;"
 
     - name: Wait for MongoDB to be ready
       run: |
+        echo "Waiting for MongoDB to be ready..."
         for i in {1..30}; do
-          if mongosh "mongodb://cinepholia_root:cinepholia_root_password@localhost:27017/cinepholia_db?authSource=admin" --quiet --eval "db.runCommand({ ping: 1 })" > /dev/null; then
-            echo "MongoDB is up!";
+          if mongosh "mongodb://cinepholia_root:cinepholia_root_password@localhost:27017/admin" --quiet --eval "db.runCommand({ ping: 1 })" > /dev/null 2>&1; then
+            echo "MongoDB is ready!";
             break;
           fi;
           echo "Waiting for MongoDB... ($i/30)";
           sleep 2;
         done
 
+    - name: Setup test databases
+      run: |
+        echo "Setting up test databases..."
+        # Create MySQL test database if it doesn't exist
+        mysql -h127.0.0.1 -ucinepholia_admin -pcinepholia_password -e "CREATE DATABASE IF NOT EXISTS cinepholia_test_db;"
+        
+        # Verify MongoDB test database access
+        mongosh "mongodb://cinepholia_root:cinepholia_root_password@localhost:27017/cinepholia_test_db?authSource=admin" --quiet --eval "db.runCommand({ ping: 1 })"
+
     - name: Build TypeScript (if needed)
       run: |
         if [ -f tsconfig.json ]; then
-          npm run build || true
+          echo "Building TypeScript..."
+          npm run build || echo "Build failed or no build script available"
         fi
 
-    - name: Run Jest tests
-      run: npm test
+    - name: Run tests
+      run: |
+        echo "Running tests..."
+        npm test
+
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results
+        path: |
+          coverage/
+          test-results.xml
+        retention-days: 30
