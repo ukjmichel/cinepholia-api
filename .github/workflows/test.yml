@@ -35,7 +35,7 @@ jobs:
         ports:
           - 27017:27017
         options: >-
-          --health-cmd="echo 'db.runCommand({ ping: 1 })' | mongosh localhost:27017/test --quiet"
+          --health-cmd="mongosh --eval 'db.runCommand({ ping: 1 })' --quiet || mongo --eval 'db.runCommand({ ping: 1 })' --quiet"
           --health-interval=10s
           --health-timeout=5s
           --health-retries=5
@@ -64,70 +64,78 @@ jobs:
       TEST_RESEND_FROM: onboarding-test@resend.dev
 
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Use Node.js 20.x
-      uses: actions/setup-node@v4
-      with:
-        node-version: 20
-        cache: 'npm'
+      - name: Use Node.js 20.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
 
-    - name: Install dependencies
-      run: npm ci
+      - name: Install MongoDB tools
+        run: |
+          # Install MongoDB shell (mongosh)
+          wget -qO - https://www.mongodb.org/static/pgp/server-6.0.asc | sudo apt-key add -
+          echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/6.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-6.0.list
+          sudo apt-get update
+          sudo apt-get install -y mongodb-mongosh
 
-    - name: Wait for MySQL to be ready
-      run: |
-        echo "Waiting for MySQL to be ready..."
-        for i in {1..30}; do
-          if mysqladmin ping -h"127.0.0.1" -ucinepholia_admin -pcinepholia_password --silent; then
-            echo "MySQL is ready!";
-            break;
-          fi;
-          echo "Waiting for MySQL... ($i/30)";
-          sleep 2;
-        done
-        # Verify test database exists
-        mysql -h127.0.0.1 -ucinepholia_admin -pcinepholia_password -e "CREATE DATABASE IF NOT EXISTS cinepholia_test_db;"
+      - name: Install dependencies
+        run: npm ci
 
-    - name: Wait for MongoDB to be ready
-      run: |
-        echo "Waiting for MongoDB to be ready..."
-        for i in {1..30}; do
-          if mongosh "mongodb://cinepholia_root:cinepholia_root_password@localhost:27017/admin" --quiet --eval "db.runCommand({ ping: 1 })" > /dev/null 2>&1; then
-            echo "MongoDB is ready!";
-            break;
-          fi;
-          echo "Waiting for MongoDB... ($i/30)";
-          sleep 2;
-        done
+      - name: Wait for MySQL to be ready
+        run: |
+          echo "Waiting for MySQL to be ready..."
+          for i in {1..30}; do
+            if mysqladmin ping -h"127.0.0.1" -ucinepholia_admin -pcinepholia_password --silent; then
+              echo "MySQL is ready!";
+              break;
+            fi;
+            echo "Waiting for MySQL... ($i/30)";
+            sleep 2;
+          done
+          # Verify test database exists
+          mysql -h127.0.0.1 -ucinepholia_admin -pcinepholia_password -e "CREATE DATABASE IF NOT EXISTS cinepholia_test_db;"
 
-    - name: Setup test databases
-      run: |
-        echo "Setting up test databases..."
-        # Create MySQL test database if it doesn't exist
-        mysql -h127.0.0.1 -ucinepholia_admin -pcinepholia_password -e "CREATE DATABASE IF NOT EXISTS cinepholia_test_db;"
-        
-        # Verify MongoDB test database access
-        mongosh "mongodb://cinepholia_root:cinepholia_root_password@localhost:27017/cinepholia_test_db?authSource=admin" --quiet --eval "db.runCommand({ ping: 1 })"
+      - name: Wait for MongoDB to be ready
+        run: |
+          echo "Waiting for MongoDB to be ready..."
+          for i in {1..30}; do
+            if mongosh "mongodb://cinepholia_root:cinepholia_root_password@localhost:27017/admin" --quiet --eval "db.runCommand({ ping: 1 })" > /dev/null 2>&1; then
+              echo "MongoDB is ready!";
+              break;
+            fi;
+            echo "Waiting for MongoDB... ($i/30)";
+            sleep 2;
+          done
 
-    - name: Build TypeScript (if needed)
-      run: |
-        if [ -f tsconfig.json ]; then
-          echo "Building TypeScript..."
-          npm run build || echo "Build failed or no build script available"
-        fi
+      - name: Setup test databases
+        run: |
+          echo "Setting up test databases..."
+          # Create MySQL test database if it doesn't exist
+          mysql -h127.0.0.1 -ucinepholia_admin -pcinepholia_password -e "CREATE DATABASE IF NOT EXISTS cinepholia_test_db;"
 
-    - name: Run tests
-      run: |
-        echo "Running tests..."
-        npm test
+          # Verify MongoDB test database access
+          mongosh "mongodb://cinepholia_root:cinepholia_root_password@localhost:27017/cinepholia_test_db?authSource=admin" --quiet --eval "db.runCommand({ ping: 1 })"
 
-    - name: Upload test results
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: test-results
-        path: |
-          coverage/
-          test-results.xml
-        retention-days: 30
+      - name: Build TypeScript (if needed)
+        run: |
+          if [ -f tsconfig.json ]; then
+            echo "Building TypeScript..."
+            npm run build || echo "Build failed or no build script available"
+          fi
+
+      - name: Run tests
+        run: |
+          echo "Running tests..."
+          npm test
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: |
+            coverage/
+            test-results.xml
+          retention-days: 30
