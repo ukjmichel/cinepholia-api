@@ -6,6 +6,23 @@ import { AuthorizationService } from '../services/authorization.service.js';
 
 export const authorizationService = new AuthorizationService();
 
+/**
+ * Authenticates a user and returns JWT tokens and user info.
+ *
+ * @param {Request} req - Express request object (should contain emailOrUsername and password in body)
+ * @param {Response} res - Express response object
+ * @param {NextFunction} next - Express next middleware function
+ * @returns {Promise<void>} Sends a JSON response with user and tokens, or passes error to next middleware
+ *
+ * Example successful response:
+ * {
+ *   message: "Login successful",
+ *   data: {
+ *     user: { userId, username, firstName, lastName, email, role },
+ *     tokens: { accessToken, refreshToken }
+ *   }
+ * }
+ */
 export const login = async (
   req: Request,
   res: Response,
@@ -34,18 +51,11 @@ export const login = async (
       }
     }
 
-    // Clean user object: get rid of password and any sequelize stuff
+    // Clean user object: get rid of password and sequelize metadata
     const plainUser =
       typeof user.get === 'function' ? user.get({ plain: true }) : user;
-    const {
-      userId,
-      username,
-      firstName,
-      lastName,
-      email,
-    } = plainUser;
+    const { userId, username, firstName, lastName, email } = plainUser;
 
-    // You can add more fields if you need, but **do not include password!**
     res.status(200).json({
       message: 'Login successful',
       data: {

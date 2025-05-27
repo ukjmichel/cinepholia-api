@@ -4,7 +4,11 @@ import { MovieHallService } from '../services/movie-hall.service.js';
 const service = new MovieHallService();
 
 /**
- * Create a new movie hall
+ * Creates a new movie hall.
+ * @param {Request} req - Express request (body: MovieHall info)
+ * @param {Response} res - Express response
+ * @param {NextFunction} next - Express next middleware
+ * @returns {Promise<void>}
  */
 export async function createMovieHall(
   req: Request,
@@ -20,7 +24,11 @@ export async function createMovieHall(
 }
 
 /**
- * Get all movie halls (optionally paginated: ?limit=, ?offset=)
+ * Returns all movie halls, optionally paginated with ?limit= and ?offset=.
+ * @param {Request} req - Express request (query: limit, offset)
+ * @param {Response} res - Express response
+ * @param {NextFunction} next - Express next middleware
+ * @returns {Promise<void>}
  */
 export async function getAllMovieHalls(
   req: Request,
@@ -40,7 +48,11 @@ export async function getAllMovieHalls(
 }
 
 /**
- * Get all halls by theaterId
+ * Returns all movie halls for a specific theater.
+ * @param {Request} req - Express request (params: theaterId)
+ * @param {Response} res - Express response
+ * @param {NextFunction} next - Express next middleware
+ * @returns {Promise<void>}
  */
 export async function getMovieHallsByTheater(
   req: Request,
@@ -56,7 +68,11 @@ export async function getMovieHallsByTheater(
 }
 
 /**
- * Get a single hall by composite PK
+ * Returns a single hall by theaterId and hallId.
+ * @param {Request} req - Express request (params: theaterId, hallId)
+ * @param {Response} res - Express response
+ * @param {NextFunction} next - Express next middleware
+ * @returns {Promise<void>}
  */
 export async function getMovieHall(
   req: Request,
@@ -75,7 +91,11 @@ export async function getMovieHall(
 }
 
 /**
- * Update a hall by composite PK
+ * Updates a hall by theaterId and hallId.
+ * @param {Request} req - Express request (params: theaterId, hallId; body: fields to update)
+ * @param {Response} res - Express response
+ * @param {NextFunction} next - Express next middleware
+ * @returns {Promise<void>}
  */
 export async function updateMovieHall(
   req: Request,
@@ -95,7 +115,11 @@ export async function updateMovieHall(
 }
 
 /**
- * Delete a hall by composite PK
+ * Deletes a hall by theaterId and hallId.
+ * @param {Request} req - Express request (params: theaterId, hallId)
+ * @param {Response} res - Express response
+ * @param {NextFunction} next - Express next middleware
+ * @returns {Promise<void>}
  */
 export async function deleteMovieHall(
   req: Request,
@@ -114,7 +138,11 @@ export async function deleteMovieHall(
 }
 
 /**
- * Search halls by theaterId or hallId (?theaterId=...&hallId=...)
+ * Searches movie halls by theaterId or hallId (?theaterId=...&hallId=...).
+ * @param {Request} req - Express request (query: theaterId, hallId)
+ * @param {Response} res - Express response
+ * @param {NextFunction} next - Express next middleware
+ * @returns {Promise<void>}
  */
 export async function searchMovieHalls(
   req: Request,

@@ -97,14 +97,13 @@ export class ScreeningModel
     targetKey: 'theaterId',
   })
   declare theater: MovieTheaterModel;
-
+  
   @BelongsTo(() => MovieHallModel, {
     foreignKey: 'hallId',
     targetKey: 'hallId',
   })
   declare hall: MovieHallModel;
 
-  // (optional) For TypeScript typing support for timestamps:
   declare readonly createdAt: Date;
   declare readonly updatedAt: Date;
 }

@@ -1,14 +1,16 @@
 import { Request, Response, NextFunction } from 'express';
 import { MovieTheaterService } from '../services/movie-theater.service.js';
 
-
 /**
  * Controller for Movie Theater endpoints.
  */
 export class MovieTheaterController {
   /**
    * Creates a new movie theater.
-   * @route POST /movie-theaters
+   * @param {Request} req - Express request object (expects theater data in body)
+   * @param {Response} res - Express response object
+   * @param {NextFunction} next - Express next middleware function
+   * @returns {Promise<void>} Sends the created theater in response.
    */
   static async create(req: Request, res: Response, next: NextFunction) {
     try {
@@ -21,7 +23,10 @@ export class MovieTheaterController {
 
   /**
    * Gets all movie theaters.
-   * @route GET /movie-theaters
+   * @param {Request} req - Express request object
+   * @param {Response} res - Express response object
+   * @param {NextFunction} next - Express next middleware function
+   * @returns {Promise<void>} Sends an array of theaters in response.
    */
   static async getAll(req: Request, res: Response, next: NextFunction) {
     try {
@@ -34,7 +39,10 @@ export class MovieTheaterController {
 
   /**
    * Gets a movie theater by its ID.
-   * @route GET /movie-theaters/:id
+   * @param {Request} req - Express request object (expects :id param)
+   * @param {Response} res - Express response object
+   * @param {NextFunction} next - Express next middleware function
+   * @returns {Promise<void>} Sends the found theater or 404 if not found.
    */
   static async getById(req: Request, res: Response, next: NextFunction) {
     try {
@@ -47,7 +55,10 @@ export class MovieTheaterController {
 
   /**
    * Updates a movie theater by its ID.
-   * @route PUT /movie-theaters/:id
+   * @param {Request} req - Express request object (expects :id param and update data in body)
+   * @param {Response} res - Express response object
+   * @param {NextFunction} next - Express next middleware function
+   * @returns {Promise<void>} Sends the updated theater in response.
    */
   static async update(req: Request, res: Response, next: NextFunction) {
     try {
@@ -60,7 +71,10 @@ export class MovieTheaterController {
 
   /**
    * Deletes a movie theater by its ID.
-   * @route DELETE /movie-theaters/:id
+   * @param {Request} req - Express request object (expects :id param)
+   * @param {Response} res - Express response object
+   * @param {NextFunction} next - Express next middleware function
+   * @returns {Promise<void>} Sends status 204 if deleted.
    */
   static async delete(req: Request, res: Response, next: NextFunction) {
     try {
@@ -73,7 +87,10 @@ export class MovieTheaterController {
 
   /**
    * Searches for movie theaters using query parameters (city, address, postalCode, theaterId).
-   * @route GET /movie-theaters/search
+   * @param {Request} req - Express request object (query params supported: city, address, postalCode, theaterId)
+   * @param {Response} res - Express response object
+   * @param {NextFunction} next - Express next middleware function
+   * @returns {Promise<void>} Sends an array of matched theaters.
    */
   static async search(req: Request, res: Response, next: NextFunction) {
     try {
