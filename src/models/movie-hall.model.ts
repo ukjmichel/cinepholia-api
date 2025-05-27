@@ -90,6 +90,8 @@ export class MovieHallModel
   @BelongsTo(() => MovieTheaterModel, {
     foreignKey: 'theaterId',
     targetKey: 'theaterId',
+    onDelete: 'CASCADE',
+    onUpdate: 'CASCADE',
   })
   declare theater: MovieTheaterModel;
 

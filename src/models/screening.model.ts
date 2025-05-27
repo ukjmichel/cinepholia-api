@@ -50,7 +50,7 @@ export class ScreeningModel
 
   @ForeignKey(() => MovieTheaterModel)
   @Column({
-    type: DataType.UUID,
+    type: DataType.STRING,
     allowNull: false,
   })
   declare theaterId: string;
