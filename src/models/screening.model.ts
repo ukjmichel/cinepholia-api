@@ -12,7 +12,7 @@ import { Optional } from 'sequelize';
 
 import { MovieModel } from './movie.model.js';
 import { MovieTheaterModel } from './movie-theater.model.js';
-import { MovieHallModel } from './movie-hall.model.js';
+
 
 export interface ScreeningAttributes {
   screeningId: string;
@@ -55,6 +55,7 @@ export class ScreeningModel
   })
   declare theaterId: string;
 
+  
   @ForeignKey(() => MovieHallModel)
   @Column({
     type: DataType.UUID,
@@ -86,6 +87,7 @@ export class ScreeningModel
   })
   declare quality: string;
 
+  // Associations non circulaires : dans la classe
   @BelongsTo(() => MovieModel, {
     foreignKey: 'movieId',
     targetKey: 'movieId',
@@ -97,13 +99,16 @@ export class ScreeningModel
     targetKey: 'theaterId',
   })
   declare theater: MovieTheaterModel;
-  
-  @BelongsTo(() => MovieHallModel, {
-    foreignKey: 'hallId',
-    targetKey: 'hallId',
-  })
-  declare hall: MovieHallModel;
+
+
 
   declare readonly createdAt: Date;
   declare readonly updatedAt: Date;
 }
+
+// --------------- ASSOCIATION CIRCULAIRE (à placer après la classe) ---------------
+import { MovieHallModel } from './movie-hall.model.js';
+BelongsTo(() => MovieHallModel, {
+  foreignKey: 'hallId',
+  targetKey: 'hallId',
+})(ScreeningModel.prototype, 'hall');

@@ -8,7 +8,6 @@ import {
   ForeignKey,
   BelongsTo,
 } from 'sequelize-typescript';
-import { ScreeningModel } from './screening.model.js';
 import { MovieTheaterModel } from './movie-theater.model.js';
 
 export interface MovieHallAttributes {
@@ -87,6 +86,7 @@ export class MovieHallModel
   })
   declare seatsLayout: (string | number)[][];
 
+  // Associations non circulaires
   @BelongsTo(() => MovieTheaterModel, {
     foreignKey: 'theaterId',
     targetKey: 'theaterId',
@@ -94,7 +94,10 @@ export class MovieHallModel
     onUpdate: 'CASCADE',
   })
   declare theater: MovieTheaterModel;
-
-  @HasMany(() => ScreeningModel)
-  declare screenings?: ScreeningModel[];
 }
+
+// -------------- ASSOCIATION CIRCULAIRE EN DEHORS DE LA CLASSE --------------
+// On ajoute l'association après coup pour casser la boucle d'import
+import { ScreeningModel } from './screening.model.js';
+
+HasMany(() => ScreeningModel)(MovieHallModel.prototype, 'screenings');
