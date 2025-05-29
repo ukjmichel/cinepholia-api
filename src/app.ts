@@ -14,6 +14,7 @@ import movieTheaterRouter from './routes/movie-theater.route.js';
 import movieHallRouter from './routes/movie-hall.route.js';
 import movieRouter from './routes/movie.route.js';
 import screeningRouter from './routes/screening.route.js';
+import bookingRouter from './routes/booking.route.js';
 
 const app = express();
 
@@ -36,6 +37,7 @@ app.use('/movie-theaters', movieTheaterRouter);
 app.use('/movie-halls', movieHallRouter);
 app.use('/movies', movieRouter);
 app.use('/screenings', screeningRouter);
+app.use('/bookings', bookingRouter);
 
 // ─────── Error Handling ──────────────────────────────────────
 app.use(errorHandler);

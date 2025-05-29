@@ -82,3 +82,7 @@ export const validateValidatePassword = [
     .withMessage('Email or username is required'),
   body('password').notEmpty().withMessage('Password is required'),
 ];
+
+export const userIdParamValidator = [
+  param('userId').isUUID().withMessage('userId must be a valid UUID'),
+];

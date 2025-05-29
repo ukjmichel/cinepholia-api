@@ -102,6 +102,7 @@ describe('BookingModel', () => {
       seatsNumber: 2,
       status: 'pending' as BookingStatus,
       bookingDate: new Date(),
+      totalPrice: 20,
     });
 
     expect(booking).toBeDefined();
@@ -133,6 +134,7 @@ describe('BookingModel', () => {
         seatsNumber: 0, // Invalid!
         status: 'pending' as BookingStatus,
         bookingDate: new Date(),
+        totalPrice: 20,
       })
     ).rejects.toThrow();
   });

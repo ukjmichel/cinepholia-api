@@ -89,6 +89,8 @@ describe('SeatBookingModel', () => {
       seatsNumber: 1,
       status: 'pending',
       bookingDate: new Date(),
+      totalPrice:20
+    
     });
   });
 

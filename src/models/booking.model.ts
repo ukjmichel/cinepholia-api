@@ -20,6 +20,7 @@ export interface BookingAttributes {
   userId: string;
   screeningId: string;
   seatsNumber: number;
+  totalPrice: number; // Add totalPrice field
   status: BookingStatus;
   bookingDate: Date;
 }
@@ -68,6 +69,15 @@ export class BookingModel
   })
   declare seatsNumber: number;
 
+  @Column({
+    type: DataType.DECIMAL(10, 2), // Support decimal prices like 15.50
+    allowNull: false,
+    validate: {
+      min: 0,
+    },
+  })
+  declare totalPrice: number;
+
   @Default('pending')
   @Column({
     type: DataType.ENUM('pending', 'used', 'canceled'),
@@ -78,7 +88,7 @@ export class BookingModel
   @Column({
     type: DataType.DATE,
     allowNull: false,
-    defaultValue: DataType.NOW, // Set the default value to the current date and time
+    defaultValue: DataType.NOW,
   })
   declare bookingDate: Date;
 
