@@ -101,7 +101,7 @@ export class ScreeningModel
   declare theater: MovieTheaterModel;
 
 
-
+ declare hall: MovieHallModel;
   declare readonly createdAt: Date;
   declare readonly updatedAt: Date;
 }
