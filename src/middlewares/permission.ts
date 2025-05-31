@@ -64,8 +64,8 @@ class Permission {
   }
 
   // For routes where user must be staff OR acting on their own resource (userId in params)
-  isSelfOrStaff(req: Request, res: Response, next: NextFunction) {
-    const paramUserId = req.params.userId;
+  async isSelfOrStaff(req: Request, res: Response, next: NextFunction) {
+    const { userId, bookingId } = req.params;
     const tokenUserId = req.userJwtPayload?.userId;
     const role = req.userRole;
 
@@ -73,13 +73,34 @@ class Permission {
       return next(new UnauthorizedError('No user information in token'));
     }
 
-    if (
-      role === 'employé' ||
-      role === 'administrateur' ||
-      paramUserId === tokenUserId
-    ) {
+    if (role === 'employé' || role === 'administrateur') {
       return next();
     }
+
+    // Handle routes with userId param (e.g., /users/:userId or /bookings/user/:userId)
+    if (userId && userId === tokenUserId) {
+      return next();
+    }
+
+    // Handle routes with bookingId param (e.g., /bookings/:bookingId/ticket)
+    if (bookingId) {
+      try {
+        const booking = await BookingModel.findByPk(bookingId);
+        if (!booking) {
+          return next(new NotFoundError('Booking not found'));
+        }
+        if ((booking as any).userId === tokenUserId) {
+          return next();
+        }
+        return next(
+          new UnauthorizedError('You are not allowed to access this resource')
+        );
+      } catch (err) {
+        return next(err);
+      }
+    }
+
+    // Fallback: deny
     return next(
       new UnauthorizedError('You are not allowed to access this resource')
     );

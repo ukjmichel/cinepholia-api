@@ -136,10 +136,7 @@ describe('BookingController', () => {
       await bookingController.deleteBooking(req, res, mockNext);
       expect(BookingService.deleteBooking).toHaveBeenCalledWith('b-1');
       expect(res.status).toHaveBeenCalledWith(204);
-      expect(res.json).toHaveBeenCalledWith({
-        message: 'Booking deleted',
-        data: null,
-      });
+      expect(res.send).toHaveBeenCalledWith(); // Changed from res.json to res.send with no arguments
       expect(mockNext).not.toHaveBeenCalled();
     });
 

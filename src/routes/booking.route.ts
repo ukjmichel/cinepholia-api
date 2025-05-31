@@ -21,6 +21,7 @@ import { screeningIdParamValidator } from '../validators/screening.validator.js'
 import { handleValidationError } from '../middlewares/handleValidatonError.middleware.js';
 import { decodeJwtToken } from '../middlewares/auth.middleware.js';
 import { permission } from '../middlewares/permission.js';
+import { generateTicket } from '../controllers/generate-ticket.controller.js';
 
 const router = express.Router();
 
@@ -330,6 +331,15 @@ router.get(
  *                     $ref: '#/components/schemas/Booking'
  */
 router.get('/status/:status', handleValidationError, getBookingsByStatus);
+
+router.get(
+  '/:bookingId/ticket',
+  bookingIdParamValidator,
+  handleValidationError,
+  decodeJwtToken,
+  permission.isSelfOrStaff,
+  generateTicket
+);
 
 export default router;
 

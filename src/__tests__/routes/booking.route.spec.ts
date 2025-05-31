@@ -654,4 +654,76 @@ describe('Booking E2E Routes', () => {
       expect(res.body.data.length).toBe(0);
     });
   });
+
+  describe('GET /bookings/:bookingId/ticket', () => {
+    let createdBookingId: string;
+
+    beforeEach(async () => {
+      createdBookingId = uuidv4();
+      await BookingModel.create({
+        ...testBooking,
+        bookingId: createdBookingId,
+        userId: regularUserId, // <- ENSURE this line exists
+        status: 'pending',
+      });
+    });
+    
+
+    it('should return HTML ticket for the booking when user is owner', async () => {
+      const res = await request(app)
+        .get(`/bookings/${createdBookingId}/ticket`)
+        .set('Authorization', `Bearer ${regularUserToken}`)
+        .expect('Content-Type', /html/)
+        .expect(200);
+
+      expect(res.text).toContain('<!DOCTYPE html>');
+      expect(res.text).toContain('Votre Ticket');
+      expect(res.text).toContain(createdBookingId);
+      expect(res.text).toContain('John');
+      expect(res.text).toContain('Doe');
+      expect(res.text).toMatch(/<img[^>]+src="data:image\/png;base64/);
+    });
+
+    it('should return HTML ticket for the booking when user is staff', async () => {
+      const res = await request(app)
+        .get(`/bookings/${createdBookingId}/ticket`)
+        .set('Authorization', `Bearer ${staffToken}`)
+        .expect('Content-Type', /html/)
+        .expect(200);
+
+      expect(res.text).toContain('<!DOCTYPE html>');
+      expect(res.text).toContain('Votre Ticket');
+      expect(res.text).toContain(createdBookingId);
+      expect(res.text).toContain('John');
+      expect(res.text).toContain('Doe');
+      expect(res.text).toMatch(/<img[^>]+src="data:image\/png;base64/);
+    });
+
+    it('should 401 if not authenticated', async () => {
+      await request(app)
+        .get(`/bookings/${createdBookingId}/ticket`)
+        .expect(401);
+    });
+
+    it("should 401 if user tries to get another user's ticket", async () => {
+      await request(app)
+        .get(`/bookings/${createdBookingId}/ticket`)
+        .set('Authorization', `Bearer ${otherUserToken}`)
+        .expect(401);
+    });
+
+    it('should 404 if booking not found', async () => {
+      await request(app)
+        .get(`/bookings/aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa/ticket`)
+        .set('Authorization', `Bearer ${regularUserToken}`)
+        .expect(404);
+    });
+
+    it('should 400 for invalid booking ID format', async () => {
+      await request(app)
+        .get(`/bookings/invalid-uuid/ticket`)
+        .set('Authorization', `Bearer ${regularUserToken}`)
+        .expect(400);
+    });
+  });
 });
