@@ -1,4 +1,4 @@
-import mongoose, { Schema, Document } from 'mongoose';
+import mongoose, { Schema } from 'mongoose';
 
 export interface Comment {
   bookingId: string;
@@ -8,7 +8,6 @@ export interface Comment {
   createdAt?: Date;
   updatedAt?: Date;
 }
-
 
 const uuidRegex =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -51,8 +50,9 @@ const BookingCommentSchema = new Schema<Comment>(
       virtuals: true,
       versionKey: false,
       transform: (_, ret) => {
-        ret.id = ret._id;
+        ret.id = ret._id.toString();
         delete ret._id;
+        return ret;
       },
     },
   }

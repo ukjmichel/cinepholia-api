@@ -21,9 +21,12 @@ describe('connectMongoDB', () => {
   });
 
   it('connects successfully and logs on success', async () => {
-    // Mock mongoose
+    // Mock mongoose with connection object
     jest.doMock('mongoose', () => ({
       connect: mockConnect.mockResolvedValue({}),
+      connection: {
+        name: 'testdb',
+      },
     }));
 
     // Mock config module
@@ -33,13 +36,19 @@ describe('connectMongoDB', () => {
       },
     }));
 
-    // Import module AFTER mocks applied
-    connectMongoDB = (await import('../../config/mongo.js')).default;
+    // Import the NAMED export (not default)
+    const { connectMongoDB: importedFunction } = await import(
+      '../../config/mongo.js'
+    );
+    connectMongoDB = importedFunction;
 
     await connectMongoDB();
 
     expect(mockConnect).toHaveBeenCalledWith('mongodb://testhost:27017/testdb');
-    expect(console.log).toHaveBeenCalledWith('✅ Connected to MongoDB');
+    expect(console.log).toHaveBeenCalledWith(
+      '✅ Connected to MongoDB:',
+      'testdb'
+    );
     expect(console.error).not.toHaveBeenCalled();
     expect(process.exit).not.toHaveBeenCalled();
   });
@@ -49,6 +58,9 @@ describe('connectMongoDB', () => {
     // Mock mongoose connect to reject
     jest.doMock('mongoose', () => ({
       connect: mockConnect.mockRejectedValue(error),
+      connection: {
+        name: 'testdb',
+      },
     }));
 
     jest.doMock('../../config/env.js', () => ({
@@ -57,7 +69,10 @@ describe('connectMongoDB', () => {
       },
     }));
 
-    connectMongoDB = (await import('../../config/mongo.js')).default;
+    const { connectMongoDB: importedFunction } = await import(
+      '../../config/mongo.js'
+    );
+    connectMongoDB = importedFunction;
 
     await connectMongoDB();
 
@@ -70,13 +85,23 @@ describe('connectMongoDB', () => {
   });
 
   it('logs error and exits if MONGODB_URI is missing', async () => {
-    jest.doMock('../../config/env', () => ({
+    jest.doMock('mongoose', () => ({
+      connect: mockConnect,
+      connection: {
+        name: 'testdb',
+      },
+    }));
+
+    jest.doMock('../../config/env.js', () => ({
       config: {
         mongodbUri: undefined,
       },
     }));
 
-    connectMongoDB = (await import('../../config/mongo.js')).default;
+    const { connectMongoDB: importedFunction } = await import(
+      '../../config/mongo.js'
+    );
+    connectMongoDB = importedFunction;
 
     await connectMongoDB();
 
