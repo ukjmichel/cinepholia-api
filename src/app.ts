@@ -16,6 +16,7 @@ import movieRouter from './routes/movie.route.js';
 import screeningRouter from './routes/screening.route.js';
 import bookingRouter from './routes/booking.route.js';
 import bookingCommentRouter from './routes/booking-comment.route.js';
+import incidentReportRouter from './routes/incident-report.route.js';
 
 const app = express();
 
@@ -40,6 +41,7 @@ app.use('/movies', movieRouter);
 app.use('/screenings', screeningRouter);
 app.use('/bookings', bookingRouter);
 app.use('/', bookingCommentRouter);
+app.use('/incident-reports', incidentReportRouter);
 
 // ─────── Error Handling ──────────────────────────────────────
 app.use(errorHandler);

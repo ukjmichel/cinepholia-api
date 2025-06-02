@@ -3,6 +3,7 @@ import { Role } from '../models/authorization.model.js';
 import { UnauthorizedError } from '../errors/unauthorized-error.js';
 import { NotFoundError } from '../errors/not-found-error.js';
 import { BookingModel } from '../models/booking.model.js';
+import { ForbiddenError } from '../errors/forbidden-error.js';
 
 // Extend Request type with custom properties
 declare module 'express-serve-static-core' {
@@ -48,7 +49,7 @@ class Permission {
     const role = req.userRole;
     if (role !== 'employé' && role !== 'administrateur') {
       return next(
-        new UnauthorizedError('Staff (Employee or Admin) access required')
+        new ForbiddenError('Staff (Employee or Admin) access required')
       );
     }
     next();
@@ -165,7 +166,5 @@ class Permission {
     }
   }
 }
-
-
 
 export const permission = new Permission();

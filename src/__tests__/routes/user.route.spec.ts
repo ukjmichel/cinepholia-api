@@ -135,7 +135,7 @@ describe('User E2E Routes with MySQL', () => {
       const res = await request(app)
         .get('/users')
         .set('Authorization', `Bearer ${userToken}`)
-        .expect(401); // Your middleware returns 401, not 403
+        .expect(403); 
 
       expect(res.body.message).toMatch(
         /forbidden|permission|not allowed|staff.*required|unauthorized/i

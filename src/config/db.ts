@@ -8,6 +8,7 @@ import { MovieHallModel } from '../models/movie-hall.model.js';
 import { ScreeningModel } from '../models/screening.model.js';
 import { MovieModel } from '../models/movie.model.js';
 import { BookingModel } from '../models/booking.model.js';
+import { IncidentReportModel } from '../models/incident-report.model.js';
 
 export const sequelize = new Sequelize({
   dialect: 'mysql',
@@ -24,7 +25,8 @@ export const sequelize = new Sequelize({
     MovieHallModel,
     ScreeningModel,
     MovieModel,
-    BookingModel
+    BookingModel,
+    IncidentReportModel,
   ],
   logging: false,
   pool: {
