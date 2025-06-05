@@ -26,10 +26,7 @@ export const sequelize = new Sequelize({
     ScreeningModel,
     MovieModel,
     BookingModel,
-<<<<<<< HEAD
     IncidentReportModel,
-=======
->>>>>>> development
   ],
   logging: false,
   pool: {

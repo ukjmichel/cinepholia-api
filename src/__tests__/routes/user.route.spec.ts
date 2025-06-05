@@ -101,11 +101,6 @@ describe('User E2E Routes with MySQL', () => {
     console.log('🔌 Database connection closed');
   });
 
-<<<<<<< HEAD
-  // ... all other tests unchanged ...
-
-=======
->>>>>>> development
   describe('PATCH /users/:userId/password', () => {
     it('should change own password', async () => {
       const newPasswordData = {
@@ -125,11 +120,6 @@ describe('User E2E Routes with MySQL', () => {
       expect(res.body.data).toHaveProperty('userId', testUserId);
     });
 
-<<<<<<< HEAD
-    // ...other PATCH tests unchanged...
-
-    // 🔴 Correction: login now sets cookie, not token in body!
-=======
     it('should change any user password when authenticated as staff', async () => {
       const newPasswordData = {
         newPassword: 'StaffChangedPassword123!',
@@ -144,7 +134,6 @@ describe('User E2E Routes with MySQL', () => {
       expect(res.body.message).toMatch(/password.*changed/i);
     });
 
-    // 🟢 Test manquant : Regular user cannot change another user's password
     it("should prevent regular users from changing another user's password", async () => {
       // Create another user to try to change password
       const otherUser = await UserModel.create({
@@ -204,7 +193,6 @@ describe('User E2E Routes with MySQL', () => {
       expect(res.body.message).toMatch(/not found/i);
     });
 
->>>>>>> development
     it('should verify password change works with login', async () => {
       const newPassword = 'VerifiedNewPassword123!';
 
@@ -225,20 +213,10 @@ describe('User E2E Routes with MySQL', () => {
         .expect(200);
 
       expect(loginRes.body).toHaveProperty('message', 'Login successful');
-<<<<<<< HEAD
-
-      // Fix: safely handle string or array
-=======
->>>>>>> development
       const setCookie = loginRes.headers['set-cookie'];
       expect(setCookie).toBeDefined();
       const cookieArray = Array.isArray(setCookie) ? setCookie : [setCookie];
       expect(cookieArray.join(';')).toMatch(/accessToken/i);
-<<<<<<< HEAD
-
-      // User info
-=======
->>>>>>> development
       expect(loginRes.body.data).toHaveProperty('user');
       expect(loginRes.body.data.user.email).toBe(userData.email);
     });
@@ -524,105 +502,6 @@ describe('User E2E Routes with MySQL', () => {
     });
   });
 
-<<<<<<< HEAD
-  describe('PATCH /users/:userId/password', () => {
-    it('should change own password', async () => {
-      const newPasswordData = {
-        newPassword: 'NewPassword123!',
-      };
-
-      const res = await request(app)
-        .patch(`/users/${testUserId}/password`)
-        .set('Authorization', `Bearer ${userToken}`)
-        .send(newPasswordData)
-        .expect(200);
-
-      expect(res.body).toHaveProperty(
-        'message',
-        'Password changed successfully'
-      );
-      expect(res.body.data).toHaveProperty('userId', testUserId);
-    });
-
-    it('should change any user password when authenticated as staff', async () => {
-      const newPasswordData = {
-        newPassword: 'StaffChangedPassword123!',
-      };
-
-      const res = await request(app)
-        .patch(`/users/${testUserId}/password`)
-        .set('Authorization', `Bearer ${staffToken}`)
-        .send(newPasswordData)
-        .expect(200);
-
-      expect(res.body.message).toMatch(/password.*changed/i);
-    });
-
-    it('should fail when not authenticated', async () => {
-      const res = await request(app)
-        .patch(`/users/${testUserId}/password`)
-        .send({ newPassword: 'NewPassword123!' })
-        .expect(401);
-
-      expect(res.body.message).toMatch(/unauthorized|token|missing/i);
-    });
-
-    it('should fail when newPassword is missing', async () => {
-      const res = await request(app)
-        .patch(`/users/${testUserId}/password`)
-        .set('Authorization', `Bearer ${userToken}`)
-        .send({})
-        .expect(400);
-
-      expect(res.body.message).toMatch(/validation|required|password/i);
-    });
-
-    it('should fail with weak password', async () => {
-      const res = await request(app)
-        .patch(`/users/${testUserId}/password`)
-        .set('Authorization', `Bearer ${userToken}`)
-        .send({ newPassword: '123' })
-        .expect(400);
-
-      expect(res.body.message).toMatch(/validation|password/i);
-    });
-
-    it('should return 404 for non-existent user', async () => {
-      const fakeId = uuidv4();
-      const res = await request(app)
-        .patch(`/users/${fakeId}/password`)
-        .set('Authorization', `Bearer ${staffToken}`)
-        .send({ newPassword: 'NewPassword123!' })
-        .expect(404);
-
-      expect(res.body.message).toMatch(/not found/i);
-    });
-
-    it('should verify password change works with login', async () => {
-      const newPassword = 'VerifiedNewPassword123!';
-
-      // Change password
-      await request(app)
-        .patch(`/users/${testUserId}/password`)
-        .set('Authorization', `Bearer ${userToken}`)
-        .send({ newPassword })
-        .expect(200);
-
-      // Verify login works with new password
-      const loginRes = await request(app)
-        .post('/auth/login')
-        .send({
-          emailOrUsername: userData.email,
-          password: newPassword,
-        })
-        .expect(200);
-
-      expect(loginRes.body).toHaveProperty('message', 'Login successful');
-    });
-  });
-
-=======
->>>>>>> development
   describe('Integration Tests - Complex Scenarios', () => {
     it('should handle user lifecycle: get, update, change password', async () => {
       await request(app)
@@ -762,11 +641,7 @@ describe('User E2E Routes with MySQL', () => {
         .put(`/users/${testUserId}`)
         .set('Authorization', `Bearer ${userToken}`)
         .send({ firstName: "'; DROP TABLE users; --" })
-<<<<<<< HEAD
-        .expect(400); // Sequelize validation error returns 500, which is expected
-=======
         .expect(400);
->>>>>>> development
     });
   });
 });

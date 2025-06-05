@@ -4,7 +4,7 @@ import { FileTooLargeError } from '../errors/file-too-large-error.js';
 import { ValidationError as SequelizeValidationError } from 'sequelize';
 import jwt from 'jsonwebtoken';
 
-export const errorHandler: ErrorRequestHandler = (err, req, res, next) => {
+export const errorHandler: ErrorRequestHandler = (err, req, res, next): any => {
   console.error(err);
 
   // Multer file size error (upload)
