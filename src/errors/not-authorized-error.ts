@@ -4,7 +4,7 @@ export class NotAuthorizedError extends Error {
 
   constructor(message: string, cause?: Error) {
     super(message);
-    this.name = 'NotAuthorizedError';
+    this.name = 'Forbidden';
     this.status = 403; // 403 Forbidden (common for "not authorized")
 
     if (cause) {

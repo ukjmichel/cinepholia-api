@@ -17,11 +17,13 @@ jest.mock('../../config/env.js', () => ({
 // Partial mock sequelize-typescript
 const actualSequelizeTs = jest.requireActual('sequelize-typescript');
 const mockSync = jest.fn();
+const mockQuery = jest.fn();
 
 jest.mock('sequelize-typescript', () => ({
   ...actualSequelizeTs,
   Sequelize: jest.fn().mockImplementation(() => ({
     sync: mockSync,
+    query: mockQuery, // <-- ADD THIS LINE
   })),
 }));
 
@@ -86,7 +88,9 @@ describe('Sequelize DB config', () => {
     await dbModule.syncDB();
 
     expect(mockSync).toHaveBeenCalledWith({ force: true });
-    expect(console.log).toHaveBeenCalledWith('Test DB synced with force:true');
+    expect(console.log).toHaveBeenCalledWith(
+      'Test DB synced with force:true + disabled FKs'
+    );
   });
 
   it('should log error if sync fails', async () => {

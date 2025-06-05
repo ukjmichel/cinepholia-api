@@ -1,14 +1,14 @@
 import { Request, Response, NextFunction } from 'express';
-import { AuthService } from '../services/auth.service.js';
-import { UserService } from '../services/user.service.js';
 import { AuthorizationService } from '../services/authorization.service.js';
 import { UnauthorizedError } from '../errors/unauthorized-error.js';
+import jwt from 'jsonwebtoken';
+import { config } from '../config/env.js';
 import { NotFoundError } from '../errors/not-found-error.js';
-// import { Role } from '../models/authorization.model.js'; // (optional, for typing)
+import { UserService } from '../services/user.service.js';
 
-const userService = new UserService();
-const authService = new AuthService();
 const authorizationService = new AuthorizationService();
+const userService = new UserService();
+const JWT_SECRET = config.jwtSecret;
 
 declare global {
   namespace Express {
@@ -20,25 +20,29 @@ declare global {
   }
 }
 
-function getAccessToken(req: Request): string | null {
-  const authHeader = req.headers['authorization'];
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    return authHeader.substring(7);
-  }
-  return null;
-}
-
 export async function decodeJwtToken(
   req: Request,
   res: Response,
   next: NextFunction
 ) {
-  try {
-    // 1. Get and decode JWT
-    const token = getAccessToken(req);
-    if (!token) throw new UnauthorizedError('Missing access token');
+  // Try to get token from cookie first, then from Authorization header
+  let token = req.cookies?.accessToken;
 
-    const payload = authService.verifyAccessToken(token);
+  // If not found in cookies, check the Authorization header (for tests)
+  if (!token && req.headers.authorization) {
+    const authHeader = req.headers.authorization;
+    if (authHeader.startsWith('Bearer ')) {
+      token = authHeader.substring(7); // Remove "Bearer "
+    }
+  }
+
+  if (!token) {
+    return next(new UnauthorizedError('Missing access token'));
+  }
+
+  try {
+    // Decode/verify JWT
+    const payload = jwt.verify(token, JWT_SECRET) as any;
     req.userJwtPayload = payload;
 
     // 2. Fetch user from DB

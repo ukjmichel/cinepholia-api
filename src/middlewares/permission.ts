@@ -1,8 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
 import { Role } from '../models/authorization.model.js';
-import { UnauthorizedError } from '../errors/unauthorized-error.js';
+
 import { NotFoundError } from '../errors/not-found-error.js';
 import { BookingModel } from '../models/booking.model.js';
+import { NotAuthorizedError } from '../errors/not-authorized-error.js';
 
 // Extend Request type with custom properties
 declare module 'express-serve-static-core' {
@@ -20,7 +21,7 @@ class Permission {
   isUser(req: Request, res: Response, next: NextFunction) {
     const role = req.userRole;
     if (!role) {
-      return next(new UnauthorizedError('Authentication required'));
+      return next(new NotAuthorizedError('Authentication required'));
     }
     next();
   }
@@ -29,7 +30,7 @@ class Permission {
   isEmployee(req: Request, res: Response, next: NextFunction) {
     const role = req.userRole;
     if (role !== 'employé') {
-      return next(new UnauthorizedError('Employee access required'));
+      return next(new NotAuthorizedError('Employee access required'));
     }
     next();
   }
@@ -38,7 +39,7 @@ class Permission {
   isAdmin(req: Request, res: Response, next: NextFunction) {
     const role = req.userRole;
     if (role !== 'administrateur') {
-      return next(new UnauthorizedError('Admin access required'));
+      return next(new NotAuthorizedError('Admin access required'));
     }
     next();
   }
@@ -48,7 +49,7 @@ class Permission {
     const role = req.userRole;
     if (role !== 'employé' && role !== 'administrateur') {
       return next(
-        new UnauthorizedError('Staff (Employee or Admin) access required')
+        new NotAuthorizedError('Staff (Employee or Admin) access required')
       );
     }
     next();
@@ -58,7 +59,7 @@ class Permission {
   isNotStaff(req: Request, res: Response, next: NextFunction) {
     const role = req.userRole;
     if (role === 'employé' || role === 'administrateur') {
-      return next(new UnauthorizedError('Only non-staff users allowed'));
+      return next(new NotAuthorizedError('Only non-staff users allowed'));
     }
     next();
   }
@@ -70,7 +71,7 @@ class Permission {
     const role = req.userRole;
 
     if (!tokenUserId) {
-      return next(new UnauthorizedError('No user information in token'));
+      return next(new NotAuthorizedError('No user information in token'));
     }
 
     if (role === 'employé' || role === 'administrateur') {
@@ -93,7 +94,7 @@ class Permission {
           return next();
         }
         return next(
-          new UnauthorizedError('You are not allowed to access this resource')
+          new NotAuthorizedError('You are not allowed to access this resource')
         );
       } catch (err) {
         return next(err);
@@ -102,7 +103,7 @@ class Permission {
 
     // Fallback: deny
     return next(
-      new UnauthorizedError('You are not allowed to access this resource')
+      new NotAuthorizedError('You are not allowed to access this resource')
     );
   }
 
@@ -113,7 +114,7 @@ class Permission {
     const role = req.userRole;
 
     if (!tokenUserId) {
-      return next(new UnauthorizedError('No user information in token'));
+      return next(new NotAuthorizedError('No user information in token'));
     }
 
     // Staff can create bookings for anyone
@@ -127,7 +128,7 @@ class Permission {
     }
 
     return next(
-      new UnauthorizedError('You can only create bookings for yourself')
+      new NotAuthorizedError('You can only create bookings for yourself')
     );
   }
 
@@ -138,7 +139,7 @@ class Permission {
     const role = req.userRole;
 
     if (!tokenUserId) {
-      return next(new UnauthorizedError('No user information in token'));
+      return next(new NotAuthorizedError('No user information in token'));
     }
 
     // Staff can access any booking
@@ -155,7 +156,7 @@ class Permission {
 
       if ((booking as any).userId !== tokenUserId) {
         return next(
-          new UnauthorizedError('You can only access your own bookings')
+          new NotAuthorizedError('You can only access your own bookings')
         );
       }
 
@@ -165,7 +166,5 @@ class Permission {
     }
   }
 }
-
-
 
 export const permission = new Permission();

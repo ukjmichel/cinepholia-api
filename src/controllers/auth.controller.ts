@@ -6,23 +6,6 @@ import { AuthorizationService } from '../services/authorization.service.js';
 
 export const authorizationService = new AuthorizationService();
 
-/**
- * Authenticates a user and returns JWT tokens and user info.
- *
- * @param {Request} req - Express request object (should contain emailOrUsername and password in body)
- * @param {Response} res - Express response object
- * @param {NextFunction} next - Express next middleware function
- * @returns {Promise<void>} Sends a JSON response with user and tokens, or passes error to next middleware
- *
- * Example successful response:
- * {
- *   message: "Login successful",
- *   data: {
- *     user: { userId, username, firstName, lastName, email, role },
- *     tokens: { accessToken, refreshToken }
- *   }
- * }
- */
 export const login = async (
   req: Request,
   res: Response,
@@ -56,6 +39,20 @@ export const login = async (
       typeof user.get === 'function' ? user.get({ plain: true }) : user;
     const { userId, username, firstName, lastName, email } = plainUser;
 
+    // --- Set tokens as HTTP-only cookies ---
+    res.cookie('accessToken', tokens.accessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 1000 * 60 * 60, // 1 hour (adjust as needed)
+    });
+    res.cookie('refreshToken', tokens.refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 1000 * 60 * 60 * 24 * 7, // 1 week (adjust as needed)
+    });
+
     res.status(200).json({
       message: 'Login successful',
       data: {
@@ -67,7 +64,6 @@ export const login = async (
           email,
           role,
         },
-        tokens,
       },
     });
   } catch (err) {

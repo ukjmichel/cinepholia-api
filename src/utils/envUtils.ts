@@ -18,3 +18,13 @@ export function requireEnvByEnv(name: string, env: string): string {
   const envSpecificName = `${name}_${env.toUpperCase()}`;
   return process.env[envSpecificName] || requireEnv(name);
 }
+
+export function envToInt(
+  value: string | undefined | null,
+  defaultValue: number
+): number {
+  if (typeof value === 'undefined' || value === null) return defaultValue;
+  const parsed = parseInt(value, 10);
+  if (isNaN(parsed)) return defaultValue;
+  return parsed;
+}

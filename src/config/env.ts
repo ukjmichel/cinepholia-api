@@ -1,4 +1,4 @@
-import { envToBool, requireEnv } from '../utils/envUtils.js';
+import { envToBool, envToInt, requireEnv } from '../utils/envUtils.js';
 
 const isTest = process.env.NODE_ENV === 'test';
 
@@ -7,6 +7,7 @@ export const config = {
   nodeEnv: process.env.NODE_ENV || 'development',
   port: Number(process.env.PORT) || (isTest ? 3001 : 3000),
   hostAppPort: Number(process.env.HOST_APP_PORT) || 3000,
+  baseUrl: Number(process.env.BASE_URL) || 'http://localhost:3000',
 
   // ─── MySQL Database Configuration ────────────
   mysqlHost: isTest ? requireEnv('TEST_MYSQL_HOST') : requireEnv('MYSQL_HOST'),
@@ -89,4 +90,10 @@ export const config = {
   jwtRefreshExpiresIn: isTest
     ? requireEnv('TEST_JWT_REFRESH_EXPIRES_IN')
     : requireEnv('JWT_REFRESH_EXPIRES_IN'),
+
+  // ─── Multer Upload Configuration ─────────────
+  multerMaxFileSize: envToInt(
+    process.env.MULTER_MAX_FILE_SIZE,
+    2 * 1024 * 1024
+  ),
 };

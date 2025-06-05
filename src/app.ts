@@ -1,4 +1,4 @@
-import express, { Request, Response } from 'express';
+import express, { ErrorRequestHandler, Request, Response } from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
 import morgan from 'morgan';
@@ -16,14 +16,21 @@ import movieRouter from './routes/movie.route.js';
 import screeningRouter from './routes/screening.route.js';
 import bookingRouter from './routes/booking.route.js';
 import bookingCommentRouter from './routes/booking-comment.route.js';
-
+import cookieParser from 'cookie-parser';
 const app = express();
 
 // ─────── Middleware ─────────────────────────────────────────
 app.use(express.json());
 app.use(helmet());
-app.use(cors());
+app.use(
+  cors({
+    origin: 'http://localhost:4200',
+    credentials: true,
+  })
+);
+app.use(cookieParser());
 app.use(morgan('dev'));
+app.use('/uploads', express.static('uploads'));
 
 // ─────── Swagger Setup ──────────────────────────────────────
 setupSwagger(app);
@@ -42,6 +49,6 @@ app.use('/bookings', bookingRouter);
 app.use('/', bookingCommentRouter);
 
 // ─────── Error Handling ──────────────────────────────────────
-app.use(errorHandler);
+app.use(errorHandler as ErrorRequestHandler);
 
 export default app;

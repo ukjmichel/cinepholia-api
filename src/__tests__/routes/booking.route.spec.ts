@@ -246,7 +246,7 @@ describe('Booking E2E Routes', () => {
         .expect(400);
     });
 
-    it('should 401 if user tries to book for another user', async () => {
+    it('should 403 if user tries to book for another user', async () => {
       const bookingData = {
         screeningId: testScreening.screeningId,
         userId: otherUserId, // Different user ID
@@ -259,7 +259,7 @@ describe('Booking E2E Routes', () => {
         .post('/bookings')
         .set('Authorization', `Bearer ${regularUserToken}`)
         .send(bookingData)
-        .expect(401); // Changed from 403 to 401 based on middleware behavior
+        .expect(403);
     });
   });
 
@@ -402,7 +402,7 @@ describe('Booking E2E Routes', () => {
       expect(res.body.data.status).toBe('canceled');
     });
 
-    it("should 401 when user tries to update another user's booking", async () => {
+    it("should 403 when user tries to update another user's booking", async () => {
       const updateData = {
         status: 'canceled',
       };
@@ -411,7 +411,7 @@ describe('Booking E2E Routes', () => {
         .patch(`/bookings/${createdBookingId}`)
         .set('Authorization', `Bearer ${otherUserToken}`)
         .send(updateData)
-        .expect(401); // Changed from 403 to 401 based on the middleware behavior
+        .expect(403);
     });
 
     it('should 401 if unauthenticated', async () => {
@@ -475,12 +475,12 @@ describe('Booking E2E Routes', () => {
       expect(booking).toBeNull();
     });
 
-    it("should 401 when user tries to delete another user's booking", async () => {
+    it("should 403 when user tries to delete another user's booking", async () => {
       await request(app)
         .delete(`/bookings/${createdBookingId}`)
         .set('Authorization', `Bearer ${otherUserToken}`)
         .send()
-        .expect(401); // Changed from 403 to 401
+        .expect(403);
 
       // Booking should still exist
       const booking = await BookingModel.findByPk(createdBookingId);
@@ -667,7 +667,6 @@ describe('Booking E2E Routes', () => {
         status: 'pending',
       });
     });
-    
 
     it('should return HTML ticket for the booking when user is owner', async () => {
       const res = await request(app)
@@ -705,11 +704,11 @@ describe('Booking E2E Routes', () => {
         .expect(401);
     });
 
-    it("should 401 if user tries to get another user's ticket", async () => {
+    it("should 403 if user tries to get another user's ticket", async () => {
       await request(app)
         .get(`/bookings/${createdBookingId}/ticket`)
         .set('Authorization', `Bearer ${otherUserToken}`)
-        .expect(401);
+        .expect(403);
     });
 
     it('should 404 if booking not found', async () => {

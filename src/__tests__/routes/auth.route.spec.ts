@@ -509,7 +509,7 @@ describe('Authentication System Tests', () => {
           .post('/auth/register-employee')
           .set('Authorization', `Bearer ${userToken}`)
           .send(employeeData)
-          .expect(401);
+          .expect(403);
 
         expect(res.body.message).toMatch(/admin.*required/i);
       });
@@ -538,12 +538,16 @@ describe('Authentication System Tests', () => {
           })
           .expect(200);
 
-        expect(res.body).toHaveProperty('message');
+        // New assertion for your API shape
+        expect(res.body).toHaveProperty('data');
         expect(res.body.data).toHaveProperty('user');
-        expect(res.body.data).toHaveProperty('tokens');
         expect(res.body.data.user.email).toBe(testUser.email);
-        expect(res.body.data.tokens).toHaveProperty('accessToken');
-        expect(res.body.data.tokens).toHaveProperty('refreshToken');
+
+        // Check tokens in cookies
+        const setCookie = res.headers['set-cookie'];
+        expect(setCookie).toBeDefined();
+        const cookieArray = Array.isArray(setCookie) ? setCookie : [setCookie];
+        expect(cookieArray.join(';')).toMatch(/accessToken/i);
       });
 
       it('should login with email and password', async () => {
@@ -712,7 +716,7 @@ describe('Authentication System Tests', () => {
         .set('Authorization', `Bearer ${malformedToken}`)
         .expect(401);
 
-      expect(res.body.message).toMatch(/invalid.*token/i);
+      expect(res.body.message).toMatch(/invalid.*token|malformed/i);
     });
 
     it('should handle missing Authorization header', async () => {
