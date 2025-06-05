@@ -26,7 +26,10 @@ export const sequelize = new Sequelize({
     ScreeningModel,
     MovieModel,
     BookingModel,
+<<<<<<< HEAD
     IncidentReportModel,
+=======
+>>>>>>> development
   ],
   logging: false,
   pool: {
@@ -40,8 +43,11 @@ export const sequelize = new Sequelize({
 export async function syncDB() {
   try {
     if (config.nodeEnv === 'test') {
+      // Désactive les contraintes FK
+      await sequelize.query('SET FOREIGN_KEY_CHECKS = 0');
       await sequelize.sync({ force: true });
-      console.log('Test DB synced with force:true');
+      await sequelize.query('SET FOREIGN_KEY_CHECKS = 1');
+      console.log('Test DB synced with force:true + disabled FKs');
     } else {
       await sequelize.sync({ alter: true });
       console.log('Database synced with alter:true');

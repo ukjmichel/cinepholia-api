@@ -3,8 +3,11 @@ import { AuthorizationService } from '../services/authorization.service.js';
 import { UnauthorizedError } from '../errors/unauthorized-error.js';
 import jwt from 'jsonwebtoken';
 import { config } from '../config/env.js';
+import { NotFoundError } from '../errors/not-found-error.js';
+import { UserService } from '../services/user.service.js';
 
 const authorizationService = new AuthorizationService();
+const userService = new UserService();
 const JWT_SECRET = config.jwtSecret;
 
 declare global {
@@ -17,6 +20,10 @@ declare global {
   }
 }
 
+/**
+ * Express middleware: verifies JWT, attaches user payload and role to req.
+ * Looks for token in cookies first, then Authorization header.
+ */
 export async function decodeJwtToken(
   req: Request,
   res: Response,
@@ -41,10 +48,12 @@ export async function decodeJwtToken(
     // Decode/verify JWT
     const payload = jwt.verify(token, JWT_SECRET) as any;
     req.userJwtPayload = payload;
+
     const auth = await authorizationService.getAuthorizationByUserId(
       payload.userId
     );
-    req.userRole = auth.role;
+    req.userRole = auth?.role;
+
     next();
   } catch (err) {
     next(new UnauthorizedError('Invalid or expired access token'));

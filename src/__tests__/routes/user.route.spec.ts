@@ -1,5 +1,3 @@
-// src/__tests__/routes/user.route.e2e.spec.ts
-
 import request from 'supertest';
 import app from '../../app.js';
 import { sequelize, syncDB } from '../../config/db.js';
@@ -103,8 +101,11 @@ describe('User E2E Routes with MySQL', () => {
     console.log('🔌 Database connection closed');
   });
 
+<<<<<<< HEAD
   // ... all other tests unchanged ...
 
+=======
+>>>>>>> development
   describe('PATCH /users/:userId/password', () => {
     it('should change own password', async () => {
       const newPasswordData = {
@@ -124,9 +125,86 @@ describe('User E2E Routes with MySQL', () => {
       expect(res.body.data).toHaveProperty('userId', testUserId);
     });
 
+<<<<<<< HEAD
     // ...other PATCH tests unchanged...
 
     // 🔴 Correction: login now sets cookie, not token in body!
+=======
+    it('should change any user password when authenticated as staff', async () => {
+      const newPasswordData = {
+        newPassword: 'StaffChangedPassword123!',
+      };
+
+      const res = await request(app)
+        .patch(`/users/${testUserId}/password`)
+        .set('Authorization', `Bearer ${staffToken}`)
+        .send(newPasswordData)
+        .expect(200);
+
+      expect(res.body.message).toMatch(/password.*changed/i);
+    });
+
+    // 🟢 Test manquant : Regular user cannot change another user's password
+    it("should prevent regular users from changing another user's password", async () => {
+      // Create another user to try to change password
+      const otherUser = await UserModel.create({
+        ...userData,
+        email: 'otheruser@test.com',
+        username: 'otheruser',
+      });
+
+      const res = await request(app)
+        .patch(`/users/${(otherUser as any).userId}/password`)
+        .set('Authorization', `Bearer ${userToken}`)
+        .send({ newPassword: 'MaliciousChange123!' })
+        .expect(403);
+
+      expect(res.body.message).toMatch(
+        /unauthorized|forbidden|permission|not allowed to access/i
+      );
+    });
+
+    it('should fail when not authenticated', async () => {
+      const res = await request(app)
+        .patch(`/users/${testUserId}/password`)
+        .send({ newPassword: 'NewPassword123!' })
+        .expect(401);
+
+      expect(res.body.message).toMatch(/unauthorized|token|missing/i);
+    });
+
+    it('should fail when newPassword is missing', async () => {
+      const res = await request(app)
+        .patch(`/users/${testUserId}/password`)
+        .set('Authorization', `Bearer ${userToken}`)
+        .send({})
+        .expect(400);
+
+      expect(res.body.message).toMatch(/validation|required|password/i);
+    });
+
+    it('should fail with weak password', async () => {
+      const res = await request(app)
+        .patch(`/users/${testUserId}/password`)
+        .set('Authorization', `Bearer ${userToken}`)
+        .send({ newPassword: '123' })
+        .expect(400);
+
+      expect(res.body.message).toMatch(/validation|password/i);
+    });
+
+    it('should return 404 for non-existent user', async () => {
+      const fakeId = uuidv4();
+      const res = await request(app)
+        .patch(`/users/${fakeId}/password`)
+        .set('Authorization', `Bearer ${staffToken}`)
+        .send({ newPassword: 'NewPassword123!' })
+        .expect(404);
+
+      expect(res.body.message).toMatch(/not found/i);
+    });
+
+>>>>>>> development
     it('should verify password change works with login', async () => {
       const newPassword = 'VerifiedNewPassword123!';
 
@@ -147,14 +225,20 @@ describe('User E2E Routes with MySQL', () => {
         .expect(200);
 
       expect(loginRes.body).toHaveProperty('message', 'Login successful');
+<<<<<<< HEAD
 
       // Fix: safely handle string or array
+=======
+>>>>>>> development
       const setCookie = loginRes.headers['set-cookie'];
       expect(setCookie).toBeDefined();
       const cookieArray = Array.isArray(setCookie) ? setCookie : [setCookie];
       expect(cookieArray.join(';')).toMatch(/accessToken/i);
+<<<<<<< HEAD
 
       // User info
+=======
+>>>>>>> development
       expect(loginRes.body.data).toHaveProperty('user');
       expect(loginRes.body.data.user.email).toBe(userData.email);
     });
@@ -196,7 +280,6 @@ describe('User E2E Routes with MySQL', () => {
         .expect(200);
 
       expect(Array.isArray(res.body.data.users)).toBe(true);
-      // Should find the test user
       expect(res.body.data.users.length).toBeGreaterThanOrEqual(1);
     });
 
@@ -217,7 +300,6 @@ describe('User E2E Routes with MySQL', () => {
         .expect(200);
 
       expect(Array.isArray(res.body.data.users)).toBe(true);
-      // Should find the test user
       expect(res.body.data.users.length).toBeGreaterThanOrEqual(1);
     });
 
@@ -231,7 +313,6 @@ describe('User E2E Routes with MySQL', () => {
     });
 
     it('should support pagination', async () => {
-      // Create additional users for pagination testing
       const additionalUsers = [];
       for (let i = 1; i <= 5; i++) {
         const user = await UserModel.create({
@@ -241,8 +322,6 @@ describe('User E2E Routes with MySQL', () => {
         });
         additionalUsers.push(user as never);
       }
-
-      // Add small delay to ensure all users are created
       await waitForOperation(100);
 
       const res = await request(app)
@@ -253,8 +332,7 @@ describe('User E2E Routes with MySQL', () => {
       expect(res.body.data.users.length).toBeLessThanOrEqual(3);
       expect(res.body.data).toHaveProperty('page');
       expect(res.body.data).toHaveProperty('total');
-      // Should have at least our test users
-      expect(res.body.data.total).toBeGreaterThanOrEqual(2); // At least regular user + staff user
+      expect(res.body.data.total).toBeGreaterThanOrEqual(2);
     });
   });
 
@@ -368,19 +446,17 @@ describe('User E2E Routes with MySQL', () => {
     });
 
     it('should prevent updating to existing email/username', async () => {
-      // Create another user first
       const anotherUser = await UserModel.create({
         ...userData,
         email: 'another@user.com',
         username: 'anotheruser',
       });
 
-      // Try to update test user with existing email - expecting 409 Conflict
       const res = await request(app)
         .put(`/users/${testUserId}`)
         .set('Authorization', `Bearer ${userToken}`)
         .send({ email: 'another@user.com' })
-        .expect(409); // Changed from 400 to 409 to match your API response
+        .expect(409);
 
       expect(res.body.message).toMatch(/validation|already exists|conflict/i);
     });
@@ -388,16 +464,12 @@ describe('User E2E Routes with MySQL', () => {
 
   describe('DELETE /users/:userId', () => {
     it('should delete any user when authenticated as staff (with proper cleanup)', async () => {
-      // Create a test user to delete WITHOUT authorization to avoid foreign key issues
       const testUser = await UserModel.create({
         ...userData,
         email: 'todelete@test.com',
         username: 'todelete',
       });
 
-      // Don't create authorization for this user to avoid foreign key constraints
-
-      // Delete the user as staff
       const res = await request(app)
         .delete(`/users/${(testUser as any).userId}`)
         .set('Authorization', `Bearer ${staffToken}`)
@@ -405,7 +477,6 @@ describe('User E2E Routes with MySQL', () => {
 
       expect(res.body.message).toMatch(/deleted/i);
 
-      // Verify user is actually deleted
       const deletedUser = await UserModel.findByPk((testUser as any).userId);
       expect(deletedUser).toBeNull();
     });
@@ -436,7 +507,6 @@ describe('User E2E Routes with MySQL', () => {
     });
 
     it('should prevent regular users from deleting other users', async () => {
-      // Create another user to try to delete
       const otherUser = await UserModel.create({
         ...userData,
         email: 'other@test.com',
@@ -446,15 +516,15 @@ describe('User E2E Routes with MySQL', () => {
       const res = await request(app)
         .delete(`/users/${(otherUser as any).userId}`)
         .set('Authorization', `Bearer ${userToken}`)
-        .expect(401); // Should fail with authorization error
+        .expect(403);
 
-      // Updated regex to match the actual error message
       expect(res.body.message).toMatch(
         /unauthorized|forbidden|permission|not allowed to access/i
       );
     });
   });
 
+<<<<<<< HEAD
   describe('PATCH /users/:userId/password', () => {
     it('should change own password', async () => {
       const newPasswordData = {
@@ -551,35 +621,30 @@ describe('User E2E Routes with MySQL', () => {
     });
   });
 
+=======
+>>>>>>> development
   describe('Integration Tests - Complex Scenarios', () => {
     it('should handle user lifecycle: get, update, change password', async () => {
-      // Get user
       await request(app)
         .get(`/users/${testUserId}`)
         .set('Authorization', `Bearer ${userToken}`)
         .expect(200);
 
-      // Update user
       await request(app)
         .put(`/users/${testUserId}`)
         .set('Authorization', `Bearer ${userToken}`)
         .send({ firstName: 'Updated' })
         .expect(200);
 
-      // Change password
       await request(app)
         .patch(`/users/${testUserId}/password`)
         .set('Authorization', `Bearer ${userToken}`)
         .send({ newPassword: 'NewPassword123!' })
         .expect(200);
-
-      // Note: Skipping delete to avoid foreign key constraint issues
     });
 
     it('should handle concurrent user operations', async () => {
       const users: UserModel[] = [];
-
-      // Create multiple users concurrently
       for (let i = 0; i < 3; i++) {
         const user = await UserModel.create({
           ...userData,
@@ -588,17 +653,14 @@ describe('User E2E Routes with MySQL', () => {
         });
         users.push(user);
       }
-
-      // Update all users concurrently as staff
       const updatePromises = users.map((user) => {
         const userId = (user as any).userId;
         return request(app)
           .put(`/users/${userId}`)
           .set('Authorization', `Bearer ${staffToken}`)
-          .send({ firstName: 'Updated Staff' }) // Use valid name without numbers
+          .send({ firstName: 'Updated Staff' })
           .expect(200);
       });
-
       const results = await Promise.all(updatePromises);
       expect(results).toHaveLength(3);
       results.forEach((res) => {
@@ -607,7 +669,6 @@ describe('User E2E Routes with MySQL', () => {
     });
 
     it('should maintain data consistency during operations', async () => {
-      // Update user with valid data (no numbers in firstName)
       await request(app)
         .put(`/users/${testUserId}`)
         .set('Authorization', `Bearer ${userToken}`)
@@ -617,7 +678,6 @@ describe('User E2E Routes with MySQL', () => {
         })
         .expect(200);
 
-      // Verify the update persisted
       const getRes = await request(app)
         .get(`/users/${testUserId}`)
         .set('Authorization', `Bearer ${userToken}`)
@@ -628,20 +688,17 @@ describe('User E2E Routes with MySQL', () => {
     });
 
     it('should respect permission boundaries', async () => {
-      // Create another user
       const otherUser = await UserModel.create({
         ...userData,
         email: 'other@user.com',
         username: 'otheruser',
       });
 
-      // Regular user should NOT be able to access other user's profile
       await request(app)
         .get(`/users/${(otherUser as any).userId}`)
         .set('Authorization', `Bearer ${userToken}`)
-        .expect(401); // Your middleware returns 401, not 403
+        .expect(403);
 
-      // But staff should be able to access any user's profile
       await request(app)
         .get(`/users/${(otherUser as any).userId}`)
         .set('Authorization', `Bearer ${staffToken}`)
@@ -649,22 +706,18 @@ describe('User E2E Routes with MySQL', () => {
     });
 
     it('should handle authorization checks correctly', async () => {
-      // Test that regular user can access their own data
       await request(app)
         .get(`/users/${testUserId}`)
         .set('Authorization', `Bearer ${userToken}`)
         .expect(200);
 
-      // Test that staff can access any user data
       await request(app)
         .get(`/users/${testUserId}`)
         .set('Authorization', `Bearer ${staffToken}`)
         .expect(200);
 
-      // Test that no token results in 401
       await request(app).get(`/users/${testUserId}`).expect(401);
 
-      // Test that invalid token results in 401
       await request(app)
         .get(`/users/${testUserId}`)
         .set('Authorization', 'Bearer invalid-token')
@@ -672,21 +725,18 @@ describe('User E2E Routes with MySQL', () => {
     });
 
     it('should validate request data properly', async () => {
-      // Test invalid email format
       await request(app)
         .put(`/users/${testUserId}`)
         .set('Authorization', `Bearer ${userToken}`)
         .send({ email: 'not-an-email' })
         .expect(400);
 
-      // Test empty required fields
       await request(app)
         .patch(`/users/${testUserId}/password`)
         .set('Authorization', `Bearer ${userToken}`)
         .send({})
         .expect(400);
 
-      // Test weak password
       await request(app)
         .patch(`/users/${testUserId}/password`)
         .set('Authorization', `Bearer ${userToken}`)
@@ -695,27 +745,28 @@ describe('User E2E Routes with MySQL', () => {
     });
 
     it('should handle edge cases gracefully', async () => {
-      // Test very long strings (should fail validation)
       const longString = 'a'.repeat(1000);
       await request(app)
         .put(`/users/${testUserId}`)
         .set('Authorization', `Bearer ${userToken}`)
         .send({ firstName: longString })
-        .expect(400); // Should fail validation
+        .expect(400);
 
-      // Test special characters in names (should succeed)
       await request(app)
         .put(`/users/${testUserId}`)
         .set('Authorization', `Bearer ${userToken}`)
         .send({ firstName: 'José-María' })
-        .expect(200); // Should succeed with valid special chars
+        .expect(200);
 
-      // Test SQL injection attempt (should be safely handled by validation)
       await request(app)
         .put(`/users/${testUserId}`)
         .set('Authorization', `Bearer ${userToken}`)
         .send({ firstName: "'; DROP TABLE users; --" })
+<<<<<<< HEAD
         .expect(400); // Sequelize validation error returns 500, which is expected
+=======
+        .expect(400);
+>>>>>>> development
     });
   });
 });

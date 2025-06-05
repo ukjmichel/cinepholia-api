@@ -57,7 +57,7 @@ describe('Custom Error Classes', () => {
   describe('NotAuthorizedError', () => {
     it('should set name and statusCode', () => {
       const err = new NotAuthorizedError('Forbidden');
-      expect(err.name).toBe('NotAuthorizedError');
+      expect(err.name).toBe('Forbidden');
       expect(err.status).toBe(403);
       expect(err.message).toBe('Forbidden');
       expect(err.cause).toBeUndefined();

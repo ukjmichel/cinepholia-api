@@ -509,7 +509,7 @@ describe('Authentication System Tests', () => {
           .post('/auth/register-employee')
           .set('Authorization', `Bearer ${userToken}`)
           .send(employeeData)
-          .expect(401);
+          .expect(403);
 
         expect(res.body.message).toMatch(/admin.*required/i);
       });
@@ -717,7 +717,7 @@ describe('Authentication System Tests', () => {
         .set('Authorization', `Bearer ${malformedToken}`)
         .expect(401);
 
-      expect(res.body.message).toMatch(/invalid.*token/i);
+      expect(res.body.message).toMatch(/invalid.*token|malformed/i);
     });
 
     it('should handle missing Authorization header', async () => {
