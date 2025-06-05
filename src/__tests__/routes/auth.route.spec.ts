@@ -538,13 +538,18 @@ describe('Authentication System Tests', () => {
           })
           .expect(200);
 
-        expect(res.body).toHaveProperty('message');
+        // New assertion for your API shape
+        expect(res.body).toHaveProperty('data');
         expect(res.body.data).toHaveProperty('user');
-        expect(res.body.data).toHaveProperty('tokens');
         expect(res.body.data.user.email).toBe(testUser.email);
-        expect(res.body.data.tokens).toHaveProperty('accessToken');
-        expect(res.body.data.tokens).toHaveProperty('refreshToken');
+
+        // Check tokens in cookies
+        const setCookie = res.headers['set-cookie'];
+        expect(setCookie).toBeDefined();
+        const cookieArray = Array.isArray(setCookie) ? setCookie : [setCookie];
+        expect(cookieArray.join(';')).toMatch(/accessToken/i);
       });
+      
 
       it('should login with email and password', async () => {
         const res = await request(app)

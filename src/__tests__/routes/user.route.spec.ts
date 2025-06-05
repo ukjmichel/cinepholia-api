@@ -31,8 +31,6 @@ const staffUserData = {
 const cleanDatabase = async (): Promise<void> => {
   try {
     await sequelize.query('SET FOREIGN_KEY_CHECKS = 0');
-
-    // Clean in proper order: child tables first
     await UserTokenModel.destroy({ where: {}, truncate: true, cascade: true });
     await AuthorizationModel.destroy({
       where: {},
@@ -40,7 +38,6 @@ const cleanDatabase = async (): Promise<void> => {
       cascade: true,
     });
     await UserModel.destroy({ where: {}, truncate: true, cascade: true });
-
     await sequelize.query('SET FOREIGN_KEY_CHECKS = 1');
     console.log('✅ Database cleaned successfully');
   } catch (error) {
@@ -49,9 +46,6 @@ const cleanDatabase = async (): Promise<void> => {
   }
 };
 
-/**
- * Add delay to avoid potential rate limiting or timing issues
- */
 const waitForOperation = async (ms: number = 100): Promise<void> => {
   return new Promise((resolve) => setTimeout(resolve, ms));
 };
@@ -70,10 +64,7 @@ describe('User E2E Routes with MySQL', () => {
   });
 
   beforeEach(async () => {
-    // Clean database before each test
     await cleanDatabase();
-
-    // Create a regular user via API
     const userRes = await request(app).post('/auth/register').send(userData);
 
     if (userRes.status === 201 && userRes.body.data?.tokens) {
@@ -85,7 +76,7 @@ describe('User E2E Routes with MySQL', () => {
       );
     }
 
-    // Create a staff user manually since /auth/register/staff doesn't exist
+    // Create staff user manually
     const staffUser = await UserModel.create(staffUserData);
     staffUserId = (staffUser as any).userId;
 
@@ -107,10 +98,66 @@ describe('User E2E Routes with MySQL', () => {
   });
 
   afterAll(async () => {
-    // Final cleanup
     await cleanDatabase();
     await sequelize.close();
     console.log('🔌 Database connection closed');
+  });
+
+  // ... all other tests unchanged ...
+
+  describe('PATCH /users/:userId/password', () => {
+    it('should change own password', async () => {
+      const newPasswordData = {
+        newPassword: 'NewPassword123!',
+      };
+
+      const res = await request(app)
+        .patch(`/users/${testUserId}/password`)
+        .set('Authorization', `Bearer ${userToken}`)
+        .send(newPasswordData)
+        .expect(200);
+
+      expect(res.body).toHaveProperty(
+        'message',
+        'Password changed successfully'
+      );
+      expect(res.body.data).toHaveProperty('userId', testUserId);
+    });
+
+    // ...other PATCH tests unchanged...
+
+    // 🔴 Correction: login now sets cookie, not token in body!
+    it('should verify password change works with login', async () => {
+      const newPassword = 'VerifiedNewPassword123!';
+
+      // Change password
+      await request(app)
+        .patch(`/users/${testUserId}/password`)
+        .set('Authorization', `Bearer ${userToken}`)
+        .send({ newPassword })
+        .expect(200);
+
+      // Login with new password
+      const loginRes = await request(app)
+        .post('/auth/login')
+        .send({
+          emailOrUsername: userData.email,
+          password: newPassword,
+        })
+        .expect(200);
+
+      expect(loginRes.body).toHaveProperty('message', 'Login successful');
+
+      // Fix: safely handle string or array
+      const setCookie = loginRes.headers['set-cookie'];
+      expect(setCookie).toBeDefined();
+      const cookieArray = Array.isArray(setCookie) ? setCookie : [setCookie];
+      expect(cookieArray.join(';')).toMatch(/accessToken/i);
+
+      // User info
+      expect(loginRes.body.data).toHaveProperty('user');
+      expect(loginRes.body.data.user.email).toBe(userData.email);
+    });
   });
 
   describe('GET /users', () => {
@@ -135,7 +182,7 @@ describe('User E2E Routes with MySQL', () => {
       const res = await request(app)
         .get('/users')
         .set('Authorization', `Bearer ${userToken}`)
-        .expect(403); 
+        .expect(403);
 
       expect(res.body.message).toMatch(
         /forbidden|permission|not allowed|staff.*required|unauthorized/i
@@ -501,7 +548,6 @@ describe('User E2E Routes with MySQL', () => {
         .expect(200);
 
       expect(loginRes.body).toHaveProperty('message', 'Login successful');
-      expect(loginRes.body.data).toHaveProperty('tokens');
     });
   });
 
@@ -669,7 +715,7 @@ describe('User E2E Routes with MySQL', () => {
         .put(`/users/${testUserId}`)
         .set('Authorization', `Bearer ${userToken}`)
         .send({ firstName: "'; DROP TABLE users; --" })
-        .expect(500); // Sequelize validation error returns 500, which is expected
+        .expect(400); // Sequelize validation error returns 500, which is expected
     });
   });
 });

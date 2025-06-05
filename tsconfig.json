@@ -16,13 +16,11 @@
     "resolveJsonModule": true,
     "declaration": false,
     "sourceMap": false,
+    "types": ["node", "jest"]
   },
   "include": ["*.ts", "**/*.ts", "src/**/*"],
   "exclude": [
     "node_modules",
     "dist",
-    "**/__tests__/**",
-    "**/*.test.ts",
-    "**/*.spec.ts"
   ]
 }

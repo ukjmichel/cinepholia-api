@@ -1,21 +1,20 @@
-import {
-  login,
-  authorizationService,
-} from '../../controllers/auth.controller.js';
+import { login } from '../../controllers/auth.controller.js';
 import { authService } from '../../services/auth.service.js';
 import { userService } from '../../services/user.service.js';
+import { authorizationService } from '../../services/authorization.service.js'; // Correct import
 import { BadRequestError } from '../../errors/bad-request-error.js';
-import { AuthorizationModel } from '../../models/authorization.model.js';
 
-// Mock dependencies
+// Correctly mock all dependencies!
 jest.mock('../../services/auth.service.js');
 jest.mock('../../services/user.service.js');
+jest.mock('../../services/authorization.service.js');
 
 const mockRequest = (body = {}) => ({ body });
 const mockResponse = () => {
   const res: any = {};
   res.status = jest.fn().mockReturnValue(res);
   res.json = jest.fn().mockReturnValue(res);
+  res.cookie = jest.fn().mockReturnValue(res); // <<-- THE FIX!
   return res;
 };
 const mockNext = jest.fn();
@@ -36,17 +35,16 @@ describe('authController.login', () => {
       email: 'u@ex.com',
       firstName: 'Test',
       lastName: 'User',
-      get: function (options?: any) {
+      get: function () {
         return this;
       }, // mock sequelize get
     };
 
     (authService.login as jest.Mock).mockResolvedValue(tokens);
     (userService.getUserByUsernameOrEmail as jest.Mock).mockResolvedValue(user);
-    // Mock with null authorization (should default to 'utilisateur')
-    jest
-      .spyOn(authorizationService, 'getAuthorizationByUserId')
-      .mockResolvedValue(null as unknown as AuthorizationModel);
+    (
+      authorizationService.getAuthorizationByUserId as jest.Mock
+    ).mockResolvedValue(null);
 
     const req = mockRequest({ emailOrUsername: 'user', password: 'pass' });
     const res = mockResponse();
@@ -55,6 +53,7 @@ describe('authController.login', () => {
 
     expect(authService.login).toHaveBeenCalledWith('user', 'pass');
     expect(userService.getUserByUsernameOrEmail).toHaveBeenCalledWith('user');
+    expect(res.cookie).toHaveBeenCalled(); // (optional) check cookie was set
     expect(res.status).toHaveBeenCalledWith(200);
     expect(res.json).toHaveBeenCalledWith({
       message: 'Login successful',
@@ -67,7 +66,6 @@ describe('authController.login', () => {
           email: 'u@ex.com',
           role: 'utilisateur',
         },
-        tokens,
       },
     });
     expect(mockNext).not.toHaveBeenCalled();
@@ -91,19 +89,18 @@ describe('authController.login', () => {
 
     (authService.login as jest.Mock).mockResolvedValue(tokens);
     (userService.getUserByUsernameOrEmail as jest.Mock).mockResolvedValue(user);
-
-    // Mock returns only role, but cast as any/Partial to bypass TS error
-    jest
-      .spyOn(authorizationService, 'getAuthorizationByUserId')
-      .mockResolvedValue({
-        role: 'employé',
-      } as any);
+    (
+      authorizationService.getAuthorizationByUserId as jest.Mock
+    ).mockResolvedValue({
+      role: 'employé',
+    });
 
     const req = mockRequest({ emailOrUsername: 'employee', password: 'pass' });
     const res = mockResponse();
 
     await login(req as any, res as any, mockNext);
 
+    expect(res.cookie).toHaveBeenCalled(); // (optional)
     expect(res.status).toHaveBeenCalledWith(200);
     expect(res.json).toHaveBeenCalledWith({
       message: 'Login successful',
@@ -116,7 +113,6 @@ describe('authController.login', () => {
           email: 'e@ex.com',
           role: 'employé',
         },
-        tokens,
       },
     });
     expect(mockNext).not.toHaveBeenCalled();

@@ -52,14 +52,6 @@ export const createMovieValidator = [
     .withMessage('durationMinutes is required')
     .isInt({ min: 1, max: 1000 })
     .withMessage('durationMinutes must be an integer between 1 and 1000'),
-  body('posterUrl')
-    .optional()
-    .isString()
-    .withMessage('posterUrl must be a string')
-    .isLength({ max: 500 })
-    .withMessage('posterUrl must be less than 500 characters')
-    .matches(/^(https?:\/\/)[^\s$.?#].[^\s]*$/)
-    .withMessage('posterUrl must be a valid URL'),
   body('recommended')
     .optional()
     .isBoolean()
@@ -106,14 +98,6 @@ export const updateMovieValidator = [
     .optional()
     .isInt({ min: 1, max: 1000 })
     .withMessage('durationMinutes must be an integer between 1 and 1000'),
-  body('posterUrl')
-    .optional()
-    .isString()
-    .withMessage('posterUrl must be a string')
-    .isLength({ max: 500 })
-    .withMessage('posterUrl must be less than 500 characters')
-    .matches(/^(https?:\/\/)[^\s$.?#].[^\s]*$/)
-    .withMessage('posterUrl must be a valid URL'),
   body('recommended')
     .optional()
     .isBoolean()

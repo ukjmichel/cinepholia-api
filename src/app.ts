@@ -1,4 +1,4 @@
-import express, { Request, Response } from 'express';
+import express, { ErrorRequestHandler, Request, Response } from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
 import morgan from 'morgan';
@@ -25,12 +25,13 @@ app.use(express.json());
 app.use(helmet());
 app.use(
   cors({
-    origin: 'http://localhost:4200', 
-    credentials: true, 
+    origin: 'http://localhost:4200',
+    credentials: true,
   })
 );
 app.use(cookieParser());
 app.use(morgan('dev'));
+app.use('/uploads', express.static('uploads'));
 
 // ─────── Swagger Setup ──────────────────────────────────────
 setupSwagger(app);
@@ -50,6 +51,6 @@ app.use('/', bookingCommentRouter);
 app.use('/incident-reports', incidentReportRouter);
 
 // ─────── Error Handling ──────────────────────────────────────
-app.use(errorHandler);
+app.use(errorHandler as ErrorRequestHandler);
 
 export default app;

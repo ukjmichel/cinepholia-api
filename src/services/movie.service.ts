@@ -4,8 +4,9 @@ import {
   MovieCreationAttributes,
 } from '../models/movie.model.js';
 import { NotFoundError } from '../errors/not-found-error.js';
-import { sequelize } from '../config/db.js'; // adjust path as needed
+import { sequelize } from '../config/db.js';
 import { Transaction, Op } from 'sequelize';
+import { MovieImageService } from './movie-image.service.js'; // Must exist!
 
 export class MovieService {
   static async getMovieById(movieId: string): Promise<MovieModel> {
@@ -17,24 +18,41 @@ export class MovieService {
   }
 
   static async createMovie(
-    payload: MovieCreationAttributes
+    payload: MovieCreationAttributes,
+    file?: Express.Multer.File
   ): Promise<MovieModel> {
     return await sequelize.transaction(async (t: Transaction) => {
-      const movie = await MovieModel.create(payload, { transaction: t });
+      let posterUrl: string | undefined = undefined;
+
+      if (file) {
+        posterUrl = await MovieImageService.saveMovieImage(file);
+      }
+
+      const movie = await MovieModel.create(
+        { ...payload, posterUrl },
+        { transaction: t }
+      );
       return movie;
     });
   }
 
   static async updateMovie(
     movieId: string,
-    update: Partial<MovieAttributes>
+    update: Partial<MovieAttributes>,
+    file?: Express.Multer.File
   ): Promise<MovieModel> {
     return await sequelize.transaction(async (t: Transaction) => {
       const movie = await MovieModel.findByPk(movieId, { transaction: t });
       if (!movie) {
         throw new NotFoundError(`Movie with id ${movieId} not found`);
       }
-      await movie.update(update, { transaction: t });
+
+      let posterUrl = update.posterUrl;
+      if (file) {
+        posterUrl = await MovieImageService.saveMovieImage(file);
+      }
+
+      await movie.update({ ...update, posterUrl }, { transaction: t });
       return movie;
     });
   }
@@ -46,6 +64,7 @@ export class MovieService {
         throw new NotFoundError(`Movie with id ${movieId} not found`);
       }
       await movie.destroy({ transaction: t });
+      // (Optional: delete poster file from storage here if needed)
     });
   }
 
@@ -53,11 +72,6 @@ export class MovieService {
     return MovieModel.findAll();
   }
 
-  /**
-   * Search for movies by title, director, or genre (partial match).
-   * @param {string} query - The search query.
-   * @returns {Promise<MovieModel[]>}
-   */
   static async searchMovie(query: string): Promise<MovieModel[]> {
     return MovieModel.findAll({
       where: {
