@@ -7,14 +7,14 @@ export function validateTokenMiddleware(
   expectedType: UserTokenType | UserTokenType[]
 ) {
   return async (req: Request, res: Response, next: NextFunction) => {
-    const { token } = req.body;
+
+    const token = req.cookies?.accessToken || req.cookies?.refreshToken; // adjust as needed
 
     if (!token || typeof token !== 'string') {
-      return next(new BadRequestError('Token is required in request body.'));
+      return next(new BadRequestError('Token is required in cookies.'));
     }
 
     try {
-      // Pass the expected type(s) directly to the service method
       const tokenInstance = await userTokenService.validateToken(
         token,
         expectedType

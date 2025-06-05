@@ -3,25 +3,12 @@ import { authService } from '../services/auth.service.js';
 import { userService } from '../services/user.service.js';
 import { BadRequestError } from '../errors/bad-request-error.js';
 import { AuthorizationService } from '../services/authorization.service.js';
+import { config } from '../config/env.js';
 
 export const authorizationService = new AuthorizationService();
 
 /**
- * Authenticates a user and returns JWT tokens and user info.
- *
- * @param {Request} req - Express request object (should contain emailOrUsername and password in body)
- * @param {Response} res - Express response object
- * @param {NextFunction} next - Express next middleware function
- * @returns {Promise<void>} Sends a JSON response with user and tokens, or passes error to next middleware
- *
- * Example successful response:
- * {
- *   message: "Login successful",
- *   data: {
- *     user: { userId, username, firstName, lastName, email, role },
- *     tokens: { accessToken, refreshToken }
- *   }
- * }
+ * Authenticates a user and returns user info, setting JWT tokens in HttpOnly cookies.
  */
 export const login = async (
   req: Request,
@@ -34,6 +21,7 @@ export const login = async (
       throw new BadRequestError('Email or username and password are required');
     }
 
+    // Authenticate and get tokens
     const tokens = await authService.login(emailOrUsername, password);
     const user = await userService.getUserByUsernameOrEmail(emailOrUsername);
 
@@ -56,6 +44,23 @@ export const login = async (
       typeof user.get === 'function' ? user.get({ plain: true }) : user;
     const { userId, username, firstName, lastName, email } = plainUser;
 
+    // Set cookies (adjust options for production: secure, sameSite, etc.)
+    res.cookie('accessToken', tokens.accessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production', // send cookie only over HTTPS in prod
+      sameSite: 'lax',
+      maxAge: 15 * 60 * 1000, // 15 minutes, adjust as needed
+      path: '/',
+    });
+    res.cookie('refreshToken', tokens.refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days, adjust as needed
+      path: '/',
+    });
+
+    // Send only user info (not tokens) in response
     res.status(200).json({
       message: 'Login successful',
       data: {
@@ -67,7 +72,6 @@ export const login = async (
           email,
           role,
         },
-        tokens,
       },
     });
   } catch (err) {

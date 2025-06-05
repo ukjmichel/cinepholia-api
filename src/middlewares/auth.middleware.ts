@@ -4,11 +4,13 @@ import { UserService } from '../services/user.service.js';
 import { AuthorizationService } from '../services/authorization.service.js';
 import { UnauthorizedError } from '../errors/unauthorized-error.js';
 import { NotFoundError } from '../errors/not-found-error.js';
+import jwt from 'jsonwebtoken';
 // import { Role } from '../models/authorization.model.js'; // (optional, for typing)
 
 const userService = new UserService();
 const authService = new AuthService();
 const authorizationService = new AuthorizationService();
+const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret';
 
 declare global {
   namespace Express {
@@ -33,29 +35,23 @@ export async function decodeJwtToken(
   res: Response,
   next: NextFunction
 ) {
+  // Get token from cookies (adjust name if needed)
+  const token = req.cookies?.accessToken;
+  if (!token) {
+    return next(new UnauthorizedError('Missing access token'));
+  }
+
   try {
-    // 1. Get and decode JWT
-    const token = getAccessToken(req);
-    if (!token) throw new UnauthorizedError('Missing access token');
-
-    const payload = authService.verifyAccessToken(token);
+    // Decode/verify JWT
+    const payload = jwt.verify(token, JWT_SECRET) as any;
+    // Attach to request object for later middleware
     req.userJwtPayload = payload;
-
-    // 2. Fetch user from DB
-    const user = await userService.getUserById(payload.userId);
-    if (!user) throw new NotFoundError('User not found');
-    req.user = user;
-
-    // 3. Fetch user role from DB
-    // If role is present in payload and you trust it, you could do: req.userRole = payload.role;
-    // If not, get from DB as you do here:
     const auth = await authorizationService.getAuthorizationByUserId(
-      user.userId
+      payload.userId
     );
     req.userRole = auth.role;
-
     next();
   } catch (err) {
-    next(err);
+    next(new UnauthorizedError('Invalid or expired access token'));
   }
 }
