@@ -12,7 +12,8 @@ import { AuthorizationModel } from '../../models/authorization.model.js';
 import { AuthService } from '../../services/auth.service.js';
 import { v4 as uuidv4 } from 'uuid';
 
-// Test data setup
+// --- Test Data Setup ---
+
 const testMovie = {
   movieId: uuidv4(),
   title: 'The Matrix',
@@ -54,48 +55,22 @@ const testScreening = {
   quality: '2D',
 };
 
-// User data
-const regularUserData = {
-  username: 'regularuser',
-  firstName: 'John',
-  lastName: 'Doe',
-  email: 'john.doe@email.com',
-  password: 'UserPass123!',
-};
-
-const staffUserData = {
-  username: 'staffbooking',
-  firstName: 'Staff',
-  lastName: 'Member',
-  email: 'staff@cinemabooking.com',
-  password: 'StaffPass123!',
-};
-
-const otherUserData = {
-  username: 'otheruser',
-  firstName: 'Jane',
-  lastName: 'Smith',
-  email: 'jane.smith@email.com',
-  password: 'OtherPass123!',
-};
-
-const testBooking: {
-  bookingId: string;
-  screeningId: string;
-  userId: string;
-  seatsNumber: number;
-  totalPrice: number;
-  status: BookingStatus;
-  bookingDate: Date;
-} = {
-  bookingId: uuidv4(),
-  screeningId: testScreening.screeningId,
-  userId: '', // Will be set in tests
-  seatsNumber: 2,
-  totalPrice: 30.0,
-  status: 'pending',
-  bookingDate: new Date(),
-};
+// Helper to create a minimal but valid user for the token & db
+function buildTestUser(overrides = {}) {
+  const now = new Date();
+  return {
+    userId: uuidv4(),
+    username: 'defaultuser',
+    firstName: 'John',
+    lastName: 'Doe',
+    email: 'testuser@email.com',
+    password: 'hashedpassword',
+    verified: true,
+    createdAt: now,
+    updatedAt: now,
+    ...overrides,
+  };
+}
 
 const cleanDatabase = async () => {
   await sequelize.query('SET FOREIGN_KEY_CHECKS = 0');
@@ -110,6 +85,7 @@ const cleanDatabase = async () => {
   await MovieModel.destroy({ where: {}, truncate: true, cascade: true });
   await MovieHallModel.destroy({ where: {}, truncate: true, cascade: true });
   await MovieTheaterModel.destroy({ where: {}, truncate: true, cascade: true });
+  // Clean booked seats if needed (add here)
   await sequelize.query('SET FOREIGN_KEY_CHECKS = 1');
 };
 
@@ -120,6 +96,9 @@ describe('Booking E2E Routes', () => {
   let regularUserId: string;
   let staffUserId: string;
   let otherUserId: string;
+  let regularUserObj: any;
+  let staffUserObj: any;
+  let otherUserObj: any;
 
   beforeAll(async () => {
     await syncDB();
@@ -128,56 +107,53 @@ describe('Booking E2E Routes', () => {
   beforeEach(async () => {
     await cleanDatabase();
 
-    // Create theater, hall, movie, and screening first
     await MovieTheaterModel.create(testTheater);
     await MovieHallModel.create(testHall);
     await MovieModel.create(testMovie);
     await ScreeningModel.create(testScreening);
 
-    // Create regular user
-    const regularUser = await UserModel.create(regularUserData);
+    // Users
+    regularUserObj = buildTestUser({
+      username: 'regularuser',
+      email: 'john.doe@email.com',
+    });
+    const regularUser = await UserModel.create(regularUserObj);
     regularUserId = (regularUser as any).userId;
     await AuthorizationModel.create({
       userId: regularUserId,
       role: 'utilisateur',
     });
     regularUserToken = new AuthService().generateTokens({
+      ...regularUserObj,
       userId: regularUserId,
-      username: regularUserData.username,
-      email: regularUserData.email,
-      verified: false,
-    } as any).accessToken;
+    }).accessToken;
 
-    // Create staff user
-    const staffUser = await UserModel.create(staffUserData);
-    staffUserId = (staffUser as any).userId;
-    await AuthorizationModel.create({
-      userId: staffUserId,
-      role: 'employé',
+    staffUserObj = buildTestUser({
+      username: 'staffbooking',
+      email: 'staff@cinemabooking.com',
     });
+    const staffUser = await UserModel.create(staffUserObj);
+    staffUserId = (staffUser as any).userId;
+    await AuthorizationModel.create({ userId: staffUserId, role: 'employé' });
     staffToken = new AuthService().generateTokens({
+      ...staffUserObj,
       userId: staffUserId,
-      username: staffUserData.username,
-      email: staffUserData.email,
-      verified: false,
-    } as any).accessToken;
+    }).accessToken;
 
-    // Create other user
-    const otherUser = await UserModel.create(otherUserData);
+    otherUserObj = buildTestUser({
+      username: 'otheruser',
+      email: 'jane.smith@email.com',
+    });
+    const otherUser = await UserModel.create(otherUserObj);
     otherUserId = (otherUser as any).userId;
     await AuthorizationModel.create({
       userId: otherUserId,
       role: 'utilisateur',
     });
     otherUserToken = new AuthService().generateTokens({
+      ...otherUserObj,
       userId: otherUserId,
-      username: otherUserData.username,
-      email: otherUserData.email,
-      verified: false,
-    } as any).accessToken;
-
-    // Set userId in test booking
-    testBooking.userId = regularUserId;
+    }).accessToken;
   });
 
   afterAll(async () => {
@@ -190,6 +166,7 @@ describe('Booking E2E Routes', () => {
       const bookingData = {
         screeningId: testScreening.screeningId,
         userId: regularUserId,
+        seatIds: ['A1', 'A2'],
         seatsNumber: 2,
         totalPrice: 30.0,
         status: 'pending',
@@ -201,16 +178,18 @@ describe('Booking E2E Routes', () => {
         .send(bookingData)
         .expect(201);
 
-      expect(res.body.data.screeningId).toBe(testScreening.screeningId);
-      expect(res.body.data.userId).toBe(regularUserId);
-      expect(res.body.data.seatsNumber).toBe(2);
-      expect(res.body.data.status).toBe('pending');
+      // POST /bookings returns booking in 'booking' field (per controller)
+      expect(res.body.booking.screeningId).toBe(testScreening.screeningId);
+      expect(res.body.booking.userId).toBe(regularUserId);
+      expect(res.body.booking.seatsNumber).toBe(2);
+      expect(res.body.booking.status).toBe('pending');
     });
 
     it('should create a booking with staff JWT', async () => {
       const bookingData = {
         screeningId: testScreening.screeningId,
         userId: regularUserId,
+        seatIds: ['A3'],
         seatsNumber: 1,
         totalPrice: 15.0,
         status: 'pending',
@@ -222,8 +201,8 @@ describe('Booking E2E Routes', () => {
         .send(bookingData)
         .expect(201);
 
-      expect(res.body.data.screeningId).toBe(testScreening.screeningId);
-      expect(res.body.data.seatsNumber).toBe(1);
+      expect(res.body.booking.screeningId).toBe(testScreening.screeningId);
+      expect(res.body.booking.seatsNumber).toBe(1);
     });
 
     it('should 401 if unauthenticated', async () => {
@@ -242,14 +221,15 @@ describe('Booking E2E Routes', () => {
       await request(app)
         .post('/bookings')
         .set('Authorization', `Bearer ${regularUserToken}`)
-        .send({}) // missing required fields
+        .send({})
         .expect(400);
     });
 
     it('should 403 if user tries to book for another user', async () => {
       const bookingData = {
         screeningId: testScreening.screeningId,
-        userId: otherUserId, // Different user ID
+        userId: otherUserId,
+        seatIds: ['B1'],
         seatsNumber: 1,
         totalPrice: 15.0,
         status: 'pending',
@@ -263,13 +243,20 @@ describe('Booking E2E Routes', () => {
     });
   });
 
+  // Each test below uses a new 'testBooking' object for DB setup.
+
   describe('GET /bookings/search', () => {
     beforeEach(async () => {
-      await BookingModel.create({
-        ...testBooking,
+      const testBooking = {
         bookingId: uuidv4(),
+        screeningId: testScreening.screeningId,
+        userId: regularUserId,
+        seatsNumber: 2,
+        totalPrice: 30.0,
         status: 'pending',
-      });
+        bookingDate: new Date(),
+      };
+      await BookingModel.create(testBooking as BookingModel);
     });
 
     it('should search bookings with query parameter', async () => {
@@ -297,11 +284,16 @@ describe('Booking E2E Routes', () => {
 
   describe('GET /bookings', () => {
     it('should return all bookings', async () => {
-      await BookingModel.create({
-        ...testBooking,
+      const testBooking = {
         bookingId: uuidv4(),
+        screeningId: testScreening.screeningId,
+        userId: regularUserId,
+        seatsNumber: 2,
+        totalPrice: 30.0,
         status: 'pending',
-      });
+        bookingDate: new Date(),
+      };
+      await BookingModel.create(testBooking as BookingModel);
 
       const res = await request(app).get('/bookings').expect(200);
 
@@ -322,11 +314,16 @@ describe('Booking E2E Routes', () => {
 
     beforeEach(async () => {
       createdBookingId = uuidv4();
-      await BookingModel.create({
-        ...testBooking,
+      const testBooking = {
         bookingId: createdBookingId,
+        screeningId: testScreening.screeningId,
+        userId: regularUserId,
+        seatsNumber: 2,
+        totalPrice: 30.0,
         status: 'pending',
-      });
+        bookingDate: new Date(),
+      };
+      await BookingModel.create(testBooking as BookingModel);
     });
 
     it('should get booking by ID', async () => {
@@ -354,22 +351,30 @@ describe('Booking E2E Routes', () => {
 
     beforeEach(async () => {
       createdBookingId = uuidv4();
-      await BookingModel.create({
-        ...testBooking,
+      const testBooking = {
         bookingId: createdBookingId,
+        screeningId: testScreening.screeningId,
+        userId: regularUserId,
+        seatsNumber: 2,
+        totalPrice: 30.0,
         status: 'pending',
-      });
+        bookingDate: new Date(),
+      };
+      await BookingModel.create(testBooking as BookingModel);
     });
 
     it('should update booking when user owns it', async () => {
-      // Create a booking that belongs to the regular user
       const userBookingId = uuidv4();
-      await BookingModel.create({
-        ...testBooking,
+      const testBooking = {
         bookingId: userBookingId,
-        userId: regularUserId, // This booking belongs to the regular user
+        screeningId: testScreening.screeningId,
+        userId: regularUserId,
+        seatsNumber: 2,
+        totalPrice: 30.0,
         status: 'pending',
-      });
+        bookingDate: new Date(),
+      };
+      await BookingModel.create(testBooking as BookingModel);
 
       const updateData = {
         seatsNumber: 2,
@@ -382,10 +387,10 @@ describe('Booking E2E Routes', () => {
         .send(updateData)
         .expect(200);
 
-      expect(res.body.data.seatsNumber).toBe(2);
-      expect(res.body.data.status).toBe('pending');
-      expect(res.body.data.bookingId).toBe(userBookingId);
-      // Don't check totalPrice since it might not be returned by the service
+      // PATCH returns booking in 'data.booking'
+      expect(res.body.data.booking.seatsNumber).toBe(2);
+      expect(res.body.data.booking.status).toBe('pending');
+      expect(res.body.data.booking.bookingId).toBe(userBookingId);
     });
 
     it('should update booking when user is staff', async () => {
@@ -399,7 +404,7 @@ describe('Booking E2E Routes', () => {
         .send(updateData)
         .expect(200);
 
-      expect(res.body.data.status).toBe('canceled');
+      expect(res.body.data.booking.status).toBe('canceled');
     });
 
     it("should 403 when user tries to update another user's booking", async () => {
@@ -430,7 +435,7 @@ describe('Booking E2E Routes', () => {
         .patch('/bookings/aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa')
         .set('Authorization', `Bearer ${regularUserToken}`)
         .send({ status: 'canceled' })
-        .expect(404); // Permission middleware finds booking doesn't exist, returns 404
+        .expect(404);
     });
   });
 
@@ -439,11 +444,16 @@ describe('Booking E2E Routes', () => {
 
     beforeEach(async () => {
       createdBookingId = uuidv4();
-      await BookingModel.create({
-        ...testBooking,
+      const testBooking = {
         bookingId: createdBookingId,
+        screeningId: testScreening.screeningId,
+        userId: regularUserId,
+        seatsNumber: 2,
+        totalPrice: 30.0,
         status: 'pending',
-      });
+        bookingDate: new Date(),
+      };
+      await BookingModel.create(testBooking as BookingModel);
     });
 
     it('should delete booking when user is staff', async () => {
@@ -457,14 +467,17 @@ describe('Booking E2E Routes', () => {
     });
 
     it('should delete booking when user owns it', async () => {
-      // Create a booking that belongs to the regular user
       const userBookingId = uuidv4();
-      await BookingModel.create({
-        ...testBooking,
+      const testBooking = {
         bookingId: userBookingId,
-        userId: regularUserId, // This booking belongs to the regular user
+        screeningId: testScreening.screeningId,
+        userId: regularUserId,
+        seatsNumber: 2,
+        totalPrice: 30.0,
         status: 'pending',
-      });
+        bookingDate: new Date(),
+      };
+      await BookingModel.create(testBooking as BookingModel);
 
       await request(app)
         .delete(`/bookings/${userBookingId}`)
@@ -482,7 +495,6 @@ describe('Booking E2E Routes', () => {
         .send()
         .expect(403);
 
-      // Booking should still exist
       const booking = await BookingModel.findByPk(createdBookingId);
       expect(booking).not.toBeNull();
     });
@@ -495,32 +507,38 @@ describe('Booking E2E Routes', () => {
       await request(app)
         .delete('/bookings/aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa')
         .set('Authorization', `Bearer ${regularUserToken}`)
-        .expect(404); // Permission middleware finds booking doesn't exist, returns 404
+        .expect(404);
     });
   });
 
   describe('GET /bookings/user/:userId', () => {
     beforeEach(async () => {
-      // Create bookings for regular user
       await BookingModel.create({
-        ...testBooking,
         bookingId: uuidv4(),
+        screeningId: testScreening.screeningId,
+        userId: regularUserId,
+        seatsNumber: 2,
+        totalPrice: 30.0,
         status: 'pending',
+        bookingDate: new Date(),
       });
       await BookingModel.create({
-        ...testBooking,
         bookingId: uuidv4(),
+        screeningId: testScreening.screeningId,
+        userId: regularUserId,
         seatsNumber: 1,
+        totalPrice: 15.0,
         status: 'pending',
+        bookingDate: new Date(),
       });
-
-      // Create booking for other user
       await BookingModel.create({
-        ...testBooking,
         bookingId: uuidv4(),
+        screeningId: testScreening.screeningId,
         userId: otherUserId,
         seatsNumber: 1,
+        totalPrice: 15.0,
         status: 'pending',
+        bookingDate: new Date(),
       });
     });
 
@@ -553,16 +571,22 @@ describe('Booking E2E Routes', () => {
   describe('GET /bookings/screening/:screeningId', () => {
     beforeEach(async () => {
       await BookingModel.create({
-        ...testBooking,
         bookingId: uuidv4(),
+        screeningId: testScreening.screeningId,
+        userId: regularUserId,
+        seatsNumber: 2,
+        totalPrice: 30.0,
         status: 'pending',
+        bookingDate: new Date(),
       });
       await BookingModel.create({
-        ...testBooking,
         bookingId: uuidv4(),
+        screeningId: testScreening.screeningId,
         userId: otherUserId,
         seatsNumber: 1,
+        totalPrice: 15.0,
         status: 'pending',
+        bookingDate: new Date(),
       });
     });
 
@@ -598,22 +622,31 @@ describe('Booking E2E Routes', () => {
   describe('GET /bookings/status/:status', () => {
     beforeEach(async () => {
       await BookingModel.create({
-        ...testBooking,
         bookingId: uuidv4(),
+        screeningId: testScreening.screeningId,
+        userId: regularUserId,
+        seatsNumber: 2,
+        totalPrice: 30.0,
         status: 'used',
+        bookingDate: new Date(),
       });
       await BookingModel.create({
-        ...testBooking,
         bookingId: uuidv4(),
+        screeningId: testScreening.screeningId,
         userId: otherUserId,
-        status: 'pending',
         seatsNumber: 1,
+        totalPrice: 15.0,
+        status: 'pending',
+        bookingDate: new Date(),
       });
       await BookingModel.create({
-        ...testBooking,
         bookingId: uuidv4(),
-        status: 'canceled',
+        screeningId: testScreening.screeningId,
+        userId: regularUserId,
         seatsNumber: 1,
+        totalPrice: 15.0,
+        status: 'canceled',
+        bookingDate: new Date(),
       });
     });
 
@@ -648,23 +681,27 @@ describe('Booking E2E Routes', () => {
     it('should return empty array for status with no bookings', async () => {
       const res = await request(app)
         .get('/bookings/status/this-status-does-not-exist')
-        .expect(200); // Changed from 400 to 200, as it should return empty array
+        .expect(200);
 
       expect(Array.isArray(res.body.data)).toBe(true);
       expect(res.body.data.length).toBe(0);
     });
   });
 
+  // TICKET ROUTES ...
   describe('GET /bookings/:bookingId/ticket', () => {
     let createdBookingId: string;
 
     beforeEach(async () => {
       createdBookingId = uuidv4();
       await BookingModel.create({
-        ...testBooking,
         bookingId: createdBookingId,
-        userId: regularUserId, // <- ENSURE this line exists
+        screeningId: testScreening.screeningId,
+        userId: regularUserId,
+        seatsNumber: 2,
+        totalPrice: 30.0,
         status: 'pending',
+        bookingDate: new Date(),
       });
     });
 

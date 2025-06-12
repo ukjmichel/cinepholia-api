@@ -1,3 +1,19 @@
+/**
+ * Auth Controller
+ *
+ * Gère l’authentification des utilisateurs (login).
+ * - Vérifie les identifiants.
+ * - Génère et envoie les tokens (JWT) en cookies sécurisés.
+ * - Récupère le rôle de l’utilisateur via AuthorizationService.
+ * - Retourne l’utilisateur sans données sensibles.
+ *
+ * Dépendances :
+ * - AuthService : pour la vérification et la génération des tokens.
+ * - UserService : pour la recherche utilisateur.
+ * - AuthorizationService : pour déterminer le rôle de l’utilisateur.
+ *
+ */
+
 import { Request, Response, NextFunction } from 'express';
 import { authService } from '../services/auth.service.js';
 import { userService } from '../services/user.service.js';
@@ -6,6 +22,17 @@ import { AuthorizationService } from '../services/authorization.service.js';
 
 export const authorizationService = new AuthorizationService();
 
+/**
+ * Authentifie un utilisateur et renvoie les tokens JWT en cookies sécurisés,
+ * ainsi que les informations publiques de l’utilisateur.
+ *
+ * @group Auth
+ * @param {Request} req - Requête Express (body: emailOrUsername, password)
+ * @param {Response} res - Réponse Express (user data et cookies)
+ * @param {NextFunction} next - Fonction de gestion d’erreur Express
+ * @returns {void}
+ * @throws {BadRequestError} Si l’un des champs est manquant ou l’utilisateur inexistant
+ */
 export const login = async (
   req: Request,
   res: Response,
@@ -44,13 +71,13 @@ export const login = async (
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 1000 * 60 * 60, // 1 hour (adjust as needed)
+      maxAge: 1000 * 60 * 60, // 1 hour
     });
     res.cookie('refreshToken', tokens.refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 1000 * 60 * 60 * 24 * 7, // 1 week (adjust as needed)
+      maxAge: 1000 * 60 * 60 * 24 * 7, // 1 week
     });
 
     res.status(200).json({

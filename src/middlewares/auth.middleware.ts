@@ -56,6 +56,7 @@ export async function decodeJwtToken(
     const auth = await authorizationService.getAuthorizationByUserId(
       user.userId
     );
+    req.user = user;
     req.userRole = auth.role;
 
     next();

@@ -8,7 +8,7 @@ jest.mock('../../models/movie.model.js');
 jest.mock('../../models/movie-theater.model.js');
 jest.mock('../../models/movie-hall.model.js');
 
-import { ScreeningService } from '../../services/screening.service.js';
+import { screeningService } from '../../services/screening.service.js';
 import { ScreeningModel } from '../../models/screening.model.js';
 import { MovieModel } from '../../models/movie.model.js';
 import { MovieTheaterModel } from '../../models/movie-theater.model.js';
@@ -41,11 +41,11 @@ beforeEach(() => {
   jest.clearAllMocks();
 });
 
-describe('ScreeningService', () => {
+describe('screeningService', () => {
   describe('getScreeningById', () => {
     it('should return a screening by id', async () => {
       (ScreeningModel.findByPk as jest.Mock).mockResolvedValue(mockScreening);
-      const result = await ScreeningService.getScreeningById(
+      const result = await screeningService.getScreeningById(
         mockScreening.screeningId
       );
       expect(result).toBe(mockScreening);
@@ -57,7 +57,7 @@ describe('ScreeningService', () => {
 
     it('should throw NotFoundError if not found', async () => {
       (ScreeningModel.findByPk as jest.Mock).mockResolvedValue(null);
-      await expect(ScreeningService.getScreeningById('bad-id')).rejects.toThrow(
+      await expect(screeningService.getScreeningById('bad-id')).rejects.toThrow(
         NotFoundError
       );
     });
@@ -69,25 +69,38 @@ describe('ScreeningService', () => {
       movieId: uuidv4(),
       theaterId: 'theater1',
       hallId: 'hall1',
-      startTime: new Date('2025-01-01T18:00:00Z'), // <-- Date object here
+      startTime: new Date('2025-01-01T18:00:00Z'),
       price: 12.5,
       quality: 'IMAX',
     };
 
     it('should create and return a screening if no overlap', async () => {
-      (MovieModel.findByPk as jest.Mock).mockResolvedValue({ duration: 120 }); // 2 hours
+      (MovieModel.findByPk as jest.Mock).mockResolvedValue({
+        durationMinutes: 120,
+      });
+      (MovieHallModel.findOne as jest.Mock).mockResolvedValue({
+        hallId: payload.hallId,
+        theaterId: payload.theaterId,
+      });
       (ScreeningModel.findAll as jest.Mock).mockResolvedValue([]);
       (ScreeningModel.create as jest.Mock).mockResolvedValue(mockScreening);
 
-      const result = await ScreeningService.createScreening(payload);
+      const result = await screeningService.createScreening(payload);
       expect(MovieModel.findByPk).toHaveBeenCalledWith(payload.movieId, {
         transaction: 'TRANSACTION_OBJ',
       });
-      expect(ScreeningModel.findAll).toHaveBeenCalledWith({
-        where: { hallId: payload.hallId, theaterId: payload.theaterId },
-        include: [{ model: MovieModel }],
+      expect(MovieHallModel.findOne).toHaveBeenCalledWith({
+        where: { theaterId: payload.theaterId, hallId: payload.hallId },
         transaction: 'TRANSACTION_OBJ',
       });
+      const findAllCall = (ScreeningModel.findAll as jest.Mock).mock
+        .calls[0][0];
+      expect(findAllCall.where).toEqual({
+        hallId: payload.hallId,
+        theaterId: payload.theaterId,
+      });
+      expect(findAllCall.transaction).toEqual('TRANSACTION_OBJ');
+      expect(findAllCall.include[0].model).toBe(MovieModel);
       expect(ScreeningModel.create).toHaveBeenCalledWith(payload, {
         transaction: 'TRANSACTION_OBJ',
       });
@@ -95,12 +108,14 @@ describe('ScreeningService', () => {
     });
 
     it('should throw ConflictError if there is an overlapping screening', async () => {
-      // Mock the movie lookup first - this was missing!
       (MovieModel.findByPk as jest.Mock).mockResolvedValue({
-        durationMinutes: 120, // 2 hours for the new screening
+        durationMinutes: 120,
       });
-
-      // Mock overlapping screening with proper movie details
+      (MovieHallModel.findOne as jest.Mock).mockResolvedValue({
+        hallId: payload.hallId,
+        theaterId: payload.theaterId,
+      });
+      // Overlaps: 19:00 (existing) - 21:00, 18:30 (new) - 20:30
       (ScreeningModel.findAll as jest.Mock).mockResolvedValue([
         {
           startTime: new Date('2025-01-01T19:00:00Z'),
@@ -111,44 +126,59 @@ describe('ScreeningService', () => {
         },
       ]);
 
-      const payload = {
-        screeningId: 'new-id',
-        movieId: 'movie-id',
-        theaterId: 'theater1',
-        hallId: 'hall1',
-        startTime: new Date('2025-01-01T18:30:00Z'), // overlaps with above screening
-        price: 10,
-        quality: 'IMAX',
+      const overlappingPayload = {
+        ...payload,
+        startTime: new Date('2025-01-01T18:30:00Z'),
       };
 
-      await expect(ScreeningService.createScreening(payload)).rejects.toThrow(
-        ConflictError
-      );
-
+      await expect(
+        screeningService.createScreening(overlappingPayload)
+      ).rejects.toThrow(ConflictError);
       expect(ScreeningModel.create).not.toHaveBeenCalled();
     });
 
-    
     it('should throw NotFoundError if movie not found', async () => {
       (MovieModel.findByPk as jest.Mock).mockResolvedValue(null);
-      await expect(ScreeningService.createScreening(payload)).rejects.toThrow(
+      await expect(screeningService.createScreening(payload)).rejects.toThrow(
         NotFoundError
       );
     });
 
-    // Add a test for no overlap if you want to check edge cases
+    it('should throw NotFoundError if hall not found', async () => {
+      (MovieModel.findByPk as jest.Mock).mockResolvedValue({
+        durationMinutes: 120,
+      });
+      (MovieHallModel.findOne as jest.Mock).mockResolvedValue(null);
+
+      await expect(screeningService.createScreening(payload)).rejects.toThrow(
+        NotFoundError
+      );
+      expect(MovieHallModel.findOne).toHaveBeenCalledWith({
+        where: { theaterId: payload.theaterId, hallId: payload.hallId },
+        transaction: 'TRANSACTION_OBJ',
+      });
+      expect(ScreeningModel.create).not.toHaveBeenCalled();
+    });
+
     it('should allow creation if new screening does not overlap', async () => {
-      (MovieModel.findByPk as jest.Mock).mockResolvedValue({ duration: 120 });
-      // Existing screening from 15:00 to 17:00, new starts at 18:00
+      (MovieModel.findByPk as jest.Mock).mockResolvedValue({
+        durationMinutes: 120,
+      });
+      (MovieHallModel.findOne as jest.Mock).mockResolvedValue({
+        hallId: payload.hallId,
+        theaterId: payload.theaterId,
+      });
+      // Existing screening: 15:00-17:00, new: 18:00
       const existing = {
-        startTime: '2025-01-01T15:00:00Z',
-        movie: { duration: 120, title: 'EarlyMovie' },
+        startTime: new Date('2025-01-01T15:00:00Z'),
+        movie: { durationMinutes: 120, title: 'EarlyMovie' },
       };
       (ScreeningModel.findAll as jest.Mock).mockResolvedValue([existing]);
       (ScreeningModel.create as jest.Mock).mockResolvedValue(mockScreening);
 
-      const result = await ScreeningService.createScreening(payload);
+      const result = await screeningService.createScreening(payload);
       expect(result).toBe(mockScreening);
+      expect(ScreeningModel.create).toHaveBeenCalled();
     });
   });
 
@@ -158,7 +188,7 @@ describe('ScreeningService', () => {
       mockScreening.update.mockResolvedValue(mockScreening);
 
       const update = { quality: '3D' };
-      const result = await ScreeningService.updateScreening(
+      const result = await screeningService.updateScreening(
         mockScreening.screeningId,
         update
       );
@@ -171,8 +201,103 @@ describe('ScreeningService', () => {
     it('should throw NotFoundError if not found', async () => {
       (ScreeningModel.findByPk as jest.Mock).mockResolvedValue(null);
       await expect(
-        ScreeningService.updateScreening('bad-id', {})
+        screeningService.updateScreening('bad-id', {})
       ).rejects.toThrow(NotFoundError);
+    });
+    it('should throw NotFoundError if new movie does not exist', async () => {
+      (ScreeningModel.findByPk as jest.Mock).mockResolvedValue(mockScreening);
+      (MovieModel.findByPk as jest.Mock).mockResolvedValue(null);
+      const update = { movieId: 'missing-movie' };
+      await expect(
+        screeningService.updateScreening(mockScreening.screeningId, update)
+      ).rejects.toThrow(NotFoundError);
+    });
+
+    it('should throw NotFoundError if new hall does not exist', async () => {
+      (ScreeningModel.findByPk as jest.Mock).mockResolvedValue(mockScreening);
+      (MovieModel.findByPk as jest.Mock).mockResolvedValue({
+        durationMinutes: 100,
+      });
+      (MovieHallModel.findOne as jest.Mock).mockResolvedValue(null);
+      const update = {
+        hallId: 'missing-hall',
+        theaterId: mockScreening.theaterId,
+      };
+      await expect(
+        screeningService.updateScreening(mockScreening.screeningId, update)
+      ).rejects.toThrow(NotFoundError);
+    });
+
+    it('should throw ConflictError if update causes overlapping screening', async () => {
+      (ScreeningModel.findByPk as jest.Mock).mockResolvedValue(mockScreening);
+      (MovieModel.findByPk as jest.Mock).mockResolvedValue({
+        durationMinutes: 120,
+        title: 'Updated Movie',
+      });
+      (MovieHallModel.findOne as jest.Mock).mockResolvedValue({
+        hallId: mockScreening.hallId,
+        theaterId: mockScreening.theaterId,
+      });
+      // Simulate one conflicting screening in the same hall/theater
+      (ScreeningModel.findAll as jest.Mock).mockResolvedValue([
+        {
+          screeningId: 'other-id',
+          startTime: new Date('2025-01-01T18:30:00Z'),
+          movie: {
+            durationMinutes: 120,
+            title: 'Overlap',
+          },
+        },
+      ]);
+      const update = {
+        startTime: new Date('2025-01-01T18:30:00Z'),
+        hallId: mockScreening.hallId,
+        theaterId: mockScreening.theaterId,
+        movieId: 'new-movie-id',
+      };
+      await expect(
+        screeningService.updateScreening(mockScreening.screeningId, update)
+      ).rejects.toThrow(ConflictError);
+    });
+
+    it('should update if no overlap and movie/hall exist', async () => {
+      (ScreeningModel.findByPk as jest.Mock).mockResolvedValue(mockScreening);
+      (MovieModel.findByPk as jest.Mock).mockResolvedValue({
+        durationMinutes: 120,
+        title: 'No Overlap Movie',
+      });
+      (MovieHallModel.findOne as jest.Mock).mockResolvedValue({
+        hallId: mockScreening.hallId,
+        theaterId: mockScreening.theaterId,
+      });
+      // Existing screening far enough not to overlap
+      (ScreeningModel.findAll as jest.Mock).mockResolvedValue([
+        {
+          screeningId: 'another-id',
+          startTime: new Date('2025-01-01T12:00:00Z'),
+          movie: {
+            durationMinutes: 60,
+            title: 'Morning Show',
+          },
+        },
+      ]);
+      mockScreening.update.mockResolvedValue(mockScreening);
+
+      const update = {
+        startTime: new Date('2025-01-01T18:00:00Z'),
+        hallId: mockScreening.hallId,
+        theaterId: mockScreening.theaterId,
+        movieId: 'valid-movie-id',
+        quality: '4DX',
+      };
+      const result = await screeningService.updateScreening(
+        mockScreening.screeningId,
+        update
+      );
+      expect(result).toBe(mockScreening);
+      expect(mockScreening.update).toHaveBeenCalledWith(update, {
+        transaction: 'TRANSACTION_OBJ',
+      });
     });
   });
 
@@ -181,14 +306,14 @@ describe('ScreeningService', () => {
       (ScreeningModel.findByPk as jest.Mock).mockResolvedValue(mockScreening);
       mockScreening.destroy.mockResolvedValue(true);
       await expect(
-        ScreeningService.deleteScreening(mockScreening.screeningId)
+        screeningService.deleteScreening(mockScreening.screeningId)
       ).resolves.toBeUndefined();
       expect(mockScreening.destroy).toHaveBeenCalled();
     });
 
     it('should throw NotFoundError if not found', async () => {
       (ScreeningModel.findByPk as jest.Mock).mockResolvedValue(null);
-      await expect(ScreeningService.deleteScreening('bad-id')).rejects.toThrow(
+      await expect(screeningService.deleteScreening('bad-id')).rejects.toThrow(
         NotFoundError
       );
     });
@@ -199,7 +324,7 @@ describe('ScreeningService', () => {
       (ScreeningModel.findAll as jest.Mock).mockResolvedValue(
         mockScreeningList
       );
-      const result = await ScreeningService.getAllScreenings();
+      const result = await screeningService.getAllScreenings();
       expect(result).toEqual(mockScreeningList);
     });
   });
@@ -209,7 +334,7 @@ describe('ScreeningService', () => {
       (ScreeningModel.findAll as jest.Mock).mockResolvedValue(
         mockScreeningList
       );
-      const result = await ScreeningService.getScreeningsByMovieId(
+      const result = await screeningService.getScreeningsByMovieId(
         mockScreening.movieId
       );
       expect(result).toEqual(mockScreeningList);
@@ -226,7 +351,7 @@ describe('ScreeningService', () => {
       (ScreeningModel.findAll as jest.Mock).mockResolvedValue(
         mockScreeningList
       );
-      const result = await ScreeningService.getScreeningsByTheaterId(
+      const result = await screeningService.getScreeningsByTheaterId(
         mockScreening.theaterId
       );
       expect(result).toEqual(mockScreeningList);
@@ -238,7 +363,7 @@ describe('ScreeningService', () => {
       (ScreeningModel.findAll as jest.Mock).mockResolvedValue(
         mockScreeningList
       );
-      const result = await ScreeningService.getScreeningsByHallId(
+      const result = await screeningService.getScreeningsByHallId(
         mockScreening.hallId,
         mockScreening.theaterId
       );
@@ -252,7 +377,7 @@ describe('ScreeningService', () => {
         mockScreeningList
       );
       const date = new Date('2025-01-01');
-      const result = await ScreeningService.getScreeningsByDate(date);
+      const result = await screeningService.getScreeningsByDate(date);
       expect(result).toEqual(mockScreeningList);
       expect(ScreeningModel.findAll).toHaveBeenCalled();
     });
@@ -263,7 +388,7 @@ describe('ScreeningService', () => {
       (ScreeningModel.findAll as jest.Mock).mockResolvedValue(
         mockScreeningList
       );
-      const result = await ScreeningService.searchScreenings('Inception');
+      const result = await screeningService.searchScreenings('Inception');
       expect(result).toEqual(mockScreeningList);
       expect(ScreeningModel.findAll).toHaveBeenCalled();
     });

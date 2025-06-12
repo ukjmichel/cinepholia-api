@@ -1,3 +1,35 @@
+/**
+ * Sequelize Model for Movies (MovieModel).
+ *
+ * This file defines the data model for movies in the cinema application.
+ * It manages the complete catalog of movies with their metadata,
+ * technical information, and integrated recommendation system.
+ * Implementation done with sequelize-typescript for strict typing and comprehensive
+ * validation of movie data.
+ *
+ * Main Features:
+ *  - Each movie has a unique auto-generated UUID identifier.
+ *  - Comprehensive management of metadata: title, description, director, genre.
+ *  - Age classification system with validation of standard international ratings.
+ *  - Validation of release dates (future dates are prohibited).
+ *  - Duration management with realistic constraints (1-1000 minutes).
+ *  - Optional support for posters via URL with format validation.
+ *  - Integrated recommendation system (boolean field recommended).
+ *  - Length constraints tailored to business needs (descriptions up to 2000 characters).
+ *  - Timestamps (createdAt, updatedAt) are automatically added thanks to the timestamps option.
+ *
+ * Associated Interfaces:
+ *   - MovieAttributes: complete structure of a movie in the database.
+ *   - MovieCreationAttributes: optional fields during creation (auto-generated movieId).
+ *
+ * Uses:
+ *   - Management of the cinema's movie catalog.
+ *   - Search and filtering by genre, director, classification.
+ *   - Recommendation system for users.
+ *   - Basis for relationships with screenings and projections.
+ *   - Display of detailed movie information.
+ */
+
 import {
   Table,
   Column,
@@ -8,6 +40,7 @@ import {
 } from 'sequelize-typescript';
 import { Optional } from 'sequelize';
 
+// Complete structure of a movie
 export interface MovieAttributes {
   movieId: string;
   title: string;
@@ -18,17 +51,20 @@ export interface MovieAttributes {
   director: string;
   durationMinutes: number;
   posterUrl?: string;
-  recommended?: boolean; // <-- New field
+  recommended?: boolean; // Recommendation field for highlighting
 }
 
+// Optional fields during creation (auto-generated movieId)
 export interface MovieCreationAttributes
   extends Optional<MovieAttributes, 'movieId'> {}
 
+// Definition of the MovieModel
 @Table({ tableName: 'movies', timestamps: true })
 export class MovieModel
   extends Model<MovieAttributes, MovieCreationAttributes>
   implements MovieAttributes
 {
+  // Unique identifier for the movie (auto-generated UUID, primary key)
   @PrimaryKey
   @Default(DataType.UUIDV4)
   @Column({
@@ -41,6 +77,7 @@ export class MovieModel
   })
   declare movieId: string;
 
+  // Movie title (required, up to 255 characters)
   @Column({
     type: DataType.STRING,
     allowNull: false,
@@ -54,6 +91,7 @@ export class MovieModel
   })
   declare title: string;
 
+  // Movie description/synopsis (long text up to 2000 characters)
   @Column({
     type: DataType.TEXT,
     allowNull: false,
@@ -67,6 +105,7 @@ export class MovieModel
   })
   declare description: string;
 
+  // Age rating (accepted international standards)
   @Column({
     type: DataType.STRING,
     allowNull: false,
@@ -74,12 +113,13 @@ export class MovieModel
       notEmpty: { msg: 'Age rating is required' },
       isIn: {
         args: [['G', 'PG', 'PG-13', 'R', 'NC-17', 'U', 'UA', 'A', 'Not Rated']],
-        msg: 'Age rating must be a valid rating (e.g. G, PG, R, etc.)',
+        msg: 'Age rating must be a valid rating (e.g., G, PG, R, etc.)',
       },
     },
   })
   declare ageRating: string;
 
+  // Movie genre (categorization for filtering and search)
   @Column({
     type: DataType.STRING,
     allowNull: false,
@@ -93,11 +133,12 @@ export class MovieModel
   })
   declare genre: string;
 
+  // Release date (validation: no future dates)
   @Column({
     type: DataType.DATE,
     allowNull: false,
     validate: {
-      isDate: true, // Must be just "true" with sequelize-typescript
+      isDate: true, // Date format validation
       isValidReleaseDate(value: Date) {
         if (value > new Date()) {
           throw new Error('Release date cannot be in the future');
@@ -107,6 +148,7 @@ export class MovieModel
   })
   declare releaseDate: Date;
 
+  // Name of the main director
   @Column({
     type: DataType.STRING,
     allowNull: false,
@@ -120,6 +162,7 @@ export class MovieModel
   })
   declare director: string;
 
+  // Duration of the movie in minutes (realistic constraints)
   @Column({
     type: DataType.INTEGER,
     allowNull: false,
@@ -131,6 +174,7 @@ export class MovieModel
   })
   declare durationMinutes: number;
 
+  // URL of the movie poster (optional, URL validation)
   @Column({
     type: DataType.STRING,
     allowNull: true,
@@ -151,10 +195,15 @@ export class MovieModel
   })
   declare posterUrl?: string;
 
+  // Recommendation marker for highlighting (default: false)
   @Column({
     type: DataType.BOOLEAN,
     allowNull: false,
     defaultValue: false,
   })
   declare recommended: boolean;
+
+  // Automatic timestamps (creation and update)
+  declare readonly createdAt: Date;
+  declare readonly updatedAt: Date;
 }

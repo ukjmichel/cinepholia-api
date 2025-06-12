@@ -1,3 +1,30 @@
+/**
+ * Sequelize Model for Movie Theaters (MovieTheaterModel).
+ *
+ * This file defines the data model for movie theaters in the cinema application.
+ * It manages the main information of a movie theater establishment,
+ * including its address, contact details, and geographical location.
+ * Implementation done with sequelize-typescript for strict typing and robust
+ * data validation.
+ *
+ * Main Features:
+ *  - Each movie theater has a unique customizable and validated identifier (theaterId).
+ *  - Comprehensive management of the postal address with format validation (postal code, city).
+ *  - Strict validation of contact information (phone, email).
+ *  - Support for international characters in city names (accents, apostrophes).
+ *  - Length and format constraints to ensure data consistency.
+ *  - Timestamps (createdAt, updatedAt) are automatically added thanks to the timestamps option.
+ *
+ * Associated Interfaces:
+ *   - MovieTheaterAttributes: complete structure of a movie theater in the database.
+ *
+ * Uses:
+ *   - Creation and management of movie theater establishments.
+ *   - Search for movie theaters by location (city, postal code).
+ *   - Management of contact information for users.
+ *   - Basis for relationships with halls and screenings.
+ */
+
 import {
   Column,
   DataType,
@@ -5,8 +32,8 @@ import {
   PrimaryKey,
   Table,
 } from 'sequelize-typescript';
-// import { v4 as uuidv4 } from 'uuid'; // Uncomment if auto-generating IDs
 
+// Complete structure of a movie theater
 export interface MovieTheaterAttributes {
   theaterId: string;
   address: string;
@@ -16,17 +43,19 @@ export interface MovieTheaterAttributes {
   email: string;
 }
 
+// Definition of the MovieTheaterModel
 @Table({ tableName: 'movie_theater', timestamps: true })
 export class MovieTheaterModel
   extends Model<MovieTheaterAttributes, MovieTheaterAttributes>
   implements MovieTheaterAttributes
 {
+  // Unique identifier for the movie theater (customizable primary key)
   @PrimaryKey
   @Column({
     type: DataType.STRING,
     allowNull: false,
     unique: true,
-    // defaultValue: () => uuidv4(), // Uncomment for auto-ID
+    // defaultValue: () => uuidv4(), // Uncomment for automatic UUID generation
     validate: {
       len: {
         args: [2, 36],
@@ -40,6 +69,7 @@ export class MovieTheaterModel
   })
   declare theaterId: string;
 
+  // Full address of the movie theater (street, number, etc.)
   @Column({
     type: DataType.STRING,
     allowNull: false,
@@ -52,6 +82,7 @@ export class MovieTheaterModel
   })
   declare address: string;
 
+  // Postal code (international numeric validation)
   @Column({
     type: DataType.STRING,
     allowNull: false,
@@ -64,6 +95,7 @@ export class MovieTheaterModel
   })
   declare postalCode: string;
 
+  // City name (support for international characters)
   @Column({
     type: DataType.STRING,
     allowNull: false,
@@ -80,6 +112,7 @@ export class MovieTheaterModel
   })
   declare city: string;
 
+  // Phone number (accepted international format)
   @Column({
     type: DataType.STRING,
     allowNull: false,
@@ -96,6 +129,7 @@ export class MovieTheaterModel
   })
   declare phone: string;
 
+  // Contact email address (standard validation)
   @Column({
     type: DataType.STRING,
     allowNull: false,
@@ -107,6 +141,7 @@ export class MovieTheaterModel
   })
   declare email: string;
 
+  // Automatic timestamps (creation and update)
   declare readonly createdAt: Date;
   declare readonly updatedAt: Date;
 }

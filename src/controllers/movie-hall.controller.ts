@@ -1,3 +1,14 @@
+/**
+ * Contrôleur des salles de cinéma (Movie Hall Controller)
+ *
+ * Fournit les handlers Express pour la gestion des salles de cinéma, incluant la création,
+ * la liste (avec pagination), la récupération par clé composite, la mise à jour, la suppression,
+ * et la recherche. Utilise MovieHallService pour toute la logique métier et l’accès aux données.
+ *
+ * Tous les handlers délèguent la gestion des erreurs au middleware Express.
+ *
+ */
+
 import { Request, Response, NextFunction } from 'express';
 import { MovieHallService } from '../services/movie-hall.service.js';
 

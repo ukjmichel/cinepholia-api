@@ -7,12 +7,12 @@ import { NotFoundError } from '../../errors/not-found-error.js';
 import { BadRequestError } from '../../errors/bad-request-error.js';
 import { UnauthorizedError } from '../../errors/unauthorized-error.js';
 
-// Mock all external services
+// Mock des services externes pour isoler le contrôleur
 jest.mock('../../services/user.service.js');
 jest.mock('../../services/authorization.service.js');
 jest.mock('../../services/email.service.js');
 
-// Mock Sequelize transaction to avoid "Transaction finished" errors
+// Mock de la transaction Sequelize pour éviter l’erreur "Transaction finished"
 beforeAll(() => {
   jest.spyOn(sequelize, 'transaction').mockImplementation(
     async () =>
@@ -23,6 +23,7 @@ beforeAll(() => {
   );
 });
 
+// Fonctions utilitaires pour créer de fausses requêtes et réponses Express
 const mockRequest = (body = {}, params = {}, query = {}) => ({
   body,
   params,
@@ -36,6 +37,7 @@ const mockResponse = () => {
 };
 const mockNext = jest.fn();
 
+// Faux utilisateur de test
 const mockUser = {
   userId: '1',
   username: 'test',
@@ -55,13 +57,14 @@ const mockUser = {
   },
 };
 
+// Reset des mocks avant chaque test et activation du mail de bienvenue
 beforeEach(() => {
   jest.clearAllMocks();
-  // Force welcome email to be sent in all tests
   config.sendWelcomeEmail = true;
 });
 
 describe('userController.createAccount (controller factory)', () => {
+  // On génère un handler Express en simulant une création d’utilisateur avec rôle 'utilisateur'
   const handler = userController.createAccount('utilisateur');
 
   it('should create user, create authorization, send email, and return 201', async () => {
@@ -83,9 +86,6 @@ describe('userController.createAccount (controller factory)', () => {
     const res = mockResponse();
 
     await handler(req as any, res as any, mockNext);
-    console.log('mockNext:', mockNext.mock.calls);
-    console.log('res.status:', res.status.mock.calls);
-    console.log('res.json:', res.json.mock.calls);
 
     expect(userService.createUser).toHaveBeenCalled();
     expect(

@@ -1,4 +1,26 @@
-// src/services/user.service.ts
+/**
+ * Service for managing users.
+ *
+ * Provides CRUD operations, uniqueness checks (email and username),
+ * authentication management, password handling, user verification,
+ * and paginated listing functionality.
+ *
+ * Main features:
+ * - Create, retrieve, update, and delete users.
+ * - Ensure uniqueness for usernames and emails.
+ * - Secure password changes.
+ * - User verification.
+ * - Advanced user listing with pagination and filters.
+ *
+ * Explicit errors:
+ * - NotFoundError: User does not exist.
+ * - ConflictError: Duplicate username or email.
+ *
+ * Dependencies:
+ * - UserModel for database interaction.
+ * - Sequelize for querying and transactions.
+ *
+ */
 
 import { ConflictError } from '../errors/conflict-error.js';
 import { NotFoundError } from '../errors/not-found-error.js';

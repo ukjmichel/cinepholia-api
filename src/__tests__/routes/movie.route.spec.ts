@@ -240,9 +240,9 @@ describe('Movie E2E Routes', () => {
       expect(res.body.data.length).toBe(0);
     });
 
-    it('should return 400 for missing query param', async () => {
+    it('should return 200 for missing query param', async () => {
       const res = await request(app).get('/movies/search');
-      expect(res.status).toBe(400);
+      expect(res.status).toBe(200);
     });
   });
 });

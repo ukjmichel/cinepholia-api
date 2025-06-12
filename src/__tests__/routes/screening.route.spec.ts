@@ -240,16 +240,16 @@ describe('Screening E2E Routes', () => {
       const res = await request(app)
         .get('/screenings/search?quality=IMAX')
         .expect(200);
-      expect(res.body.some((s: any) => s.quality === 'IMAX')).toBe(true);
+      expect(res.body.data.some((s: any) => s.quality === 'IMAX')).toBe(true);
     });
 
     it('should filter by hallId', async () => {
       const res = await request(app)
         .get(`/screenings/search?hallId=${testScreening.hallId}`)
         .expect(200);
-      expect(res.body.some((s: any) => s.hallId === testScreening.hallId)).toBe(
-        true
-      );
+      expect(
+        res.body.data.some((s: any) => s.hallId === testScreening.hallId)
+      ).toBe(true);
     });
 
     it('should filter by theaterId', async () => {
@@ -257,7 +257,7 @@ describe('Screening E2E Routes', () => {
         .get(`/screenings/search?theaterId=${testScreening.theaterId}`)
         .expect(200);
       expect(
-        res.body.some((s: any) => s.theaterId === testScreening.theaterId)
+        res.body.data.some((s: any) => s.theaterId === testScreening.theaterId)
       ).toBe(true);
     });
 
@@ -266,7 +266,7 @@ describe('Screening E2E Routes', () => {
         .get(`/screenings/search?movieId=${testScreening.movieId}`)
         .expect(200);
       expect(
-        res.body.some((s: any) => s.movieId === testScreening.movieId)
+        res.body.data.some((s: any) => s.movieId === testScreening.movieId)
       ).toBe(true);
     });
 
@@ -277,8 +277,8 @@ describe('Screening E2E Routes', () => {
       const res = await request(app)
         .get(`/screenings/search?date=${date}`)
         .expect(200);
-      expect(Array.isArray(res.body)).toBe(true);
-      expect(res.body.length).toBeGreaterThan(0);
+      expect(Array.isArray(res.body.data)).toBe(true);
+      expect(res.body.data.length).toBeGreaterThan(0);
     });
 
     it('should 400 for invalid filters', async () => {

@@ -1,4 +1,4 @@
-import { MovieTheaterService } from '../../services/movie-theater.service.js';
+import { movieTheaterService } from '../../services/movie-theater.service.js';
 import { MovieTheaterModel } from '../../models/movie-theater.model.js';
 import { ConflictError } from '../../errors/conflict-error.js';
 import { NotFoundError } from '../../errors/not-found-error.js';
@@ -19,7 +19,7 @@ const mockTheater = {
   },
 };
 
-describe('MovieTheaterService', () => {
+describe('movieTheaterService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
@@ -29,7 +29,7 @@ describe('MovieTheaterService', () => {
       (MovieTheaterModel.findByPk as jest.Mock).mockResolvedValue(null);
       (MovieTheaterModel.create as jest.Mock).mockResolvedValue(mockTheater);
 
-      const result = await MovieTheaterService.create(mockTheater);
+      const result = await movieTheaterService.create(mockTheater);
       expect(MovieTheaterModel.findByPk).toHaveBeenCalledWith('theater-1');
       expect(MovieTheaterModel.create).toHaveBeenCalledWith(mockTheater);
       expect(result).toEqual(mockTheater);
@@ -38,7 +38,7 @@ describe('MovieTheaterService', () => {
     it('throws ConflictError if theater already exists', async () => {
       (MovieTheaterModel.findByPk as jest.Mock).mockResolvedValue(mockTheater);
 
-      await expect(MovieTheaterService.create(mockTheater)).rejects.toThrow(
+      await expect(movieTheaterService.create(mockTheater)).rejects.toThrow(
         ConflictError
       );
     });
@@ -48,14 +48,14 @@ describe('MovieTheaterService', () => {
     it('returns theater if found', async () => {
       (MovieTheaterModel.findByPk as jest.Mock).mockResolvedValue(mockTheater);
 
-      const result = await MovieTheaterService.getById('theater-1');
+      const result = await movieTheaterService.getById('theater-1');
       expect(result).toBe(mockTheater);
     });
 
     it('throws NotFoundError if not found', async () => {
       (MovieTheaterModel.findByPk as jest.Mock).mockResolvedValue(null);
 
-      await expect(MovieTheaterService.getById('not-exist')).rejects.toThrow(
+      await expect(movieTheaterService.getById('not-exist')).rejects.toThrow(
         NotFoundError
       );
     });
@@ -64,7 +64,7 @@ describe('MovieTheaterService', () => {
   describe('getAll', () => {
     it('returns all movie theaters', async () => {
       (MovieTheaterModel.findAll as jest.Mock).mockResolvedValue([mockTheater]);
-      const result = await MovieTheaterService.getAll();
+      const result = await movieTheaterService.getAll();
       expect(result).toEqual([mockTheater]);
     });
   });
@@ -80,7 +80,7 @@ describe('MovieTheaterService', () => {
         update: mockUpdate,
       });
 
-      const result = await MovieTheaterService.update('theater-1', {
+      const result = await movieTheaterService.update('theater-1', {
         city: 'Lyon',
       });
       expect(mockUpdate).toHaveBeenCalledWith({ city: 'Lyon' });
@@ -91,7 +91,7 @@ describe('MovieTheaterService', () => {
       (MovieTheaterModel.findByPk as jest.Mock).mockResolvedValue(null);
 
       await expect(
-        MovieTheaterService.update('not-exist', { city: 'Nice' })
+        movieTheaterService.update('not-exist', { city: 'Nice' })
       ).rejects.toThrow(NotFoundError);
     });
   });
@@ -101,7 +101,7 @@ describe('MovieTheaterService', () => {
       (MovieTheaterModel.destroy as jest.Mock).mockResolvedValue(1);
 
       await expect(
-        MovieTheaterService.delete('theater-1')
+        movieTheaterService.delete('theater-1')
       ).resolves.toBeUndefined();
       expect(MovieTheaterModel.destroy).toHaveBeenCalledWith({
         where: { theaterId: 'theater-1' },
@@ -111,7 +111,7 @@ describe('MovieTheaterService', () => {
     it('throws NotFoundError if not found', async () => {
       (MovieTheaterModel.destroy as jest.Mock).mockResolvedValue(0);
 
-      await expect(MovieTheaterService.delete('not-exist')).rejects.toThrow(
+      await expect(movieTheaterService.delete('not-exist')).rejects.toThrow(
         NotFoundError
       );
     });
@@ -120,7 +120,7 @@ describe('MovieTheaterService', () => {
   describe('search', () => {
     it('returns matched theaters', async () => {
       (MovieTheaterModel.findAll as jest.Mock).mockResolvedValue([mockTheater]);
-      const result = await MovieTheaterService.search({ city: 'Paris' });
+      const result = await movieTheaterService.search({ city: 'Paris' });
 
       expect(MovieTheaterModel.findAll).toHaveBeenCalledWith({
         where: expect.objectContaining({

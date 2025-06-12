@@ -21,7 +21,23 @@ const app = express();
 
 // ─────── Middleware ─────────────────────────────────────────
 app.use(express.json());
-app.use(helmet());
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        imgSrc: [
+          "'self'",
+          'http://localhost:3000',
+          'http://localhost:4200',
+          'data:',
+          'blob:',
+        ],
+      },
+    },
+    crossOriginEmbedderPolicy: false, // This should be at the helmet level only
+  })
+);
 app.use(
   cors({
     origin: 'http://localhost:4200',
@@ -30,6 +46,11 @@ app.use(
 );
 app.use(cookieParser());
 app.use(morgan('dev'));
+app.use('/uploads', (req, res, next) => {
+  res.header('Cross-Origin-Resource-Policy', 'cross-origin');
+  res.header('Access-Control-Allow-Origin', 'http://localhost:4200');
+  next();
+});
 app.use('/uploads', express.static('uploads'));
 
 // ─────── Swagger Setup ──────────────────────────────────────

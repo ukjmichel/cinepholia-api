@@ -1,3 +1,20 @@
+/**
+ * Service class for managing movie theaters in the database.
+ *
+ * Main functionalities:
+ * - Create a movie theater (throws ConflictError if already exists)
+ * - Retrieve by ID (throws NotFoundError if not found)
+ * - Retrieve all theaters
+ * - Update a theater (throws NotFoundError if not found)
+ * - Delete a theater (throws NotFoundError if not found)
+ * - Search theaters by city, address, postalCode, or theaterId (partial match)
+ *
+ * Explicitly handled errors:
+ * - ConflictError if a theater with the same ID already exists
+ * - NotFoundError if a theater is not found for read/update/delete
+ *
+ */
+
 import {
   MovieTheaterModel,
   MovieTheaterAttributes,
@@ -6,9 +23,6 @@ import { ConflictError } from '../errors/conflict-error.js';
 import { NotFoundError } from '../errors/not-found-error.js';
 import { Op } from 'sequelize';
 
-/**
- * Service class for managing movie theaters in the database.
- */
 export class MovieTheaterService {
   /**
    * Creates a new movie theater.
@@ -18,7 +32,7 @@ export class MovieTheaterService {
    * @returns {Promise<MovieTheaterModel>} The created movie theater instance.
    * @throws {ConflictError} If a theater with the same ID already exists.
    */
-  static async create(
+  async create(
     theaterData: MovieTheaterAttributes
   ): Promise<MovieTheaterModel> {
     const existing = await MovieTheaterModel.findByPk(theaterData.theaterId);
@@ -38,7 +52,7 @@ export class MovieTheaterService {
    * @returns {Promise<MovieTheaterModel>} The found movie theater instance.
    * @throws {NotFoundError} If the theater is not found.
    */
-  static async getById(theaterId: string): Promise<MovieTheaterModel> {
+  async getById(theaterId: string): Promise<MovieTheaterModel> {
     const theater = await MovieTheaterModel.findByPk(theaterId);
     if (!theater) {
       throw new NotFoundError(
@@ -53,7 +67,7 @@ export class MovieTheaterService {
    *
    * @returns {Promise<MovieTheaterModel[]>} An array of all movie theaters.
    */
-  static async getAll(): Promise<MovieTheaterModel[]> {
+  async getAll(): Promise<MovieTheaterModel[]> {
     return await MovieTheaterModel.findAll();
   }
 
@@ -66,7 +80,7 @@ export class MovieTheaterService {
    * @returns {Promise<MovieTheaterModel>} The updated movie theater instance.
    * @throws {NotFoundError} If the theater is not found.
    */
-  static async update(
+  async update(
     theaterId: string,
     updateData: Partial<MovieTheaterAttributes>
   ): Promise<MovieTheaterModel> {
@@ -76,9 +90,7 @@ export class MovieTheaterService {
         `Movie theater with ID "${theaterId}" not found.`
       );
     }
-    // Optionally, capture the updated instance returned by update
-    const updated = await theater.update(updateData);
-    return updated;
+    return await theater.update(updateData);
   }
 
   /**
@@ -89,7 +101,7 @@ export class MovieTheaterService {
    * @returns {Promise<void>}
    * @throws {NotFoundError} If the theater is not found.
    */
-  static async delete(theaterId: string): Promise<void> {
+  async delete(theaterId: string): Promise<void> {
     const deletedRows = await MovieTheaterModel.destroy({
       where: { theaterId },
     });
@@ -108,7 +120,7 @@ export class MovieTheaterService {
    *   The search filters: city, address, postalCode, or theaterId.
    * @returns {Promise<MovieTheaterModel[]>} The list of matched movie theaters.
    */
-  static async search(
+  async search(
     filters: Partial<
       Pick<
         MovieTheaterAttributes,
@@ -119,7 +131,7 @@ export class MovieTheaterService {
     const where: any = {};
 
     if (filters.city) {
-      where.city = { [Op.like]: `%${filters.city}%` }; // case-insensitive if collation is set
+      where.city = { [Op.like]: `%${filters.city}%` };
     }
     if (filters.address) {
       where.address = { [Op.like]: `%${filters.address}%` };
@@ -134,3 +146,5 @@ export class MovieTheaterService {
     return await MovieTheaterModel.findAll({ where });
   }
 }
+
+export const movieTheaterService = new MovieTheaterService();

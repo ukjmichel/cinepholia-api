@@ -132,7 +132,10 @@ describe('MovieHallService', () => {
         'theater-1',
         'hall-1'
       );
-      expect(result).toEqual({ message: 'Movie hall deleted' });
+      expect(result).toEqual({
+        message:
+          'Movie hall (hallId: hall-1) deleted from theater (theaterId: theater-1)',
+      });
       expect(mockHall.destroy).toHaveBeenCalled();
     });
 
@@ -141,6 +144,17 @@ describe('MovieHallService', () => {
 
       await expect(
         movieHallService.deleteByTheaterIdAndHallId('unknown', 'hall-1')
+      ).rejects.toThrow(NotFoundError);
+    });
+
+    it('throws NotFoundError if hall does not exist', async () => {
+      (MovieTheaterModel.findOne as jest.Mock).mockResolvedValue(mockTheater);
+      (movieHallService.findByTheaterIdAndHallId as jest.Mock) = jest
+        .fn()
+        .mockResolvedValue(null);
+
+      await expect(
+        movieHallService.deleteByTheaterIdAndHallId('theater-1', 'notfound')
       ).rejects.toThrow(NotFoundError);
     });
   });

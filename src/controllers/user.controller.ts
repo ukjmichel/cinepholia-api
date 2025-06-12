@@ -1,3 +1,27 @@
+/**
+ * Contrôleur Utilisateur (User Controller)
+ *
+ * Fournit toutes les routes Express pour la gestion des utilisateurs :
+ * - Création de compte avec gestion du rôle et envoi de mail de bienvenue.
+ * - Récupération, modification, suppression, et vérification d’utilisateur.
+ * - Mise à jour du mot de passe.
+ * - Listing paginé et filtré des utilisateurs.
+ * - Validation d’identifiants pour l’authentification.
+ *
+ * Gestion des erreurs :
+ * - NotFoundError : utilisateur non trouvé.
+ * - BadRequestError : données manquantes ou invalides.
+ * - ConflictError : email ou nom d’utilisateur déjà pris.
+ * - UnauthorizedError : authentification invalide.
+ *
+ * Toutes les opérations critiques sont transactionnelles et assurent la cohérence des rôles et droits.
+ * Les réponses sont normalisées pour l’API REST.
+ *
+ * Dépendances :
+ * - userService, authorizationService, authService, emailService
+ *
+ */
+
 import { Request, Response, NextFunction } from 'express';
 import { userService } from '../services/user.service.js';
 import { UserAttributes } from '../models/user.model.js';
