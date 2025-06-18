@@ -149,3 +149,31 @@ export async function searchMovie(
     next(error);
   }
 }
+
+/**
+ * Récupère la liste des films à venir (dont la date de sortie est future).
+ * @route GET /movies/upcoming
+ * @param {Request} req - Requête Express
+ * @param {Response} res - Réponse Express
+ * @param {NextFunction} next - Middleware Express suivant
+ * @returns {Promise<void>} Répond avec la liste des films à venir.
+ *
+ * @example
+ * // GET /movies/upcoming
+ * // Réponse : { message: 'Upcoming movies fetched successfully', data: [...] }
+ */
+export async function getUpcomingMovies(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const movies = await movieService.getUpcomingMovies();
+    res.json({
+      message: 'Upcoming movies fetched successfully',
+      data: movies,
+    });
+  } catch (error) {
+    next(error);
+  }
+}

@@ -92,6 +92,7 @@ export class EmailService {
     username: string,
     code: string
   ): Promise<void> {
+    //const recipient = this.testReceiver || to;
     const recipient = this.testReceiver || to;
     try {
       const { data, error } = await this.resend.emails.send({
@@ -114,6 +115,50 @@ export class EmailService {
         console.error('Unknown error sending reset password email:', error);
       }
       throw new Error('Failed to send reset password email');
+    }
+  }
+
+  /**
+   * Sends a custom contact message related to a theater.
+   *
+   * @param {string} theaterId - The theater ID the message is about.
+   * @param {string} to - Recipient's email address.
+   * @param {string} message - The message content from the user.
+   * @returns {Promise<void>}
+   * @throws {Error} If sending the email fails.
+   */
+  async sendTheaterContactMessage(
+    theaterId: string,
+    to: string,
+    message: string
+  ): Promise<void> {
+    const recipient = this.testReceiver || '';
+    try {
+      const { data, error } = await this.resend.emails.send({
+        from: this.from,
+        to: recipient,
+        subject: `Message concernant le cinéma ${theaterId}`,
+        html: `
+            <div style="font-family: Arial, sans-serif; line-height: 1.5;">
+              <h2>Message concernant le cinéma ${theaterId}</h2>
+              <p>${message.replace(/\n/g, '<br>')}</p>
+            </div>
+          `,
+      });
+
+      if (error) {
+        console.error('Error sending theater contact message:', error);
+        throw new Error('Failed to send theater contact message');
+      }
+
+      console.log('Theater contact message sent successfully:', data?.id);
+    } catch (error) {
+      if (error instanceof Error) {
+        console.error('Error sending theater contact message:', error.message);
+      } else {
+        console.error('Unknown error sending theater contact message:', error);
+      }
+      throw new Error('Failed to send theater contact message');
     }
   }
 }

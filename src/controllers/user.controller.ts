@@ -100,17 +100,37 @@ export const createAccount =
       await transaction.commit();
 
       // If role is 'utilisateur', generate both access and refresh tokens
-      let tokens = undefined;
       if (role === 'utilisateur') {
-        tokens = authService.generateTokens(user);
+        const tokens = authService.generateTokens(user);
+
+        res.cookie('accessToken', tokens.accessToken, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax',
+          maxAge: 1000 * 60 * 60, // 1 hour
+        });
+        res.cookie('refreshToken', tokens.refreshToken, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax',
+          maxAge: 1000 * 60 * 60 * 24 * 7, // 1 week
+        });
       }
+
+      // Only return public user info (no tokens, no password)
+      const plainUser =
+        typeof user.get === 'function' ? user.get({ plain: true }) : user;
+      const { userId, username, firstName, lastName, email } = plainUser;
 
       res.status(201).json({
         message: 'User created successfully',
         data: {
-          ...user.toJSON(),
+          userId,
+          username,
+          firstName,
+          lastName,
+          email,
           role: authorization.role,
-          ...(tokens ? { tokens } : {}),
         },
       });
     } catch (error) {

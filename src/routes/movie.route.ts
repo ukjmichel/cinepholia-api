@@ -6,6 +6,7 @@ import {
   deleteMovie,
   getAllMovies,
   searchMovie,
+  getUpcomingMovies,
 } from '../controllers/movie.controller.js';
 import {
   createMovieValidator,
@@ -21,7 +22,7 @@ import { uploadMovieImage } from '../middlewares/upload.middleware.js';
 const router = Router();
 
 /**
- * @openapi
+ * @swagger
  * /movies/{movieId}:
  *   put:
  *     tags:
@@ -81,7 +82,7 @@ router.put(
 );
 
 /**
- * @openapi
+ * @swagger
  * /movies:
  *   post:
  *     tags:
@@ -134,7 +135,7 @@ router.post(
 );
 
 /**
- * @openapi
+ * @swagger
  * /movies/{movieId}:
  *   delete:
  *     tags:
@@ -175,7 +176,7 @@ router.delete(
 );
 
 /**
- * @openapi
+ * @swagger
  * /movies/search:
  *   get:
  *     tags:
@@ -220,7 +221,7 @@ router.delete(
 router.get('/search', searchMovieValidator, handleValidationError, searchMovie);
 
 /**
- * @openapi
+ * @swagger
  * /movies/{movieId}:
  *   get:
  *     tags:
@@ -244,6 +245,34 @@ router.get('/search', searchMovieValidator, handleValidationError, searchMovie);
 /**
  * Get a movie by its ID.
  */
+
+/**
+ * @swagger
+ * /movies/upcoming:
+ *   get:
+ *     tags:
+ *       - Movies
+ *     summary: Get all upcoming movies
+ *     description: Retrieve all movies with a release date in the future (after today).
+ *     responses:
+ *       200:
+ *         description: Array of upcoming movies
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Movie'
+ */
+/**
+ * Get all upcoming movies.
+ */
+router.get('/upcoming', getUpcomingMovies);
 router.get(
   '/:movieId',
   movieIdParamValidator,
@@ -252,7 +281,7 @@ router.get(
 );
 
 /**
- * @openapi
+ * @swagger
  * /movies:
  *   get:
  *     tags:
@@ -267,5 +296,7 @@ router.get(
  * Get all movies.
  */
 router.get('/', getAllMovies);
+
+
 
 export default router;

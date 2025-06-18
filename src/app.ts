@@ -16,6 +16,7 @@ import movieRouter from './routes/movie.route.js';
 import screeningRouter from './routes/screening.route.js';
 import bookingRouter from './routes/booking.route.js';
 import bookingCommentRouter from './routes/booking-comment.route.js';
+import contactRouter from './routes/contact.route.js';
 import cookieParser from 'cookie-parser';
 const app = express();
 
@@ -57,6 +58,7 @@ app.use('/uploads', express.static('uploads'));
 setupSwagger(app);
 
 // ─────── Endpoint ──────────────────────────────
+app.use('/contact', contactRouter);
 app.use('/', rootRouter);
 app.use('/tests', testRouter);
 app.use('/users', userRouter);
@@ -68,7 +70,6 @@ app.use('/movies', movieRouter);
 app.use('/screenings', screeningRouter);
 app.use('/bookings', bookingRouter);
 app.use('/', bookingCommentRouter);
-
 // ─────── Error Handling ──────────────────────────────────────
 app.use(errorHandler as ErrorRequestHandler);
 

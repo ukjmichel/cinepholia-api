@@ -32,7 +32,6 @@ import { Transaction, Op } from 'sequelize';
 import { movieImageService, MovieImageService } from './movie-image.service.js'; // Must exist!
 import { ConflictError } from '../errors/conflict-error.js';
 
-
 export class MovieService {
   /**
    * Get a movie by its ID.
@@ -229,6 +228,30 @@ export class MovieService {
     }
 
     return MovieModel.findAll({ where });
+  }
+
+  /**
+   * Retrieve all upcoming movies with a release date in the future (strictly greater than today).
+   *
+   * This method fetches movies whose `releaseDate` is after the current date.
+   * The results are ordered in ascending order of release date, so the soonest releases come first.
+   *
+   * @returns {Promise<MovieModel[]>} Array of movie instances with future release dates.
+   *
+   * @example
+   * // Get all upcoming movies
+   * const upcoming = await movieService.getUpcomingMovies();
+   */
+  async getUpcomingMovies(): Promise<MovieModel[]> {
+    const today = new Date().toISOString().split('T')[0]; // Format: YYYY-MM-DD
+    return MovieModel.findAll({
+      where: {
+        releaseDate: {
+          [Op.gt]: today,
+        },
+      },
+      order: [['releaseDate', 'ASC']], // Optional: soonest first
+    });
   }
 }
 

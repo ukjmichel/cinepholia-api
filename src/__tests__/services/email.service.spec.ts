@@ -823,4 +823,129 @@ describe('EmailService', () => {
       expect(mockResetTemplate).toHaveBeenCalledWith('JohnDoe', 'RESET123');
     });
   });
+  describe('sendTheaterContactMessage', () => {
+    it('should send theater contact message successfully', async () => {
+      jest.resetModules();
+
+      const mockSend = jest.fn().mockResolvedValue({
+        data: { id: 'contact-message-001' },
+        error: null,
+      } as never);
+
+      jest.doMock('resend', () => ({
+        Resend: jest.fn().mockImplementation(() => ({
+          emails: { send: mockSend },
+        })),
+      }));
+
+      jest.doMock(
+        configPath,
+        () => ({
+          config: {
+            resendApiKey: 'dummy_key',
+            resendFrom: 'test@example.com',
+            testEmail: 'test.receiver@example.com',
+          },
+        }),
+        { virtual: true }
+      );
+
+      const emailModule = await import(servicePath);
+      const service = new emailModule.EmailService();
+
+      await service.sendTheaterContactMessage(
+        'THX1138',
+        'owner@email.com',
+        'Hello!\nI need help.'
+      );
+
+      expect(mockSend).toHaveBeenCalledWith({
+        from: 'test@example.com',
+        to: 'test.receiver@example.com',
+        subject: 'Message concernant le cinéma THX1138',
+        html: expect.stringContaining('Hello!<br>I need help.'),
+      });
+
+      expect(consoleLogSpy).toHaveBeenCalledWith(
+        'Theater contact message sent successfully:',
+        'contact-message-001'
+      );
+    });
+
+    it('should throw if sending theater contact message fails', async () => {
+      jest.resetModules();
+
+      const mockSend = jest.fn().mockResolvedValue({
+        data: null,
+        error: { message: 'Invalid theater ID' },
+      } as never);
+
+      jest.doMock('resend', () => ({
+        Resend: jest.fn().mockImplementation(() => ({
+          emails: { send: mockSend },
+        })),
+      }));
+
+      jest.doMock(
+        configPath,
+        () => ({
+          config: {
+            resendApiKey: 'dummy_key',
+            resendFrom: 'test@example.com',
+            testEmail: 'test.receiver@example.com',
+          },
+        }),
+        { virtual: true }
+      );
+
+      const emailModule = await import(servicePath);
+      const service = new emailModule.EmailService();
+
+      await expect(
+        service.sendTheaterContactMessage('BADID', 'user@email.com', 'Test')
+      ).rejects.toThrow('Failed to send theater contact message');
+
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        'Error sending theater contact message:',
+        { message: 'Invalid theater ID' }
+      );
+    });
+
+    it('should handle non-error object rejection in theater contact message', async () => {
+      jest.resetModules();
+
+      const mockSend = jest.fn().mockRejectedValue('String failure' as never);
+
+      jest.doMock('resend', () => ({
+        Resend: jest.fn().mockImplementation(() => ({
+          emails: { send: mockSend },
+        })),
+      }));
+
+      jest.doMock(
+        configPath,
+        () => ({
+          config: {
+            resendApiKey: 'dummy_key',
+            resendFrom: 'test@example.com',
+            testEmail: 'test.receiver@example.com',
+          },
+        }),
+        { virtual: true }
+      );
+
+      const emailModule = await import(servicePath);
+      const service = new emailModule.EmailService();
+
+      await expect(
+        service.sendTheaterContactMessage('THX', 'contact@email.com', 'Oops')
+      ).rejects.toThrow('Failed to send theater contact message');
+
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        'Unknown error sending theater contact message:',
+        'String failure'
+      );
+    });
+  });
+
 });

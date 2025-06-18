@@ -139,11 +139,6 @@ export class MovieModel
     allowNull: false,
     validate: {
       isDate: true, // Date format validation
-      isValidReleaseDate(value: Date) {
-        if (value > new Date()) {
-          throw new Error('Release date cannot be in the future');
-        }
-      },
     },
   })
   declare releaseDate: Date;

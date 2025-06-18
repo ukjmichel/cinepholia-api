@@ -64,3 +64,61 @@ export async function decodeJwtToken(
     next(err);
   }
 }
+
+export async function refreshToken(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  const token = req.cookies?.refreshToken;
+
+  if (!token) {
+    return next(new UnauthorizedError('Missing refresh token'));
+  }
+
+  try {
+    // 1. Verify the refresh token
+    const payload = jwt.verify(token, JWT_SECRET) as any;
+
+    // 2. Get user from DB
+    const user = await userService.getUserById(payload.userId);
+    if (!user) throw new UnauthorizedError('User not found');
+
+    // 3. Get user role (optional, for payload)
+    const auth = await authorizationService.getAuthorizationByUserId(
+      user.userId
+    );
+    const role = auth?.role || 'utilisateur';
+
+    // 4. Generate new access (and refresh) tokens
+    const newAccessToken = jwt.sign(
+      { userId: user.userId, role }, // add extra payload as needed
+      JWT_SECRET,
+      { expiresIn: '1h' }
+    );
+
+    // generate a new refresh token for added security
+    const newRefreshToken = jwt.sign({ userId: user.userId }, JWT_SECRET, {
+      expiresIn: '7d',
+    });
+
+    // 5. Set new tokens in cookies
+    res.cookie('accessToken', newAccessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 1000 * 60 * 60, // 1 hour
+    });
+
+    res.cookie('refreshToken', newRefreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 1000 * 60 * 60 * 24 * 7,
+    });
+
+    res.status(200).json({ message: 'Token refreshed successfully' });
+  } catch (err) {
+    next(new UnauthorizedError('Invalid or expired refresh token'));
+  }
+}

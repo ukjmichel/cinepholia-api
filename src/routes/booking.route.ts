@@ -22,6 +22,7 @@ import { handleValidationError } from '../middlewares/handleValidatonError.middl
 import { decodeJwtToken } from '../middlewares/auth.middleware.js';
 import { permission } from '../middlewares/permission.js';
 import { generateTicket } from '../controllers/generate-ticket.controller.js';
+import { getBookedSeatsByScreeningId } from '../controllers/booked-seat.controller.js';
 
 const router = express.Router();
 
