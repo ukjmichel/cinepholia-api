@@ -17,7 +17,7 @@
 
 import mongoose, { Schema } from 'mongoose';
 
-export interface Comment {
+export interface BookingComment {
   bookingId: string;
   comment: string;
   rating: number;
@@ -31,7 +31,7 @@ const uuidRegex =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 // Definition of the Mongoose schema for booking comments
-const BookingCommentSchema = new Schema<Comment>(
+const BookingCommentSchema = new Schema<BookingComment>(
   {
     bookingId: {
       type: String,
@@ -81,7 +81,7 @@ const BookingCommentSchema = new Schema<Comment>(
 BookingCommentSchema.index({ bookingId: 1 }, { unique: true });
 
 // Export the Mongoose model
-export const BookingCommentModel = mongoose.model<Comment>(
+export const BookingCommentModel = mongoose.model<BookingComment>(
   'Comment',
   BookingCommentSchema
 );

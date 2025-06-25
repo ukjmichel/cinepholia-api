@@ -377,12 +377,24 @@ describe('Authentication System Tests', () => {
           .send(testUser)
           .expect(201);
 
+        // Body assertions (tokens should NOT be present!)
         expect(res.body).toHaveProperty('message', 'User created successfully');
         expect(res.body.data).toHaveProperty('userId');
-        expect(res.body.data).toHaveProperty('tokens');
+        expect(res.body.data).not.toHaveProperty('tokens'); // Tokens should NOT be here!
         expect(res.body.data.email).toBe(testUser.email);
         expect(res.body.data.role).toBe('utilisateur');
         expect(res.body.data).not.toHaveProperty('password');
+
+        // --- New: Assert tokens are set as cookies ---
+        const setCookie = res.headers['set-cookie'];
+        expect(setCookie).toBeDefined();
+
+        // There should be cookies for both accessToken and refreshToken
+        const cookies = Array.isArray(setCookie)
+          ? setCookie.join(';')
+          : setCookie;
+        expect(cookies).toMatch(/accessToken/i);
+        expect(cookies).toMatch(/refreshToken/i);
       });
 
       it('should fail with invalid email', async () => {
@@ -623,20 +635,34 @@ describe('Authentication System Tests', () => {
 
   describe('Integration Tests', () => {
     it('should handle complete auth flow: register → login → use token', async () => {
-      // 1. Register
+      // 1. Register user
       const registerRes = await request(app)
         .post('/auth/register')
         .send(testUser)
         .expect(201);
 
-      const { tokens } = registerRes.body.data;
+      // 2. Get set-cookie header (can be string or string[])
+      const rawSetCookie = registerRes.headers['set-cookie'];
+      expect(rawSetCookie).toBeDefined();
 
-      // 2. Use access token to access protected route
+      // Normalize to string[]
+      const setCookieArr = Array.isArray(rawSetCookie)
+        ? rawSetCookie
+        : [rawSetCookie];
+
+      // Find the accessToken cookie in the array
+      const accessTokenCookie = setCookieArr.find((cookie) =>
+        cookie.startsWith('accessToken=')
+      );
+      expect(accessTokenCookie).toBeDefined();
+
+      // 3. Use the access token cookie to access protected route
       const protectedRes = await request(app)
         .get(`/users/${registerRes.body.data.userId}`)
-        .set('Authorization', `Bearer ${tokens.accessToken}`)
+        .set('Cookie', accessTokenCookie!) // TypeScript: non-null assertion
         .expect(200);
 
+      // 4. Assert the protected data
       expect(protectedRes.body.data.email).toBe(testUser.email);
     });
 

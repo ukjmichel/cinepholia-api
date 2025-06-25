@@ -120,7 +120,8 @@ export const createAccount =
       // Only return public user info (no tokens, no password)
       const plainUser =
         typeof user.get === 'function' ? user.get({ plain: true }) : user;
-      const { userId, username, firstName, lastName, email } = plainUser;
+      const { userId, username, firstName, lastName, email, verified } =
+        plainUser;
 
       res.status(201).json({
         message: 'User created successfully',
@@ -130,11 +131,15 @@ export const createAccount =
           firstName,
           lastName,
           email,
+          verified,
           role: authorization.role,
         },
       });
     } catch (error) {
-      await transaction.rollback();
+      // @ts-ignore
+      if (!transaction.finished) {
+        await transaction.rollback();
+      }
       next(error);
     }
   };

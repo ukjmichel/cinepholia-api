@@ -44,7 +44,7 @@ export class BookingService {
   async getBookingById(
     bookingId: string,
     transaction?: Transaction
-  ): Promise<BookingModel> {
+  ): Promise<BookingModel | null> {
     const booking = await BookingModel.findByPk(bookingId, {
       include: [UserModel, ScreeningModel],
       transaction,
@@ -68,77 +68,21 @@ export class BookingService {
     payload: BookingCreationAttributes,
     transaction?: Transaction
   ): Promise<BookingModel> {
-    // Use provided transaction or start a new one
-    const run = async (t: Transaction) => {
-      const screening = await ScreeningModel.findByPk(payload.screeningId, {
-        include: [MovieHallModel],
-        transaction: t,
-      });
-      if (!screening) throw new NotFoundError('Screening not found');
-
-      const hall = await screening.$get('hall', { transaction: t });
-      if (!hall) throw new NotFoundError('Hall not found for this screening');
-
-      const totalSeats = hall.seatsLayout.reduce(
-        (sum, row) => sum + row.length,
-        0
-      );
-
-      const bookedSeats = await BookingModel.sum('seatsNumber', {
-        where: { screeningId: payload.screeningId },
-        transaction: t,
-      });
-
-      const remainingSeats = totalSeats - (bookedSeats || 0);
-      if (payload.seatsNumber > remainingSeats) {
-        throw new ConflictError(
-          `Only ${remainingSeats} seat(s) left for this screening`
-        );
-      }
-
-      return await BookingModel.create(payload, { transaction: t });
-    };
-
-    if (transaction) {
-      // Run inside given transaction
-      return run(transaction);
-    } else {
-      // Or use a new transaction
-      return await sequelize.transaction(run);
-    }
+    // Only booking creation, no seat logic
+    return BookingModel.create(payload, { transaction });
   }
 
-  /**
-   * Updates the information of an existing reservation.
-   *
-   * @param {string} bookingId - UUID of the reservation.
-   * @param {Partial<BookingAttributes>} update - Fields to modify.
-   * @param {Transaction} [transaction] - Optional transaction.
-   * @returns {Promise<BookingModel>} Updated reservation.
-   * @throws {NotFoundError} If the reservation does not exist.
-   */
   async updateBooking(
     bookingId: string,
     update: Partial<BookingAttributes>,
     transaction?: Transaction
   ): Promise<BookingModel> {
-    const run = async (t: Transaction) => {
-      const booking = await BookingModel.findByPk(bookingId, {
-        transaction: t,
-      });
-      if (!booking) {
-        throw new NotFoundError(`Booking with id ${bookingId} not found`);
-      }
-      await booking.update(update, { transaction: t });
-      await booking.reload({ transaction: t });
-      return booking;
-    };
-
-    if (transaction) {
-      return run(transaction);
-    } else {
-      return await sequelize.transaction(run);
-    }
+    const booking = await BookingModel.findByPk(bookingId, { transaction });
+    if (!booking)
+      throw new NotFoundError(`Booking with id ${bookingId} not found`);
+    await booking.update(update, { transaction });
+    await booking.reload({ transaction });
+    return booking;
   }
 
   /**

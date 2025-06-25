@@ -1,7 +1,6 @@
 import express from 'express';
 import {
   createBooking,
-  getBookingById,
   updateBooking,
   deleteBooking,
   getAllBookings,
@@ -9,6 +8,9 @@ import {
   getBookingsByScreening,
   getBookingsByStatus,
   searchBooking,
+  markBookingAsUsed,
+  cancelBooking,
+  getBookingById,
 } from '../controllers/booking.controller.js';
 import {
   createBookingValidator,
@@ -157,7 +159,7 @@ router.get(
  * @swagger
  * /bookings/{bookingId}:
  *   patch:
- *     summary: Update a booking (ownership or staff only)
+ *     summary: Update a booking (staff only)
  *     tags: [Bookings]
  *     security:
  *       - bearerAuth: []
@@ -194,8 +196,84 @@ router.patch(
   updateBookingValidator,
   handleValidationError,
   decodeJwtToken,
-  permission.canAccessBooking,
+  permission.isStaff, // only staff can update
   updateBooking
+);
+
+/**
+ * @swagger
+ * /bookings/{bookingId}/used:
+ *   patch:
+ *     summary: Mark a booking as used (staff only)
+ *     tags: [Bookings]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: bookingId
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: UUID of the booking
+ *     responses:
+ *       200:
+ *         description: Booking marked as used
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Booking'
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
+ *       404:
+ *         description: Booking not found
+ */
+router.patch(
+  '/:bookingId/used',
+  bookingIdParamValidator,
+  handleValidationError,
+  decodeJwtToken,
+  permission.isStaff, // only staff can mark as used
+  markBookingAsUsed
+);
+
+/**
+ * @swagger
+ * /bookings/{bookingId}/cancel:
+ *   patch:
+ *     summary: Cancel a booking (owner or staff)
+ *     tags: [Bookings]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: bookingId
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: UUID of the booking
+ *     responses:
+ *       200:
+ *         description: Booking canceled
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Booking'
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
+ *       404:
+ *         description: Booking not found
+ */
+router.patch(
+  '/:bookingId/cancel',
+  bookingIdParamValidator,
+  handleValidationError,
+  decodeJwtToken,
+  permission.isSelfOrStaff, // owner or staff can cancel
+  cancelBooking
 );
 
 /**
@@ -343,75 +421,3 @@ router.get(
 );
 
 export default router;
-
-/**
- * @swagger
- * components:
- *   schemas:
- *     Booking:
- *       type: object
- *       properties:
- *         bookingId:
- *           type: string
- *           format: uuid
- *           description: Unique identifier for the booking
- *         userId:
- *           type: string
- *           format: uuid
- *           description: User who made the booking
- *         screeningId:
- *           type: string
- *           format: uuid
- *           description: Screening for this booking
- *         seatsNumber:
- *           type: integer
- *           description: Number of seats booked
- *         status:
- *           type: string
- *           enum: [pending, used, canceled]
- *           description: Status of the booking
- *         bookingDate:
- *           type: string
- *           format: date-time
- *           description: Date and time of booking
- *         createdAt:
- *           type: string
- *           format: date-time
- *         updatedAt:
- *           type: string
- *           format: date-time
- *
- *     BookingInput:
- *       type: object
- *       required:
- *         - userId
- *         - screeningId
- *         - seatsNumber
- *       properties:
- *         userId:
- *           type: string
- *           format: uuid
- *         screeningId:
- *           type: string
- *           format: uuid
- *         seatsNumber:
- *           type: integer
- *           minimum: 1
- *
- *     BookingUpdate:
- *       type: object
- *       properties:
- *         seatsNumber:
- *           type: integer
- *           minimum: 1
- *         status:
- *           type: string
- *           enum: [pending, used, canceled]
- */
-
-/**
- * @swagger
- * tags:
- *   - name: Bookings
- *     description: API for managing cinema bookings
- */

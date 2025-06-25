@@ -1,3 +1,5 @@
+// src/__tests__/controllers/user.controller.spec.ts
+
 import * as userController from '../../controllers/user.controller.js';
 import { userService } from '../../services/user.service.js';
 import { config } from '../../config/env.js';
@@ -7,23 +9,24 @@ import { NotFoundError } from '../../errors/not-found-error.js';
 import { BadRequestError } from '../../errors/bad-request-error.js';
 import { UnauthorizedError } from '../../errors/unauthorized-error.js';
 
-// Mock des services externes pour isoler le contrôleur
+// Mocks for external dependencies and services
 jest.mock('../../services/user.service.js');
 jest.mock('../../services/authorization.service.js');
 jest.mock('../../services/email.service.js');
 
-// Mock de la transaction Sequelize pour éviter l’erreur "Transaction finished"
+// Mock Sequelize transaction, always returns a mock object
 beforeAll(() => {
   jest.spyOn(sequelize, 'transaction').mockImplementation(
     async () =>
       ({
         commit: jest.fn().mockResolvedValue(undefined),
         rollback: jest.fn().mockResolvedValue(undefined),
+        finished: undefined, // simulate a "not finished" transaction
       }) as any
   );
 });
 
-// Fonctions utilitaires pour créer de fausses requêtes et réponses Express
+// Utility functions for creating fake req/res/next
 const mockRequest = (body = {}, params = {}, query = {}) => ({
   body,
   params,
@@ -33,11 +36,12 @@ const mockResponse = () => {
   const res: any = {};
   res.status = jest.fn().mockReturnValue(res);
   res.json = jest.fn().mockReturnValue(res);
+  res.cookie = jest.fn().mockReturnValue(res);
   return res;
 };
 const mockNext = jest.fn();
 
-// Faux utilisateur de test
+// A sample user used for testing
 const mockUser = {
   userId: '1',
   username: 'test',
@@ -57,17 +61,17 @@ const mockUser = {
   },
 };
 
-// Reset des mocks avant chaque test et activation du mail de bienvenue
+// Reset mocks and config before each test
 beforeEach(() => {
   jest.clearAllMocks();
   config.sendWelcomeEmail = true;
 });
 
+// Test the user creation controller factory
 describe('userController.createAccount (controller factory)', () => {
-  // On génère un handler Express en simulant une création d’utilisateur avec rôle 'utilisateur'
   const handler = userController.createAccount('utilisateur');
 
-  it('should create user, create authorization, send email, and return 201', async () => {
+  it('should create user, authorization, send email, set cookies, and return 201', async () => {
     (userService.createUser as jest.Mock).mockResolvedValue(mockUser);
     (
       userController.authorizationService.createAuthorization as jest.Mock
@@ -78,6 +82,10 @@ describe('userController.createAccount (controller factory)', () => {
     jest
       .spyOn(userController.emailService, 'sendWelcomeEmail')
       .mockResolvedValue(undefined);
+    jest.spyOn(userController.authService, 'generateTokens').mockReturnValue({
+      accessToken: 'access',
+      refreshToken: 'refresh',
+    });
 
     const req = mockRequest({
       ...mockUser,
@@ -97,6 +105,17 @@ describe('userController.createAccount (controller factory)', () => {
     expect(userController.emailService.sendWelcomeEmail).toHaveBeenCalledWith(
       mockUser.email,
       mockUser.firstName
+    );
+    expect(res.cookie).toHaveBeenCalledTimes(2);
+    expect(res.cookie).toHaveBeenCalledWith(
+      'accessToken',
+      'access',
+      expect.any(Object)
+    );
+    expect(res.cookie).toHaveBeenCalledWith(
+      'refreshToken',
+      'refresh',
+      expect.any(Object)
     );
     expect(res.status).toHaveBeenCalledWith(201);
     expect(res.json).toHaveBeenCalledWith({

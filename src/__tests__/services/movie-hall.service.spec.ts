@@ -1,5 +1,3 @@
-// __tests__/movie-hall.service.test.ts
-
 import { MovieHallService } from '../../services/movie-hall.service.js';
 import { MovieHallModel } from '../../models/movie-hall.model.js';
 import { MovieTheaterModel } from '../../models/movie-theater.model.js';

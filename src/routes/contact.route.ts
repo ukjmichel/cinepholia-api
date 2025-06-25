@@ -59,7 +59,7 @@ const router = Router();
  *                       example: BadRequestError
  *                     message:
  *                       type: string
- *                       example: Missing required fields: theaterId, email, and message are all required.
+ *                       example: "Missing required fields: theaterId, email, and message"
  *       500:
  *         description: Erreur serveur lors de l’envoi de l’email
  */

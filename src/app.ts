@@ -17,6 +17,7 @@ import screeningRouter from './routes/screening.route.js';
 import bookingRouter from './routes/booking.route.js';
 import bookingCommentRouter from './routes/booking-comment.route.js';
 import contactRouter from './routes/contact.route.js';
+import initDbRouter from './routes/init-db.route.js';
 import cookieParser from 'cookie-parser';
 const app = express();
 
@@ -36,7 +37,7 @@ app.use(
         ],
       },
     },
-    crossOriginEmbedderPolicy: false, // This should be at the helmet level only
+    crossOriginEmbedderPolicy: false, 
   })
 );
 app.use(
@@ -69,7 +70,8 @@ app.use('/movie-halls', movieHallRouter);
 app.use('/movies', movieRouter);
 app.use('/screenings', screeningRouter);
 app.use('/bookings', bookingRouter);
-app.use('/', bookingCommentRouter);
+app.use('', bookingCommentRouter);
+app.use('/init', initDbRouter);
 // ─────── Error Handling ──────────────────────────────────────
 app.use(errorHandler as ErrorRequestHandler);
 

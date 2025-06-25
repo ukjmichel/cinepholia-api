@@ -1,95 +1,217 @@
-// ✅ Mock EmailService before importing app
-jest.mock('../../services/email.service.js', () => ({
-  emailService: {
-    sendTheaterContactMessage: jest.fn().mockResolvedValue(undefined),
-  },
-}));
-
-import request from 'supertest';
-import app from '../../app.js';
-import { sequelize, syncDB } from '../../config/db.js';
+import { Sequelize } from 'sequelize-typescript';
+import { v4 as uuidv4 } from 'uuid';
+import { BookingModel, BookingStatus } from '../../models/booking.model.js';
+import { UserModel } from '../../models/user.model.js';
+import { ScreeningModel } from '../../models/screening.model.js';
+import { MovieModel } from '../../models/movie.model.js';
 import { MovieTheaterModel } from '../../models/movie-theater.model.js';
-import { emailService } from '../../services/email.service.js';
+import { MovieHallModel } from '../../models/movie-hall.model.js';
 
-const testTheater = {
-  theaterId: 'cinema-contact-01',
-  address: '123 Rue du Cinéma',
-  postalCode: '75000',
-  city: 'Paris',
-  phone: '+33123456789',
-  email: 'contact@cinema.com',
-};
+// Fixed: this will always use the shared, correct FK unless overridden
+function makeBooking(overrides: Partial<any> = {}) {
+  return {
+    bookingId: uuidv4(),
+    userId, // Shared static user
+    screeningId, // Shared static screening
+    seatsNumber: 2,
+    status: 'pending' as BookingStatus,
+    bookingDate: new Date(),
+    totalPrice: 22.5,
+    ...overrides,
+  };
+}
 
-describe('POST /api/contact', () => {
+// Use shared variables for correct referential integrity
+const userId = uuidv4();
+const movieId = uuidv4();
+const theaterId = 'theater1';
+const hallId = 'hallA';
+const screeningId = uuidv4();
+
+describe('BookingModel', () => {
+  let sequelize: Sequelize;
+
   beforeAll(async () => {
-    await syncDB();
-  });
+    sequelize = new Sequelize({
+      dialect: 'sqlite',
+      storage: ':memory:',
+      logging: false,
+      models: [
+        BookingModel,
+        UserModel,
+        ScreeningModel,
+        MovieModel,
+        MovieTheaterModel,
+        MovieHallModel,
+      ],
+    });
 
-  beforeEach(async () => {
-    await MovieTheaterModel.destroy({ where: {}, force: true });
-    await MovieTheaterModel.create(testTheater);
-    jest.clearAllMocks(); // reset mock call history
+    await sequelize.sync({ force: true });
+
+    // --- Setup static entities for FK integrity ---
+    await UserModel.create({
+      userId,
+      username: 'janedoe',
+      firstName: 'Jane',
+      lastName: 'Doe',
+      email: 'jane.doe@example.com',
+      password: 'password123',
+      verified: true,
+    });
+
+    await MovieModel.create({
+      movieId,
+      title: 'A Movie',
+      description: 'A description',
+      ageRating: 'PG',
+      genre: 'Drama',
+      releaseDate: new Date('2020-01-01'),
+      director: 'Jane Director',
+      durationMinutes: 100,
+    });
+
+    await MovieTheaterModel.create({
+      theaterId,
+      address: '123 Main St',
+      postalCode: '75000',
+      city: 'Paris',
+      phone: '0102030405',
+      email: 'test@theater.com',
+    });
+
+    await MovieHallModel.create({
+      theaterId,
+      hallId,
+      seatsLayout: [
+        [1, 2, 3],
+        [4, 5, 6],
+      ],
+    });
+
+    await ScreeningModel.create({
+      screeningId,
+      movieId,
+      theaterId,
+      hallId,
+      startTime: new Date('2025-01-01T18:00:00Z'),
+      price: 11.5,
+      quality: '2D',
+    });
   });
 
   afterAll(async () => {
-    await MovieTheaterModel.destroy({
-      where: {},
-      truncate: true,
-      cascade: true,
-    });
-    await sequelize.close();
+    if (sequelize) await sequelize.close();
   });
 
-  it('should send contact email successfully with valid data', async () => {
-    const res = await request(app).post('/api/contact').send({
-      theaterId: testTheater.theaterId,
-      email: 'client@example.com',
-      message: 'Hello, is the cinema accessible by wheelchair?',
+  beforeEach(async () => {
+    await BookingModel.destroy({ where: {} });
+  });
+
+  it('should create a booking with valid attributes and associate with User and Screening', async () => {
+    const booking = await BookingModel.create(makeBooking());
+
+    expect(booking).toBeDefined();
+    expect(booking.userId).toBe(userId);
+    expect(booking.screeningId).toBe(screeningId);
+    expect(booking.seatsNumber).toBe(2);
+    expect(booking.status).toBe('pending');
+    expect(booking.bookingDate).toBeDefined();
+
+    // Associations
+    const foundBooking = await BookingModel.findByPk(booking.bookingId, {
+      include: [UserModel, ScreeningModel],
     });
 
-    expect(res.statusCode).toBe(200);
-    expect(res.body.message).toBe('Email sent successfully');
-    expect(emailService.sendTheaterContactMessage).toHaveBeenCalledWith(
-      testTheater.theaterId,
-      'client@example.com',
-      'Hello, is the cinema accessible by wheelchair?'
+    expect(foundBooking).toBeDefined();
+    expect(foundBooking!.user).toBeDefined();
+    expect(foundBooking!.user.username).toBe('janedoe');
+    expect(foundBooking!.screening).toBeDefined();
+    expect(foundBooking!.screening.screeningId).toBe(screeningId);
+  });
+
+  it('should require seatsNumber to be at least 1', async () => {
+    await expect(
+      BookingModel.create(makeBooking({ seatsNumber: 0 }))
+    ).rejects.toThrow();
+  });
+
+  it('should require totalPrice to be non-negative', async () => {
+    await expect(
+      BookingModel.create(makeBooking({ totalPrice: -10 }))
+    ).rejects.toThrow();
+  });
+
+
+  it('should not allow duplicate bookingId', async () => {
+    const booking1 = await BookingModel.create(makeBooking());
+    await expect(
+      BookingModel.create({ ...makeBooking(), bookingId: booking1.bookingId })
+    ).rejects.toThrow();
+  });
+
+  it('should update booking status', async () => {
+    const booking = await BookingModel.create(makeBooking());
+    booking.status = 'used';
+    await booking.save();
+    const updated = await BookingModel.findByPk(booking.bookingId);
+    expect(updated!.status).toBe('used');
+  });
+
+  it('should delete a booking', async () => {
+    const booking = await BookingModel.create(makeBooking());
+    await booking.destroy();
+    const found = await BookingModel.findByPk(booking.bookingId);
+    expect(found).toBeNull();
+  });
+
+  it('should cascade delete when user is removed', async () => {
+    const tempUserId = uuidv4();
+    await UserModel.create({
+      userId: tempUserId,
+      username: 'todelete',
+      firstName: 'To',
+      lastName: 'Delete',
+      email: 'todelete@example.com',
+      password: 'password123',
+      verified: true,
+    });
+    const booking = await BookingModel.create(
+      makeBooking({ userId: tempUserId })
     );
+    await UserModel.destroy({ where: { userId: tempUserId } });
+    const found = await BookingModel.findByPk(booking.bookingId);
+    // Adapt if your FK is set to SET NULL instead of CASCADE!
+    expect(found).toBeNull();
   });
 
-  it('should return 400 when missing required fields', async () => {
-    const res = await request(app).post('/api/contact').send({
-      email: 'client@example.com',
-    });
-
-    expect(res.statusCode).toBe(400);
-    expect(res.body.error).toBeDefined();
-    expect(res.body.error.message).toMatch(/Missing required fields/i);
+  it('should not create booking for missing userId', async () => {
+    await expect(
+      BookingModel.create(makeBooking({ userId: undefined }))
+    ).rejects.toThrow();
   });
 
-  it('should return 400 when email is invalid', async () => {
-    const res = await request(app).post('/api/contact').send({
-      theaterId: testTheater.theaterId,
-      email: 'invalid-email',
-      message: 'Hello world',
-    });
-
-    expect(res.statusCode).toBe(400);
-    expect(res.body.error).toBeDefined();
+  it('should not create booking for missing screeningId', async () => {
+    await expect(
+      BookingModel.create(makeBooking({ screeningId: undefined }))
+    ).rejects.toThrow();
   });
 
-  it('should return 400 when email service fails', async () => {
-    (emailService.sendTheaterContactMessage as jest.Mock).mockRejectedValueOnce(
-      new Error('Simulated service failure')
+  it('should not create booking for missing seatsNumber', async () => {
+    await expect(
+      BookingModel.create(makeBooking({ seatsNumber: undefined }))
+    ).rejects.toThrow();
+  });
+
+  it('should default status to "pending" if not provided', async () => {
+    const booking = await BookingModel.create(
+      makeBooking({ status: undefined })
     );
+    expect(booking.status).toBe('pending');
+  });
 
-    const res = await request(app).post('/api/contact').send({
-      theaterId: testTheater.theaterId,
-      email: 'client@example.com',
-      message: 'Will this fail?',
-    });
-
-    expect(res.statusCode).toBe(400);
-    expect(res.body.error).toBeDefined();
-    expect(res.body.error.message).toBe('Failed to send email');
+  it('should not create booking for missing totalPrice', async () => {
+    await expect(
+      BookingModel.create(makeBooking({ totalPrice: undefined }))
+    ).rejects.toThrow();
   });
 });

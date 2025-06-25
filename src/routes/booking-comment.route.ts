@@ -1,4 +1,4 @@
-import { Router, Request, Response, NextFunction } from 'express';
+import { Router } from 'express';
 import * as bookingCommentController from '../controllers/booking-comment.controller.js';
 import { validate } from '../middlewares/validate.js';
 
@@ -36,7 +36,7 @@ router.get(
   '/movies/:movieId/comments',
   movieIdParamValidation,
   validate,
-  bookingCommentController.getCommentsByMovieId
+  bookingCommentController.getCommentsByMovie
 );
 
 // All routes below require authentication
@@ -114,7 +114,7 @@ router.post(
 
 /**
  * @swagger
- * /bookings/:bookingId/comment:
+ * /bookings/{bookingId}/comment:
  *   put:
  *     summary: Update a comment (owner or staff)
  *     tags: [Comments]
@@ -154,7 +154,7 @@ router.put(
 
 /**
  * @swagger
- * /bookings/:bookingId/comment:
+ * /bookings/{bookingId}/comment:
  *   delete:
  *     summary: Delete a comment (owner or staff)
  *     tags: [Comments]
@@ -260,10 +260,37 @@ router.get(
  *     parameters:
  *       - in: query
  *         name: q
- *         required: true
+ *         required: false
  *         schema:
  *           type: string
  *         description: Search query
+ *       - in: query
+ *         name: status
+ *         required: false
+ *         schema:
+ *           type: string
+ *           enum: [pending, confirmed]
+ *       - in: query
+ *         name: rating
+ *         required: false
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: bookingId
+ *         required: false
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: movieId
+ *         required: false
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: createdAt
+ *         required: false
+ *         schema:
+ *           type: string
+ *           format: date-time
  *     responses:
  *       200:
  *         description: Search results
@@ -274,6 +301,40 @@ router.get(
   validate,
   permission.isStaff,
   bookingCommentController.searchComments
+);
+
+/**
+ * @swagger
+ * /movies/{movieId}/comments/average:
+ *   get:
+ *     summary: Get the average rating for a movie
+ *     tags: [Comments]
+ *     parameters:
+ *       - in: path
+ *         name: movieId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Movie ID
+ *     responses:
+ *       200:
+ *         description: The average rating for the movie (null if no ratings)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 data:
+ *                   type: number
+ *                   nullable: true
+ */
+router.get(
+  '/movies/:movieId/comments/average',
+  movieIdParamValidation,
+  validate,
+  bookingCommentController.getAverageRatingForMovie
 );
 
 export default router;

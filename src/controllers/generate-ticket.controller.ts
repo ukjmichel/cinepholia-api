@@ -17,6 +17,7 @@
 import { Request, Response, NextFunction } from 'express';
 import QRCode from 'qrcode';
 import { bookingService } from '../services/booking.service.js';
+import { NotFoundError } from '../errors/not-found-error.js';
 
 /**
  * Generate a ticket with booking details and a QR code.
@@ -35,6 +36,10 @@ export const generateTicket = async (
     // Fetch booking data (and possibly user info)
     const booking = await bookingService.getBookingById(req.params.bookingId);
     // Let's assume booking.User is eager-loaded, and has "nom" and "prenom"
+    if (!booking) {
+      // handle not found (throw error, return 404, etc)
+      throw new NotFoundError('Booking not found');
+    }
     const { bookingId, user } = booking;
     const nom = user?.lastName || user?.firstName || 'N/A';
     const prenom = user?.firstName || user?.lastName || 'N/A';

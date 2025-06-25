@@ -133,6 +133,7 @@ class Permission {
   }
 
   // For booking operations - check if user owns the booking or is staff
+  // For booking operations - check if user owns the booking or is staff
   async canAccessBooking(req: Request, res: Response, next: NextFunction) {
     const bookingId = req.params.bookingId;
     const tokenUserId = req.userJwtPayload?.userId;
@@ -142,25 +143,26 @@ class Permission {
       return next(new NotAuthorizedError('No user information in token'));
     }
 
-    // Staff can access any booking
-    if (role === 'employé' || role === 'administrateur') {
-      return next();
-    }
-
-    // Regular users can only access their own bookings
     try {
+      // Always check existence FIRST
       const booking = await BookingModel.findByPk(bookingId);
       if (!booking) {
         return next(new NotFoundError('Booking not found'));
       }
 
-      if ((booking as any).userId !== tokenUserId) {
-        return next(
-          new NotAuthorizedError('You can only access your own bookings')
-        );
+      // Then permissions
+      if (role === 'employé' || role === 'administrateur') {
+        return next();
       }
 
-      next();
+      if ((booking as any).userId === tokenUserId) {
+        return next();
+      }
+
+      // If exists but not allowed
+      return next(
+        new NotAuthorizedError('You can only access your own bookings')
+      );
     } catch (error) {
       next(error);
     }

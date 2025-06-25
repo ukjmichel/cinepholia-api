@@ -1,6 +1,3 @@
-// src/__tests__/services/email.service.spec.ts
-
-// 💡 Toujours mettre les chemins relatifs tout en haut !
 const configPath = '../../config/env.js';
 const servicePath = '../../services/email.service.js';
 const welcomeTemplatePath = '../../templates/emails/welcome-email.js';

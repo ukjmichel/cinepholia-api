@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 import {
+  BookingComment,
   BookingCommentModel,
-  Comment,
 } from '../../models/booking-comment.schema';
 import { config } from '../../config/env.js';
 
@@ -26,7 +26,7 @@ describe('BookingCommentModel', () => {
 
   describe('Valid Comment Creation', () => {
     it('should create a comment with valid data', async () => {
-      const input: Omit<Comment, 'createdAt' | 'updatedAt'> = {
+      const input: Omit<BookingComment, 'createdAt' | 'updatedAt'> = {
         bookingId: 'e27163b0-08d7-47d0-bb62-b48d312c919f',
         comment: 'Great!',
         rating: 5,
