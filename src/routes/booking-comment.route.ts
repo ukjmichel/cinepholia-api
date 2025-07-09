@@ -12,6 +12,7 @@ import {
   searchQueryValidation,
 } from '../validators/booking-comment.validator.js';
 import { decodeJwtToken } from '../middlewares/auth.middleware.js';
+import { validateUserIdParam } from '../validators/user.validator.js';
 
 const router = Router();
 
@@ -335,6 +336,30 @@ router.get(
   movieIdParamValidation,
   validate,
   bookingCommentController.getAverageRatingForMovie
+);
+
+/**
+ * @swagger
+ * /users/{userId}/comments:
+ *   get:
+ *     summary: Get all comments made by a specific user (public)
+ *     tags: [Comments]
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: User ID
+ *     responses:
+ *       200:
+ *         description: List of comments made by the user
+ */
+router.get(
+  '/users/:userId/comments',
+  validateUserIdParam,
+  validate,
+  bookingCommentController.getCommentsByUser
 );
 
 export default router;

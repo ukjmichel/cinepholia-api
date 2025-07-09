@@ -1,6 +1,7 @@
 /**
- * Booking Comment Controller
+ * @module controllers/booking-comment.controller
  *
+ * @description
  * Handles CRUD operations for booking comments:
  * - Create, read, update, and delete comments related to bookings.
  * - Search for comments by status, movie, or full-text.
@@ -12,8 +13,6 @@
  *
  * Each Express handler follows RESTful conventions: status codes, messages, and consistent response structure.
  *
- * @module controllers/booking-comment.controller
- * @since 2024
  */
 
 import { Request, Response, NextFunction } from 'express';
@@ -161,6 +160,35 @@ export async function getCommentByBookingId(
       ? await formatCommentResponse(comment)
       : null;
     res.json({ message: 'Comment found', data: formattedComment });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * Retrieve all comments made by a specific user.
+ *
+ * @function getCommentsByUser
+ * @param {Request<{ userId: string }>} req - Express request object with userId param.
+ * @param {Response} res - Express response object.
+ * @param {NextFunction} next - Express next middleware.
+ * @returns {Promise<void>} JSON response with the user's comments.
+ */
+export async function getCommentsByUser(
+  req: Request<{ userId: string }>,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const { userId } = req.params;
+    const comments = await bookingCommentService.getCommentsByUser(userId);
+    const formattedComments = await Promise.all(
+      comments.map((comment) => formatCommentResponse(comment))
+    );
+    res.json({
+      message: `Comments by user ${userId}`,
+      data: formattedComments,
+    });
   } catch (error) {
     next(error);
   }

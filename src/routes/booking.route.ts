@@ -272,7 +272,7 @@ router.patch(
   bookingIdParamValidator,
   handleValidationError,
   decodeJwtToken,
-  permission.isSelfOrStaff, // owner or staff can cancel
+  permission.canAccessBooking, // owner or staff can cancel
   cancelBooking
 );
 
@@ -416,7 +416,7 @@ router.get(
   bookingIdParamValidator,
   handleValidationError,
   decodeJwtToken,
-  permission.isSelfOrStaff,
+  permission.canAccessBooking,
   generateTicket
 );
 

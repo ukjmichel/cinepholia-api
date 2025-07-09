@@ -325,12 +325,80 @@ export class UserService {
     const isValid = await user.validatePassword(password);
     return isValid ? user : null;
   }
+
+  async searchUsers(filters: any): Promise<UserModel[]> {
+    const where: any = {};
+
+    // Global search as string
+    if (typeof filters === 'string' && filters.trim() !== '') {
+      const value = `%${filters.trim().toLowerCase()}%`;
+      where[Op.or] = [
+        { username: { [Op.like]: value } },
+        { email: { [Op.like]: value } },
+        { firstName: { [Op.like]: value } },
+        { lastName: { [Op.like]: value } },
+        { userId: { [Op.like]: value } },
+      ];
+    }
+    // Object filter: support q/global and individual fields
+    else if (typeof filters === 'object' && filters !== null) {
+      const orArr: any[] = [];
+
+      // Global query
+      if (
+        filters.q &&
+        typeof filters.q === 'string' &&
+        filters.q.trim() !== ''
+      ) {
+        const q = `%${filters.q.trim().toLowerCase()}%`;
+        orArr.push(
+          { username: { [Op.like]: q } },
+          { email: { [Op.like]: q } },
+          { firstName: { [Op.like]: q } },
+          { lastName: { [Op.like]: q } },
+          { userId: { [Op.like]: q } }
+        );
+      }
+
+      // Field-specific string matches (partial)
+      if (filters.username)
+        orArr.push({
+          username: { [Op.like]: `%${filters.username.toLowerCase()}%` },
+        });
+      if (filters.email)
+        orArr.push({
+          email: { [Op.like]: `%${filters.email.toLowerCase()}%` },
+        });
+      if (filters.firstName)
+        orArr.push({
+          firstName: { [Op.like]: `%${filters.firstName.toLowerCase()}%` },
+        });
+      if (filters.lastName)
+        orArr.push({
+          lastName: { [Op.like]: `%${filters.lastName.toLowerCase()}%` },
+        });
+      if (filters.userId)
+        orArr.push({ userId: { [Op.like]: `%${filters.userId}%` } });
+
+      // Combine with OR if needed
+      if (orArr.length > 0) where[Op.or] = orArr;
+
+      // Exact match for boolean
+      if (filters.verified !== undefined) {
+        if (typeof filters.verified === 'string') {
+          where.verified =
+            filters.verified === 'true' || filters.verified === '1';
+        } else {
+          where.verified = !!filters.verified;
+        }
+      }
+    }
+
+    return UserModel.findAll({ where });
+  }
 }
 
 /**
  * Singleton instance of UserService for convenient access
- * @example
- * import { userService } from './services/user.service.js';
- * const user = await userService.createUser(userData);
  */
 export const userService = new UserService();

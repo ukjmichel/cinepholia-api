@@ -1,13 +1,17 @@
+// --- Import dependencies and modules ---
 import { MovieHallService } from '../../services/movie-hall.service.js';
 import { MovieHallModel } from '../../models/movie-hall.model.js';
 import { MovieTheaterModel } from '../../models/movie-theater.model.js';
 import { NotFoundError } from '../../errors/not-found-error.js';
 
+// --- Mock Sequelize models ---
 jest.mock('../../models/movie-hall.model.js');
 jest.mock('../../models/movie-theater.model.js');
 
+// --- Initialize the service ---
 const movieHallService = new MovieHallService();
 
+// --- Define mock data used in tests ---
 const mockTheater = { theaterId: 'theater-1' };
 const mockHall = {
   theaterId: 'theater-1',
@@ -16,18 +20,20 @@ const mockHall = {
     ['A1', 'A2'],
     ['B1', 'B2'],
   ],
+  quality: '2D',
   update: jest.fn(),
   destroy: jest.fn(),
-  toJSON: function () {
+  toJSON() {
     return this;
   },
-};
+} as unknown as MovieHallModel;
 
 describe('MovieHallService', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    jest.clearAllMocks(); // Reset mocks before each test
   });
 
+  // --- Test: Create Movie Hall ---
   describe('create', () => {
     it('creates a hall if theater exists', async () => {
       (MovieTheaterModel.findOne as jest.Mock).mockResolvedValue(mockTheater);
@@ -37,7 +43,9 @@ describe('MovieHallService', () => {
         theaterId: 'theater-1',
         hallId: 'hall-1',
         seatsLayout: [['A1']],
+        quality: '2D',
       });
+
       expect(hall).toEqual(mockHall);
       expect(MovieHallModel.create).toHaveBeenCalled();
     });
@@ -50,11 +58,13 @@ describe('MovieHallService', () => {
           theaterId: 'unknown',
           hallId: 'hall-1',
           seatsLayout: [['A1']],
+          quality: '2D',
         })
       ).rejects.toThrow(NotFoundError);
     });
   });
 
+  // --- Test: Get All Halls by Theater ID ---
   describe('findAllByTheaterId', () => {
     it('returns halls for a given theater', async () => {
       (MovieHallModel.findAll as jest.Mock).mockResolvedValue([mockHall]);
@@ -70,6 +80,7 @@ describe('MovieHallService', () => {
     });
   });
 
+  // --- Test: Find One Hall by Theater ID + Hall ID ---
   describe('findByTheaterIdAndHallId', () => {
     it('returns hall if found', async () => {
       (MovieHallModel.findOne as jest.Mock).mockResolvedValue(mockHall);
@@ -88,11 +99,13 @@ describe('MovieHallService', () => {
     });
   });
 
+  // --- Test: Update Hall ---
   describe('updateByTheaterIdAndHallId', () => {
     it('updates hall if theater and hall exist', async () => {
       (MovieTheaterModel.findOne as jest.Mock).mockResolvedValue(mockTheater);
-      (movieHallService.findByTheaterIdAndHallId as jest.Mock) = jest
-        .fn()
+      // Mock the internal method
+      jest
+        .spyOn(movieHallService, 'findByTheaterIdAndHallId')
         .mockResolvedValue(mockHall);
       mockHall.update = jest.fn().mockResolvedValue(mockHall);
 
@@ -101,6 +114,7 @@ describe('MovieHallService', () => {
         'hall-1',
         { seatsLayout: [['A1', 'A2']] }
       );
+
       expect(updated).toEqual(mockHall);
       expect(mockHall.update).toHaveBeenCalledWith({
         seatsLayout: [['A1', 'A2']],
@@ -118,11 +132,12 @@ describe('MovieHallService', () => {
     });
   });
 
+  // --- Test: Delete Hall ---
   describe('deleteByTheaterIdAndHallId', () => {
     it('deletes hall if theater and hall exist', async () => {
       (MovieTheaterModel.findOne as jest.Mock).mockResolvedValue(mockTheater);
-      (movieHallService.findByTheaterIdAndHallId as jest.Mock) = jest
-        .fn()
+      jest
+        .spyOn(movieHallService, 'findByTheaterIdAndHallId')
         .mockResolvedValue(mockHall);
       mockHall.destroy = jest.fn().mockResolvedValue(true);
 
@@ -130,6 +145,7 @@ describe('MovieHallService', () => {
         'theater-1',
         'hall-1'
       );
+
       expect(result).toEqual({
         message:
           'Movie hall (hallId: hall-1) deleted from theater (theaterId: theater-1)',
@@ -147,9 +163,9 @@ describe('MovieHallService', () => {
 
     it('throws NotFoundError if hall does not exist', async () => {
       (MovieTheaterModel.findOne as jest.Mock).mockResolvedValue(mockTheater);
-      (movieHallService.findByTheaterIdAndHallId as jest.Mock) = jest
-        .fn()
-        .mockResolvedValue(null);
+      jest
+        .spyOn(movieHallService, 'findByTheaterIdAndHallId')
+        .mockResolvedValue(null as any);
 
       await expect(
         movieHallService.deleteByTheaterIdAndHallId('theater-1', 'notfound')
@@ -157,6 +173,7 @@ describe('MovieHallService', () => {
     });
   });
 
+  // --- Test: Search Movie Halls ---
   describe('searchByTheaterIdOrHallId', () => {
     it('returns matching halls', async () => {
       (MovieHallModel.findAll as jest.Mock).mockResolvedValue([mockHall]);

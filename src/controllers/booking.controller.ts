@@ -1,3 +1,12 @@
+/**
+ * @module controllers/booking.controller
+ * @description
+ *   Express controller functions for handling cinema bookings.
+ *   - Ensures business validation and transactional integrity.
+ *   - Integrates booking statistics in MongoDB (movieStatsService).
+ *   - All methods respond with appropriate HTTP status and payload.
+ */
+
 import { Request, Response, NextFunction } from 'express';
 import { bookingService } from '../services/booking.service.js';
 import { sequelize } from '../config/db.js';
@@ -6,51 +15,51 @@ import { NotFoundError } from '../errors/not-found-error.js';
 import { bookedSeatService } from '../services/booked-seat.service.js';
 import { BookingCreationAttributes } from '../models/booking.model.js';
 import { BadRequestError } from '../errors/bad-request-error.js';
+import movieStatsService from '../services/movie-stats.service.js';
 
 /**
  * Create a new booking.
- * @param req - Express request (body: booking fields)
+ *
+ * @route POST /bookings
+ * @param req - Express request (body: userId, screeningId, seatIds)
  * @param res - Express response
  * @param next - Express error handler
+ * @returns {Promise<void>} Returns nothing; sends JSON response.
  */
 export const createBooking = async (
   req: Request,
   res: Response,
   next: NextFunction
 ): Promise<void> => {
-  // Validation: All fields present and correct type
   const { userId, screeningId, seatIds } = req.body as {
     userId: string;
     screeningId: string;
     seatIds: string[];
   };
 
+  // Input validation
   if (!userId || typeof userId !== 'string') {
     res
       .status(400)
       .json({ message: 'userId is required and must be a string' });
     return;
   }
-
   if (!screeningId || typeof screeningId !== 'string') {
     res
       .status(400)
       .json({ message: 'screeningId is required and must be a string' });
     return;
   }
-
   if (!seatIds || !Array.isArray(seatIds) || seatIds.length === 0) {
     res
       .status(400)
       .json({ message: 'seatIds is required and must be a non-empty array' });
     return;
   }
-
   if (!seatIds.every((s) => typeof s === 'string' && s.length > 0)) {
     res.status(400).json({ message: 'All seatIds must be non-empty strings' });
     return;
   }
-
   // Prevent duplicate seats
   const uniqueSeatIds = [...new Set(seatIds)];
   if (uniqueSeatIds.length !== seatIds.length) {
@@ -65,9 +74,8 @@ export const createBooking = async (
       screeningId,
       transaction
     );
-    if (!screening) {
+    if (!screening)
       throw new NotFoundError(`Screening not found with ID ${screeningId}`);
-    }
 
     // 2. Validate seat existence and availability
     await bookedSeatService.checkSeatsExist(
@@ -84,7 +92,7 @@ export const createBooking = async (
     // 3. Calculate total price
     const totalPrice = Number(screening.price) * uniqueSeatIds.length;
 
-    // 4. Build and type payload for BookingCreationAttributes
+    // 4. Build booking payload
     const payload: BookingCreationAttributes = {
       userId,
       screeningId,
@@ -111,13 +119,25 @@ export const createBooking = async (
 
     await transaction.commit();
 
+    // 7. Update stats (MongoDB) after booking
+    try {
+      if (screening.movieId) {
+        await movieStatsService.addBooking(
+          screening.movieId,
+          uniqueSeatIds.length
+        );
+      }
+    } catch (statErr) {
+      // Log but do not block booking
+      console.warn('Stats update failed:', statErr);
+    }
+
     res.status(201).json({
       message: 'Booking and seat(s) created successfully',
       data: booking,
     });
   } catch (error: any) {
     await transaction.rollback();
-
     // Handle DB unique constraint error gracefully
     if (
       error.name === 'SequelizeUniqueConstraintError' ||
@@ -133,25 +153,77 @@ export const createBooking = async (
   }
 };
 
+/**
+ * Delete a booking by its ID.
+ *
+ * @route DELETE /bookings/:bookingId
+ * @param req - Express request (params: bookingId)
+ * @param res - Express response
+ * @param next - Express error handler
+ * @returns {Promise<void>} Returns nothing; sends status 204 on success.
+ */
+export const deleteBooking = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    // 1. Find the booking (required for stats and seat unbooking)
+    const booking = await bookingService.getBookingById(req.params.bookingId);
+    if (!booking) {
+      res.status(404).json({ message: 'Booking not found' });
+      return;
+    }
+
+    // 2. Find the screening for movieId
+    const screening = await screeningService.getScreeningById(
+      booking.screeningId
+    );
+    const movieId = screening?.movieId;
+
+    // 3. Delete booking
+    await bookingService.deleteBooking(req.params.bookingId);
+
+    // 4. Update stats (MongoDB) after deletion
+    try {
+      if (movieId) {
+        await movieStatsService.removeBooking(movieId, booking.seatsNumber);
+      }
+    } catch (statErr) {
+      // Log but do not block deletion
+      console.warn('Stats update failed:', statErr);
+    }
+
+    res.status(204).send();
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Update a booking.
+ *
+ * @route PATCH /bookings/:bookingId
+ * @param req - Express request (params: bookingId, body: updates)
+ * @param res - Express response
+ * @param next - Express error handler
+ * @returns {Promise<void>} Returns nothing; sends JSON response.
+ */
 export const updateBooking = async (
   req: Request,
   res: Response,
   next: NextFunction
-) => {
+): Promise<void> => {
   const { bookingId } = req.params;
   const update = req.body;
-
   const transaction = await sequelize.transaction();
   try {
-    // Try to update the booking
     const booking = await bookingService.updateBooking(
       bookingId,
       update,
       transaction
     );
-
     await transaction.commit();
-
     res.json({ message: 'Booking updated', data: booking });
   } catch (error) {
     await transaction.rollback();
@@ -160,35 +232,19 @@ export const updateBooking = async (
 };
 
 /**
- * Delete a booking by its ID.
- * @param req - Express request (params: bookingId)
- * @param res - Express response
- * @param next - Express error handler
- */
-export const deleteBooking = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
-  try {
-    await bookingService.deleteBooking(req.params.bookingId);
-    res.status(204).send();
-  } catch (error) {
-    next(error);
-  }
-};
-
-/**
  * Get all bookings.
+ *
+ * @route GET /bookings
  * @param req - Express request
  * @param res - Express response
  * @param next - Express error handler
+ * @returns {Promise<void>} Returns nothing; sends JSON response.
  */
 export const getAllBookings = async (
   req: Request,
   res: Response,
   next: NextFunction
-) => {
+): Promise<void> => {
   try {
     const bookings = await bookingService.getAllBookings();
     res.json({ message: 'All bookings', data: bookings });
@@ -196,19 +252,25 @@ export const getAllBookings = async (
     next(error);
   }
 };
+
+/**
+ * Get a booking by ID.
+ *
+ * @route GET /bookings/:bookingId
+ * @param req - Express request (params: bookingId)
+ * @param res - Express response
+ * @param next - Express error handler
+ * @returns {Promise<void>} Returns nothing; sends JSON response.
+ */
 export const getBookingById = async (
   req: Request,
   res: Response,
   next: NextFunction
-) => {
+): Promise<void> => {
   const { bookingId } = req.params;
-
   try {
     const booking = await bookingService.getBookingById(bookingId);
-    res.status(200).json({
-      message: 'Booking found',
-      data: booking,
-    });
+    res.status(200).json({ message: 'Booking found', data: booking });
   } catch (error) {
     next(error);
   }
@@ -216,9 +278,8 @@ export const getBookingById = async (
 
 /**
  * Get all bookings for a specific user.
- * @param req - Express request (params: userId)
- * @param res - Express response
- * @param next - Express error handler
+ *
+ * @route GET /bookings/user/:userId
  */
 export const getBookingsByUser = async (
   req: Request,
@@ -235,9 +296,8 @@ export const getBookingsByUser = async (
 
 /**
  * Get all bookings for a specific screening.
- * @param req - Express request (params: screeningId)
- * @param res - Express response
- * @param next - Express error handler
+ *
+ * @route GET /bookings/screening/:screeningId
  */
 export const getBookingsByScreening = async (
   req: Request,
@@ -256,9 +316,8 @@ export const getBookingsByScreening = async (
 
 /**
  * Get all bookings with a specific status.
- * @param req - Express request (params: status)
- * @param res - Express response
- * @param next - Express error handler
+ *
+ * @route GET /bookings/status/:status
  */
 export const getBookingsByStatus = async (
   req: Request,
@@ -277,9 +336,8 @@ export const getBookingsByStatus = async (
 
 /**
  * Search bookings by keyword (status, screeningId, userId).
- * @param req - Express request (query: query string)
- * @param res - Express response
- * @param next - Express error handler
+ *
+ * @route GET /bookings/search?q=
  */
 export const searchBooking = async (
   req: Request,
@@ -300,9 +358,8 @@ export const searchBooking = async (
 
 /**
  * Mark a booking as 'used'.
- * @param req - Express request (params: bookingId)
- * @param res - Express response
- * @param next - Express error handler
+ *
+ * @route PATCH /bookings/:bookingId/used
  */
 export const markBookingAsUsed = async (
   req: Request,
@@ -328,9 +385,8 @@ export const markBookingAsUsed = async (
 
 /**
  * Cancel a booking.
- * @param req - Express request (params: bookingId)
- * @param res - Express response
- * @param next - Express error handler
+ *
+ * @route PATCH /bookings/:bookingId/cancel
  */
 export const cancelBooking = async (
   req: Request,

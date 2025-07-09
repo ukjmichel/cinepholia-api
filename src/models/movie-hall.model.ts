@@ -1,52 +1,57 @@
 /**
  * Sequelize Model for Movie Theater Hall (MovieHallModel).
  *
- * This file defines the structure and validations for a hall in a movie theater.
- * It relies on sequelize-typescript for typing and managing relationships between entities.
+ * This model represents a cinema hall inside a movie theater, including layout and projection quality.
  *
- * Key Points:
- *  - A hall is identified by a composite primary key: theaterId + hallId.
- *  - theaterId: identifier of the cinema, with format and length validation.
- *  - hallId: identifier specific to the hall within the cinema, also validated.
- *  - seatsLayout: structure of the seats (hall layout), stored in JSON.
- *      * Validates that the layout is a non-empty 2D array, with each "seat" being a non-empty string or a positive number.
- *  - BelongsTo relationship with MovieTheaterModel (each hall belongs to a cinema).
- *      * Cascade deletion and updates on the associated cinema.
- *  - The HasMany association with ScreeningModel (a hall can host multiple screenings)
- *    is declared **outside the class** to avoid circular imports.
- *  - The generated SQL table is named 'movie_halls' and has automatic timestamps.
- *
- * Uses:
- *  - Manage the seat layout, reservations per hall, dynamic display of availability.
- *  - Associate each hall with a cinema and its screenings.
+ * Key Features:
+ * - Composite primary key: theaterId + hallId
+ * - seatsLayout: 2D array of seats (strings or numbers)
+ * - quality: Type of projection (2D, 3D, IMAX, 4DX)
+ * - BelongsTo: MovieTheaterModel
+ * - HasMany: ScreeningModel (declared after class to avoid circular dependency)
  */
 
 import {
+  Table,
   Column,
-  DataType,
   Model,
   PrimaryKey,
-  Table,
-  HasMany,
+  DataType,
   ForeignKey,
   BelongsTo,
+  HasMany,
 } from 'sequelize-typescript';
-import { MovieTheaterModel } from './movie-theater.model.js';
 
-// Structure of a movie theater hall
+/**
+ * ⚠️ Important:
+ * These imports are placed early to prevent circular dependency and temporal dead zone (TDZ) issues.
+ * When decorators like @BelongsTo or @HasMany reference another model, that model must already be initialized.
+ */
+import { MovieTheaterModel } from './movie-theater.model.js';
+import { ScreeningModel } from './screening.model.js';
+
+/**
+ * MovieHall attributes interface.
+ */
 export interface MovieHallAttributes {
-  theaterId: string; // Cinema identifier
-  hallId: string; // Hall identifier
-  seatsLayout: (string | number)[][]; // Seat layout (2D)
+  theaterId: string;
+  hallId: string;
+  seatsLayout: (string | number)[][];
+  quality: '2D' | '3D' | 'IMAX' | '4DX';
 }
 
-// Definition of the hall model
+/**
+ * Sequelize model definition for movie_halls table.
+ */
 @Table({ tableName: 'movie_halls', timestamps: true })
 export class MovieHallModel
   extends Model<MovieHallAttributes>
   implements MovieHallAttributes
 {
-  // Primary key and foreign key to the cinema
+  /**
+   * Foreign key and part of the composite primary key.
+   * Identifies the movie theater to which this hall belongs.
+   */
   @PrimaryKey
   @ForeignKey(() => MovieTheaterModel)
   @Column({
@@ -65,7 +70,9 @@ export class MovieHallModel
   })
   declare theaterId: string;
 
-  // Primary key specific to the hall
+  /**
+   * Hall identifier (unique per theater)
+   */
   @PrimaryKey
   @Column({
     type: DataType.STRING,
@@ -83,13 +90,14 @@ export class MovieHallModel
   })
   declare hallId: string;
 
-  // Seat layout, stored in JSON format
+  /**
+   * Seat layout of the hall, stored as a 2D array of seat identifiers or numbers.
+   */
   @Column({
     type: DataType.JSON,
     allowNull: false,
     validate: {
       isValidLayout(value: unknown) {
-        // Custom validation: non-empty 2D array of strings or numbers >= 0
         if (
           !Array.isArray(value) ||
           value.length === 0 ||
@@ -115,7 +123,19 @@ export class MovieHallModel
   })
   declare seatsLayout: (string | number)[][];
 
-  // Association: the hall belongs to a cinema
+  /**
+   * Projection quality of the hall (e.g. 2D, 3D, IMAX, 4DX).
+   */
+  @Column({
+    type: DataType.ENUM('2D', '3D', 'IMAX', '4DX'),
+    allowNull: false,
+    defaultValue: '2D',
+  })
+  declare quality: '2D' | '3D' | 'IMAX' | '4DX';
+
+  /**
+   * Association: The hall belongs to a movie theater.
+   */
   @BelongsTo(() => MovieTheaterModel, {
     foreignKey: 'theaterId',
     targetKey: 'theaterId',
@@ -123,11 +143,10 @@ export class MovieHallModel
     onUpdate: 'CASCADE',
   })
   declare theater: MovieTheaterModel;
+
+  /**
+   * Association: The hall has many screenings (defined outside the class for circular safety).
+   */
+  @HasMany(() => ScreeningModel)
+  declare screenings: ScreeningModel[];
 }
-
-// -------------------------------------------------------------------------
-// HasMany association declared outside the class to avoid circular imports
-import { ScreeningModel } from './screening.model.js';
-
-// A hall can host multiple screenings
-HasMany(() => ScreeningModel)(MovieHallModel.prototype, 'screenings');

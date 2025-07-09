@@ -2,6 +2,10 @@
 
 import * as userController from '../../controllers/user.controller.js';
 import { userService } from '../../services/user.service.js';
+import { authorizationService } from '../../services/authorization.service.js';
+import { emailService } from '../../services/email.service.js';
+import { authService } from '../../services/auth.service.js';
+
 import { config } from '../../config/env.js';
 import { sequelize } from '../../config/db.js';
 
@@ -13,15 +17,14 @@ import { UnauthorizedError } from '../../errors/unauthorized-error.js';
 jest.mock('../../services/user.service.js');
 jest.mock('../../services/authorization.service.js');
 jest.mock('../../services/email.service.js');
+jest.mock('../../services/auth.service.js');
 
-// Mock Sequelize transaction, always returns a mock object
 beforeAll(() => {
   jest.spyOn(sequelize, 'transaction').mockImplementation(
     async () =>
       ({
         commit: jest.fn().mockResolvedValue(undefined),
         rollback: jest.fn().mockResolvedValue(undefined),
-        finished: undefined, // simulate a "not finished" transaction
       }) as any
   );
 });
@@ -49,40 +52,33 @@ const mockUser = {
   lastName: 'User',
   email: 'test@email.com',
   verified: false,
-  toJSON: function () {
-    return {
-      userId: this.userId,
-      username: this.username,
-      firstName: this.firstName,
-      lastName: this.lastName,
-      email: this.email,
-      verified: this.verified,
-    };
-  },
 };
 
-// Reset mocks and config before each test
+const withRole = (user = mockUser, role = 'utilisateur') => ({
+  ...user,
+  role,
+});
+
 beforeEach(() => {
   jest.clearAllMocks();
   config.sendWelcomeEmail = true;
+  // Always return utilisateur as role by default for all tests
+  (
+    authorizationService.getAuthorizationByUserId as jest.Mock
+  ).mockResolvedValue({ userId: '1', role: 'utilisateur' });
 });
 
-// Test the user creation controller factory
 describe('userController.createAccount (controller factory)', () => {
   const handler = userController.createAccount('utilisateur');
 
   it('should create user, authorization, send email, set cookies, and return 201', async () => {
     (userService.createUser as jest.Mock).mockResolvedValue(mockUser);
-    (
-      userController.authorizationService.createAuthorization as jest.Mock
-    ).mockResolvedValue({
+    (authorizationService.createAuthorization as jest.Mock).mockResolvedValue({
       userId: '1',
       role: 'utilisateur',
     });
-    jest
-      .spyOn(userController.emailService, 'sendWelcomeEmail')
-      .mockResolvedValue(undefined);
-    jest.spyOn(userController.authService, 'generateTokens').mockReturnValue({
+    (emailService.sendWelcomeEmail as jest.Mock).mockResolvedValue(undefined);
+    (authService.generateTokens as jest.Mock).mockReturnValue({
       accessToken: 'access',
       refreshToken: 'refresh',
     });
@@ -96,13 +92,11 @@ describe('userController.createAccount (controller factory)', () => {
     await handler(req as any, res as any, mockNext);
 
     expect(userService.createUser).toHaveBeenCalled();
-    expect(
-      userController.authorizationService.createAuthorization
-    ).toHaveBeenCalledWith(
+    expect(authorizationService.createAuthorization).toHaveBeenCalledWith(
       { userId: mockUser.userId, role: 'utilisateur' },
       expect.any(Object)
     );
-    expect(userController.emailService.sendWelcomeEmail).toHaveBeenCalledWith(
+    expect(emailService.sendWelcomeEmail).toHaveBeenCalledWith(
       mockUser.email,
       mockUser.firstName
     );
@@ -120,15 +114,7 @@ describe('userController.createAccount (controller factory)', () => {
     expect(res.status).toHaveBeenCalledWith(201);
     expect(res.json).toHaveBeenCalledWith({
       message: 'User created successfully',
-      data: expect.objectContaining({
-        userId: '1',
-        username: 'test',
-        firstName: 'Test',
-        lastName: 'User',
-        email: 'test@email.com',
-        verified: false,
-        role: 'utilisateur',
-      }),
+      data: withRole(),
     });
     expect(mockNext).not.toHaveBeenCalled();
   });
@@ -149,12 +135,10 @@ describe('userController.createAccount (controller factory)', () => {
 
   it('should call next with error if authorizationService.createAuthorization fails', async () => {
     (userService.createUser as jest.Mock).mockResolvedValue(mockUser);
-    (
-      userController.authorizationService.createAuthorization as jest.Mock
-    ).mockRejectedValue(new Error('Auth error'));
-    jest
-      .spyOn(userController.emailService, 'sendWelcomeEmail')
-      .mockResolvedValue(undefined);
+    (authorizationService.createAuthorization as jest.Mock).mockRejectedValue(
+      new Error('Auth error')
+    );
+    (emailService.sendWelcomeEmail as jest.Mock).mockResolvedValue(undefined);
 
     const req = mockRequest({
       ...mockUser,
@@ -173,6 +157,7 @@ describe('userController.createAccount (controller factory)', () => {
 describe('userController.getUserById', () => {
   it('should return user and 200', async () => {
     (userService.getUserById as jest.Mock).mockResolvedValue(mockUser);
+
     const req = mockRequest({}, { userId: '1' });
     const res = mockResponse();
 
@@ -182,7 +167,7 @@ describe('userController.getUserById', () => {
     expect(res.status).toHaveBeenCalledWith(200);
     expect(res.json).toHaveBeenCalledWith({
       message: 'User found successfully',
-      data: mockUser,
+      data: withRole(),
     });
     expect(mockNext).not.toHaveBeenCalled();
   });
@@ -206,6 +191,9 @@ describe('userController.updateUser', () => {
       ...mockUser,
       firstName: 'Changed',
     });
+    (
+      authorizationService.getAuthorizationByUserId as jest.Mock
+    ).mockResolvedValue({ userId: '1', role: 'utilisateur' });
     const req = mockRequest({ firstName: 'Changed' }, { userId: '1' });
     const res = mockResponse();
 
@@ -217,7 +205,7 @@ describe('userController.updateUser', () => {
     expect(res.status).toHaveBeenCalledWith(200);
     expect(res.json).toHaveBeenCalledWith({
       message: 'User updated successfully',
-      data: { ...mockUser, firstName: 'Changed' },
+      data: withRole({ ...mockUser, firstName: 'Changed' }),
     });
     expect(mockNext).not.toHaveBeenCalled();
   });
@@ -249,7 +237,7 @@ describe('userController.changePassword', () => {
     expect(res.status).toHaveBeenCalledWith(200);
     expect(res.json).toHaveBeenCalledWith({
       message: 'Password changed successfully',
-      data: mockUser,
+      data: withRole(),
     });
     expect(mockNext).not.toHaveBeenCalled();
   });
@@ -294,7 +282,7 @@ describe('userController.verifyUser', () => {
     expect(res.status).toHaveBeenCalledWith(200);
     expect(res.json).toHaveBeenCalledWith({
       message: 'User verified',
-      data: { ...mockUser, verified: true },
+      data: withRole({ ...mockUser, verified: true }),
     });
     expect(mockNext).not.toHaveBeenCalled();
   });
@@ -361,6 +349,10 @@ describe('userController.listUsers', () => {
       page: 1,
       pageSize: 10,
     });
+
+    (
+      authorizationService.getAuthorizationByUserId as jest.Mock
+    ).mockResolvedValue({ userId: '1', role: 'utilisateur' });
     const req = mockRequest({}, {}, {});
     const res = mockResponse();
 
@@ -371,7 +363,7 @@ describe('userController.listUsers', () => {
     expect(res.json).toHaveBeenCalledWith({
       message: 'Users found successfully',
       data: {
-        users: [mockUser],
+        users: [withRole()],
         total: 1,
         page: 1,
         pageSize: 10,
@@ -437,7 +429,7 @@ describe('userController.validatePassword', () => {
     expect(res.status).toHaveBeenCalledWith(200);
     expect(res.json).toHaveBeenCalledWith({
       message: 'User validated successfully',
-      data: mockUser,
+      data: withRole(),
     });
     expect(mockNext).not.toHaveBeenCalled();
   });

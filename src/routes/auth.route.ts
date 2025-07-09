@@ -1,9 +1,8 @@
 import { Router } from 'express';
-import { login } from '../controllers/auth.controller.js';
+import { login, refreshToken } from '../controllers/auth.controller.js';
 import { validate } from '../middlewares/validate.js';
 import {
   decodeJwtToken,
-  refreshToken,
 } from '../middlewares/auth.middleware.js';
 import { permission } from '../middlewares/permission.js';
 import { validateCreateUser } from '../validators/user.validator.js';

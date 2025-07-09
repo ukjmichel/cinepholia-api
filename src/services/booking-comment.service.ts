@@ -27,6 +27,7 @@ import mongoose from 'mongoose';
 import { BookingModel } from '../models/booking.model.js';
 import { ScreeningModel } from '../models/screening.model.js';
 import { Op } from 'sequelize';
+import { MovieModel } from '../models/movie.model.js';
 
 /**
  * Advanced search filters for booking comments.
@@ -169,6 +170,83 @@ export class BookingCommentService {
     status: 'pending' | 'confirmed'
   ): Promise<BookingComment[]> {
     return BookingCommentModel.find({ status }).sort({ createdAt: -1 }).lean();
+  }
+
+  /**
+   * Retrieves all comments made by a specific user, including related movie title and movieId.
+   * @param userId The user identifier.
+   * @returns Promise resolving to a list of comments with movie information.
+   */
+  async getCommentsByUser(userId: string): Promise<any[]> {
+    // Step 1: Find all bookings for this user
+    const bookings = await BookingModel.findAll({
+      where: { userId },
+      attributes: ['bookingId', 'screeningId'],
+      raw: true,
+    });
+
+    if (!bookings.length) return [];
+
+    // Step 2: Map bookingId to screeningId
+    const bookingMap = new Map<string, string>();
+    for (const booking of bookings) {
+      bookingMap.set(booking.bookingId, booking.screeningId);
+    }
+
+    const bookingIds = [...bookingMap.keys()];
+
+    // Step 3: Find all comments for these bookings
+    const comments = await BookingCommentModel.find({
+      bookingId: { $in: bookingIds },
+    })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    if (!comments.length) return [];
+
+    // Step 4: Get all screeningIds from the bookings
+    const screeningIds = [...new Set(bookings.map((b) => b.screeningId))];
+
+    // Step 5: Fetch screenings and populate movies
+    const screenings = await ScreeningModel.findAll({
+      where: { screeningId: screeningIds },
+      include: [
+        {
+          model: MovieModel,
+          attributes: ['movieId', 'title'],
+        },
+      ],
+      raw: true,
+      nest: true,
+    });
+
+    // Step 6: Create a map of screeningId to movie info
+    const screeningToMovieMap = new Map<
+      string,
+      { movieId: string; title: string }
+    >();
+    for (const screening of screenings) {
+      if (screening.movie) {
+        screeningToMovieMap.set(screening.screeningId, {
+          movieId: screening.movie.movieId,
+          title: screening.movie.title,
+        });
+      }
+    }
+
+    // Step 7: Combine comment with movie info
+    const enrichedComments = comments.map((comment) => {
+      const screeningId = bookingMap.get(comment.bookingId);
+      const movie = screeningToMovieMap.get(screeningId || '');
+
+      return {
+        ...comment,
+        movieId: movie?.movieId || null,
+        movieTitle: movie?.title || null,
+      };
+    });
+
+    return enrichedComments;
   }
 
   /**

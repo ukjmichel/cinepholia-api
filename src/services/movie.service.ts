@@ -31,6 +31,7 @@ import { sequelize } from '../config/db.js';
 import { Transaction, Op } from 'sequelize';
 import { movieImageService, MovieImageService } from './movie-image.service.js'; // Must exist!
 import { ConflictError } from '../errors/conflict-error.js';
+import { ScreeningModel } from '../models/screening.model.js';
 
 export class MovieService {
   /**
@@ -251,6 +252,34 @@ export class MovieService {
         },
       },
       order: [['releaseDate', 'ASC']], // Optional: soonest first
+    });
+  }
+  /**
+   * Get all unique movies that are being screened in a given theater.
+   *
+   * A movie is considered "displayed" in a theater if there is at least one screening of it in that theater.
+   *
+   * @param {string} theaterId - The unique identifier of the theater.
+   * @returns {Promise<MovieModel[]>} Array of movie instances displayed in the theater.
+   *
+   * @example
+   * // Get all movies displayed in theater 'T123'
+   * const movies = await movieService.getMoviesByTheater('T123');
+   */
+  async getMoviesByTheater(theaterId: string): Promise<MovieModel[]> {
+    // Step 1: Get all unique movieIds from screenings in the theater
+    const screenings = await ScreeningModel.findAll({
+      where: { theaterId },
+      attributes: ['movieId'],
+      group: ['movieId'],
+      raw: true,
+    });
+    const movieIds = screenings.map((s) => s.movieId);
+    if (!movieIds.length) return [];
+
+    // Step 2: Fetch movies with those IDs
+    return MovieModel.findAll({
+      where: { movieId: movieIds },
     });
   }
 }

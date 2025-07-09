@@ -33,11 +33,12 @@ const testTheater = {
 
 const testHall = {
   theaterId: testTheater.theaterId,
-  hallId: 'hall-1',
+  hallId: 'grande-salle',
   seatsLayout: [
     ['A1', 'A2'],
     ['B1', 'B2'],
   ],
+  quality: '2D' as '2D', // type-safe
 };
 
 const screening = {

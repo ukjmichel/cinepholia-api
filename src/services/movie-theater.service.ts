@@ -22,6 +22,7 @@ import {
 import { ConflictError } from '../errors/conflict-error.js';
 import { NotFoundError } from '../errors/not-found-error.js';
 import { Op } from 'sequelize';
+import { param } from 'express-validator';
 
 export class MovieTheaterService {
   /**
@@ -146,5 +147,20 @@ export class MovieTheaterService {
     return await MovieTheaterModel.findAll({ where });
   }
 }
+
+/**
+ * Validator for the `theaterId` route parameter.
+ * Checks that theaterId exists, is a string, not empty, and matches allowed pattern.
+ */
+export const theaterIdParamValidator = [
+  param('theaterId')
+    .exists().withMessage('Theater ID is required')
+    .bail()
+    .isString().withMessage('Theater ID must be a string')
+    .bail()
+    .notEmpty().withMessage('Theater ID cannot be empty')
+    // You can add a regex if you want to restrict the allowed format, e.g.:
+    // .matches(/^[a-zA-Z0-9\-]+$/).withMessage('Invalid theater ID format')
+];
 
 export const movieTheaterService = new MovieTheaterService();

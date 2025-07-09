@@ -177,3 +177,33 @@ export async function getUpcomingMovies(
     next(error);
   }
 }
+
+/**
+ * Récupère la liste des films diffusés dans un cinéma donné (par theaterId).
+ * Un film est considéré "diffusé" s'il existe au moins une séance (screening) dans ce cinéma.
+ * @route GET /theaters/:theaterId/movies
+ * @param {Request} req - Requête Express (params: theaterId)
+ * @param {Response} res - Réponse Express
+ * @param {NextFunction} next - Middleware Express suivant
+ * @returns {Promise<void>} Répond avec la liste des films diffusés dans le cinéma.
+ *
+ * @example
+ * // GET /theaters/abc123/movies
+ * // Réponse : { message: 'Movies by theater fetched successfully', data: [...] }
+ */
+export async function getMoviesByTheater(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const { theaterId } = req.params;
+    const movies = await movieService.getMoviesByTheater(theaterId);
+    res.json({
+      message: 'Movies by theater fetched successfully',
+      data: movies,
+    });
+  } catch (error) {
+    next(error);
+  }
+}

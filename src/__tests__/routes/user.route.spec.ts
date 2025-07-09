@@ -79,7 +79,7 @@ describe('User E2E Routes with MySQL', () => {
     staffUserId = staffUser.userId;
     await AuthorizationModel.create({
       userId: staffUserId,
-      role: 'employé',
+      role: 'administrateur',
     });
 
     // 3. Log in the staff user to get their cookie

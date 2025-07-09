@@ -86,6 +86,7 @@ describe('BookingModel', () => {
         [1, 2, 3],
         [4, 5, 6],
       ],
+      quality: '2D',
     });
 
     await ScreeningModel.create({
@@ -95,7 +96,6 @@ describe('BookingModel', () => {
       hallId,
       startTime: new Date('2025-01-01T18:00:00Z'),
       price: 11.5,
-      quality: '2D',
     });
   });
 
@@ -140,7 +140,6 @@ describe('BookingModel', () => {
       BookingModel.create(makeBooking({ totalPrice: -10 }))
     ).rejects.toThrow();
   });
-
 
   it('should not allow duplicate bookingId', async () => {
     const booking1 = await BookingModel.create(makeBooking());

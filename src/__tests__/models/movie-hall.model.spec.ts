@@ -8,6 +8,7 @@ describe('MovieHallModel', () => {
   let sequelize: Sequelize;
 
   beforeAll(async () => {
+    // Initialize in-memory SQLite DB
     sequelize = new Sequelize({
       dialect: 'sqlite',
       storage: ':memory:',
@@ -16,6 +17,7 @@ describe('MovieHallModel', () => {
     });
     await sequelize.sync({ force: true });
 
+    // Create a theater for foreign key association
     await MovieTheaterModel.create({
       theaterId: 'cinema42',
       address: '123 Main St',
@@ -30,19 +32,20 @@ describe('MovieHallModel', () => {
     await sequelize.close();
   });
 
-  it('creates a valid movie hall', async () => {
+  it('creates a valid movie hall with seats and quality', async () => {
     const hall = await MovieHallModel.create({
       theaterId: 'cinema42',
       hallId: 'main_hall',
       seatsLayout: [
         [1, 2, 3, 4, 5],
-        [1, 2, 'A', 'B'],
-        ['VIP', 2, 3],
+        ['A', 'B', 'C'],
       ],
+      quality: '2D',
     });
 
     expect(hall.theaterId).toBe('cinema42');
     expect(hall.hallId).toBe('main_hall');
+    expect(hall.quality).toBe('2D');
     expect(Array.isArray(hall.seatsLayout)).toBe(true);
   });
 
@@ -52,6 +55,7 @@ describe('MovieHallModel', () => {
         theaterId: 'a',
         hallId: 'hallA',
         seatsLayout: [[1, 2, 3]],
+        quality: '2D',
       })
     ).rejects.toThrow(/theaterId/);
   });
@@ -60,8 +64,9 @@ describe('MovieHallModel', () => {
     await expect(
       MovieHallModel.create({
         theaterId: 'cinema42',
-        hallId: 'main hall!', // invalid chars
+        hallId: 'main hall!', // invalid
         seatsLayout: [[1, 2, 3]],
+        quality: '2D',
       })
     ).rejects.toThrow(/hallId/);
   });
@@ -70,8 +75,9 @@ describe('MovieHallModel', () => {
     await expect(
       MovieHallModel.create({
         theaterId: 'cinema42',
-        hallId: 'A',
-        seatsLayout: [1, 2, 3] as any, // not 2D
+        hallId: 'invalidSeats',
+        seatsLayout: [1, 2, 3] as any,
+        quality: '2D',
       })
     ).rejects.toThrow(/seatsLayout/);
   });
@@ -80,18 +86,20 @@ describe('MovieHallModel', () => {
     await expect(
       MovieHallModel.create({
         theaterId: 'cinema42',
-        hallId: 'B',
+        hallId: 'rowEmpty',
         seatsLayout: [[], [1, 2, 3]],
+        quality: '2D',
       })
     ).rejects.toThrow(/seatsLayout/);
   });
 
-  it('fails when a seat is negative number', async () => {
+  it('fails when a seat is a negative number', async () => {
     await expect(
       MovieHallModel.create({
         theaterId: 'cinema42',
-        hallId: 'C',
-        seatsLayout: [[1, 2, -3]], // negative number
+        hallId: 'negSeat',
+        seatsLayout: [[1, 2, -3]],
+        quality: '3D',
       })
     ).rejects.toThrow(/seatsLayout/);
   });
@@ -100,66 +108,56 @@ describe('MovieHallModel', () => {
     await expect(
       MovieHallModel.create({
         theaterId: 'cinema42',
-        hallId: 'D',
-        seatsLayout: [[1, {} as any, 3]], // object in row
+        hallId: 'objectSeat',
+        seatsLayout: [[1, {} as any, 3]],
+        quality: '2D',
       })
     ).rejects.toThrow(/seatsLayout/);
   });
 
-  it('fails when a row in seatsLayout contains an empty string', async () => {
+  it('fails when a seat is an empty string', async () => {
     await expect(
       MovieHallModel.create({
         theaterId: 'cinema42',
-        hallId: 'E',
-        seatsLayout: [[1, 2, 3], ['']], // Empty string seat
+        hallId: 'emptyStrSeat',
+        seatsLayout: [[1, '', 3]],
+        quality: '2D',
       })
     ).rejects.toThrow(/seatsLayout/);
   });
 
-  it('fails if seatsLayout has an empty array as the only row', async () => {
+  it('fails when seatsLayout has only empty rows', async () => {
     await expect(
       MovieHallModel.create({
         theaterId: 'cinema42',
-        hallId: 'F',
-        seatsLayout: [[]], // Only empty row
+        hallId: 'emptyRows',
+        seatsLayout: [[], []],
+        quality: '2D',
       })
     ).rejects.toThrow(/seatsLayout/);
   });
 
-  it('fails if seatsLayout is an array of empty arrays', async () => {
-    await expect(
-      MovieHallModel.create({
-        theaterId: 'cinema42',
-        hallId: 'G',
-        seatsLayout: [[], []], // All rows empty
-      })
-    ).rejects.toThrow(/seatsLayout/);
-  });
-
-  it('creates a hall with multiple valid rows and mixed types', async () => {
+  it('creates hall with valid mixed seat types', async () => {
     const hall = await MovieHallModel.create({
       theaterId: 'cinema42',
-      hallId: 'multirow',
+      hallId: 'mixedTypes',
       seatsLayout: [
         [1, 2, 3, 'A', 'B'],
-        [4, 5, 6, 'C'],
         ['VIP', 1, 2, 3],
       ],
+      quality: 'IMAX',
     });
-    expect(hall.seatsLayout.length).toBe(3);
-    expect(hall.seatsLayout[0][0]).toBe(1);
-    expect(hall.seatsLayout[2][0]).toBe('VIP');
+    expect(hall.quality).toBe('IMAX');
+    expect(hall.seatsLayout.length).toBe(2);
   });
 
-  it('fails when a row contains undefined', async () => {
+  it('fails when a seat is undefined', async () => {
     await expect(
       MovieHallModel.create({
         theaterId: 'cinema42',
-        hallId: 'undef',
-        seatsLayout: [
-          [1, 2, 3],
-          [4, undefined as any, 6],
-        ],
+        hallId: 'undefSeat',
+        seatsLayout: [[1, 2, undefined as any]],
+        quality: '3D',
       })
     ).rejects.toThrow(/seatsLayout/);
   });
@@ -168,25 +166,39 @@ describe('MovieHallModel', () => {
     await expect(
       MovieHallModel.create({
         theaterId: 'cinema42',
-        hallId: 'bool',
-        seatsLayout: [[1, 2, true as any]],
+        hallId: 'boolSeat',
+        seatsLayout: [[true as any, 2, 3]],
+        quality: '2D',
       })
     ).rejects.toThrow(/seatsLayout/);
   });
 
-  it('fails if two halls have same theaterId and hallId', async () => {
+  it('fails if two halls have same theaterId and hallId (duplicate key)', async () => {
     await MovieHallModel.create({
       theaterId: 'cinema42',
-      hallId: 'dup',
+      hallId: 'duplicate',
       seatsLayout: [[1, 2, 3]],
+      quality: '2D',
     });
 
     await expect(
       MovieHallModel.create({
         theaterId: 'cinema42',
-        hallId: 'dup',
+        hallId: 'duplicate',
         seatsLayout: [[1, 2, 3]],
+        quality: '2D',
       })
     ).rejects.toThrow(/validation error/i);
+  });
+
+  it('accepts quality value "4DX"', async () => {
+    const hall = await MovieHallModel.create({
+      theaterId: 'cinema42',
+      hallId: 'imax4dx',
+      seatsLayout: [[1, 2, 3]],
+      quality: '4DX',
+    });
+
+    expect(hall.quality).toBe('4DX');
   });
 });

@@ -6,6 +6,7 @@ import {
   validateDeleteUser,
   validateChangePassword,
   validateListUsers,
+  validateSearchUsers,
 } from '../validators/user.validator.js';
 import { validate } from '../middlewares/validate.js';
 import { decodeJwtToken } from '../middlewares/auth.middleware.js';
@@ -17,7 +18,7 @@ const router = express.Router();
  * @swagger
  * /users:
  *   get:
- *     summary: Get a paginated list of users (Staff only)
+ *     summary: Retrieve a paginated list of users (Staff only)
  *     tags: [Users]
  *     security:
  *       - bearerAuth: []
@@ -26,27 +27,27 @@ const router = express.Router();
  *         name: page
  *         schema:
  *           type: integer
- *         description: Page number
+ *         description: Page number (starting at 1)
  *       - in: query
  *         name: pageSize
  *         schema:
  *           type: integer
- *         description: Users per page
+ *         description: Number of users per page
  *       - in: query
  *         name: username
  *         schema:
  *           type: string
- *         description: Username filter
+ *         description: Filter by exact username
  *       - in: query
  *         name: email
  *         schema:
  *           type: string
- *         description: Email filter
+ *         description: Filter by exact email
  *     responses:
  *       200:
  *         description: A list of users
  *       401:
- *         description: Unauthorized
+ *         description: Unauthorized (invalid or missing token)
  */
 router.get(
   '/',
@@ -55,6 +56,81 @@ router.get(
   decodeJwtToken,
   permission.isStaff,
   userController.listUsers
+);
+
+/**
+ * @swagger
+ * /users/me:
+ *   get:
+ *     summary: Get the currently authenticated user's information
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Current user object
+ *       401:
+ *         description: Unauthorized (invalid or missing token)
+ */
+router.get('/me', decodeJwtToken, userController.getCurrentUser);
+
+/**
+ * @swagger
+ * /users/search:
+ *   get:
+ *     summary: Search for users using global or specific filters (Staff only)
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: q
+ *         schema:
+ *           type: string
+ *         description: Global search term (username, email, name, or ID)
+ *       - in: query
+ *         name: userId
+ *         schema:
+ *           type: string
+ *         description: Partial match on user ID
+ *       - in: query
+ *         name: username
+ *         schema:
+ *           type: string
+ *         description: Partial match on username
+ *       - in: query
+ *         name: email
+ *         schema:
+ *           type: string
+ *         description: Partial match on email
+ *       - in: query
+ *         name: firstName
+ *         schema:
+ *           type: string
+ *         description: Partial match on first name
+ *       - in: query
+ *         name: lastName
+ *         schema:
+ *           type: string
+ *         description: Partial match on last name
+ *       - in: query
+ *         name: verified
+ *         schema:
+ *           type: boolean
+ *         description: Filter by verification status
+ *     responses:
+ *       200:
+ *         description: List of matching users
+ *       401:
+ *         description: Unauthorized
+ */
+router.get(
+  '/search',
+  validateSearchUsers,
+  validate,
+  decodeJwtToken,
+  permission.isStaff,
+  userController.searchUsers
 );
 
 /**
@@ -163,7 +239,7 @@ router.delete(
  * @swagger
  * /users/{userId}/password:
  *   patch:
- *     summary: Change user password (Self or Staff)
+ *     summary: Change a user's password (Self or Admin)
  *     tags: [Users]
  *     security:
  *       - bearerAuth: []
@@ -197,7 +273,7 @@ router.patch(
   validateChangePassword,
   validate,
   decodeJwtToken,
-  permission.isSelfOrStaff,
+  permission.isSelfOrAdmin,
   userController.changePassword
 );
 

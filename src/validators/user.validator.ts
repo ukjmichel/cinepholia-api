@@ -86,3 +86,43 @@ export const validateValidatePassword = [
 export const userIdParamValidator = [
   param('userId').isUUID().withMessage('userId must be a valid UUID'),
 ];
+
+export const validateSearchUsers = [
+  // q: optional, string, trimmed, max 100 chars
+  query('q').optional().isString().isLength({ max: 100 }).trim().escape(),
+
+  // userId: optional, string, trimmed, max 64 chars
+  query('userId').optional().isString().isLength({ max: 64 }).trim().escape(),
+
+  // username: optional, string, trimmed, max 30 chars
+  query('username').optional().isString().isLength({ max: 30 }).trim().escape(),
+
+  // email: optional, string, email format or partial, max 100 chars
+  query('email').optional().isString().isLength({ max: 100 }).trim().escape(),
+
+  // firstName: optional, string, max 30 chars
+  query('firstName')
+    .optional()
+    .isString()
+    .isLength({ max: 30 })
+    .trim()
+    .escape(),
+
+  // lastName: optional, string, max 30 chars
+  query('lastName').optional().isString().isLength({ max: 30 }).trim().escape(),
+
+  // verified: optional, boolean (accepts 'true'/'false', '1'/'0')
+  query('verified')
+    .optional()
+    .custom((value) => {
+      if (
+        value === 'true' ||
+        value === 'false' ||
+        value === '1' ||
+        value === '0'
+      ) {
+        return true;
+      }
+      throw new Error('verified must be boolean');
+    }),
+];

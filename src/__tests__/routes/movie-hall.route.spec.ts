@@ -33,13 +33,14 @@ const testHall = {
     ['A1', 'A2'],
     ['B1', 'B2'],
   ],
+  quality: '2D' as '2D', 
 };
 
 /**
  * Clean all relevant tables between tests
  */
 const cleanDatabase = async () => {
-  await sequelize.query('SET FOREIGN_KEY_CHECKS = 0'); 
+  await sequelize.query('SET FOREIGN_KEY_CHECKS = 0');
   await AuthorizationModel.destroy({
     where: {},
     truncate: true,

@@ -57,6 +57,7 @@ describe('ScreeningModel', () => {
     await MovieHallModel.create({
       theaterId,
       hallId,
+      quality: 'IMAX', // ⬅️ Include quality here
       seatsLayout: [
         [1, 2, 3, 4, 5],
         [1, 2, 'A', 'B'],
@@ -73,7 +74,6 @@ describe('ScreeningModel', () => {
       hallId,
       startTime: new Date('2025-01-01T18:00:00Z'),
       price: 12.5,
-      quality: 'IMAX',
     };
 
     const screening = await ScreeningModel.create(screeningData);
@@ -83,7 +83,6 @@ describe('ScreeningModel', () => {
     expect(screening.theaterId).toBe(theaterId);
     expect(screening.hallId).toBe(hallId);
     expect(Number(screening.price)).toBe(12.5);
-    expect(screening.quality).toBe('IMAX');
 
     const foundScreening = await ScreeningModel.findByPk(
       screening.screeningId,
@@ -100,24 +99,8 @@ describe('ScreeningModel', () => {
     expect(foundScreening!.theater.theaterId).toBe(theaterId);
     expect(foundScreening!.hall).toBeDefined();
     expect(foundScreening!.hall.hallId).toBe(hallId);
+    expect(foundScreening!.hall.quality).toBe('IMAX');
     expect(Number(foundScreening!.price)).toBe(12.5);
-    expect(foundScreening!.quality).toBe('IMAX');
-  });
-
-  it('should fail to create a screening with an invalid quality', async () => {
-    const screeningData = {
-      screeningId: uuidv4(),
-      movieId,
-      theaterId,
-      hallId,
-      startTime: new Date('2025-01-01T18:00:00Z'),
-      price: 10.0,
-      quality: 'HFR', // Invalid quality not in allowed list
-    };
-
-    await expect(ScreeningModel.create(screeningData)).rejects.toThrow(
-      ValidationError
-    );
   });
 
   it('should fail to create a screening with a negative price', async () => {
@@ -127,11 +110,9 @@ describe('ScreeningModel', () => {
       theaterId,
       hallId,
       startTime: new Date('2025-01-01T22:00:00Z'),
-      price: -5.0, // Invalid price
-      quality: '3D',
+      price: -5.0,
     };
 
-    // Optional: Ensure you have a min validator in your model for price
     await expect(ScreeningModel.create(screeningData)).rejects.toThrow(
       ValidationError
     );
