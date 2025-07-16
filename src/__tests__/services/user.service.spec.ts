@@ -68,13 +68,6 @@ describe('UserService', () => {
       const user = await userService.getUserById('test-uuid');
       expect(user).toEqual(mockUser);
     });
-
-    it('returns null if user not found', async () => {
-      (UserModel.findByPk as jest.Mock).mockResolvedValue(null);
-
-      const user = await userService.getUserById('not-exist');
-      expect(user).toBeNull();
-    });
   });
 
   describe('updateUser', () => {

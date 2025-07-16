@@ -7,7 +7,7 @@ export const config = {
   nodeEnv: process.env.NODE_ENV || 'development',
   port: Number(process.env.PORT) || (isTest ? 3001 : 3000),
   hostAppPort: Number(process.env.HOST_APP_PORT) || 3000,
-  baseUrl: Number(process.env.BASE_URL) || 'http://localhost:3000',
+  baseUrl: process.env.BASE_URL || 'http://localhost:3000',
 
   // ─── MySQL Database Configuration ────────────
   mysqlHost: isTest ? requireEnv('TEST_MYSQL_HOST') : requireEnv('MYSQL_HOST'),
@@ -85,11 +85,12 @@ export const config = {
     ? requireEnv('TEST_JWT_REFRESH_SECRET')
     : requireEnv('JWT_REFRESH_SECRET'),
   jwtExpiresIn: isTest
-    ? requireEnv('TEST_JWT_EXPIRES_IN')
-    : requireEnv('JWT_EXPIRES_IN'),
+    ? process.env.TEST_JWT_EXPIRES_IN || '1h'
+    : process.env.JWT_EXPIRES_IN || '1h',
+
   jwtRefreshExpiresIn: isTest
-    ? requireEnv('TEST_JWT_REFRESH_EXPIRES_IN')
-    : requireEnv('JWT_REFRESH_EXPIRES_IN'),
+    ? process.env.TEST_JWT_REFRESH_EXPIRES_IN || '7d'
+    : process.env.JWT_REFRESH_EXPIRES_IN || '7d',
 
   // ─── Multer Upload Configuration ─────────────
   multerMaxFileSize: envToInt(
