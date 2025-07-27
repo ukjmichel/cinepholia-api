@@ -1,3 +1,15 @@
+/**
+ * @fileoverview Service for initializing screening data in the database.
+ * Provides utility methods to populate the ScreeningModel with generated data
+ * for all theaters and halls, scheduled for every 3 hours, for a specified month.
+ * Used for test data, demo environments, or initial DB population.
+ *
+ * Usage:
+ *   await InitDbService.initMonth(month, year);
+ *
+ * Dependencies: Sequelize models for theaters, movies, halls, and screenings.
+ */
+
 import { v4 as uuidv4 } from 'uuid';
 import { Op } from 'sequelize';
 import { MovieTheaterModel } from '../models/movie-theater.model.js';
@@ -5,17 +17,21 @@ import { MovieModel } from '../models/movie.model.js';
 import { MovieHallModel } from '../models/movie-hall.model.js';
 import { ScreeningModel } from '../models/screening.model.js';
 
+const PRICES = [10, 12, 15, 17, 20];
 
-const QUALITY_CHOICES = ['2D', '3D', 'IMAX', '4DX', 'Dolby'];
-const PRICES = [10, 12, 15, 17, 20]; 
-
+/**
+ * Service class for initializing the database with screening data.
+ */
 export class InitDbService {
   /**
    * Initialize all screenings for a specific month.
    * This method fills all theaters and all halls with screenings every 3 hours,
    * cycling through available movies.
-   * @param month Month (1-12)
-   * @param year Year (e.g., 2025)
+   *
+   * @param {number} month - Month (1-12).
+   * @param {number} year - Year (e.g., 2025).
+   * @returns {Promise<void>}
+   * @throws {Error} If no theaters or movies are found.
    */
   static async initMonth(month: number, year: number): Promise<void> {
     const theaters = await MovieTheaterModel.findAll();
@@ -48,10 +64,13 @@ export class InitDbService {
   /**
    * Add a full day's screenings in a specific hall for a specific movie.
    * Creates screenings every 3 hours from 10:00 to 22:00 (inclusive).
-   * @param theaterId
-   * @param hallId
-   * @param movieId
-   * @param date Date of the screenings (JS Date object)
+   * Removes any pre-existing screenings for the same hall and day.
+   *
+   * @param {string} theaterId - The ID of the theater.
+   * @param {string} hallId - The ID of the hall.
+   * @param {string} movieId - The ID of the movie.
+   * @param {Date} date - Date of the screenings (JS Date object).
+   * @returns {Promise<void>}
    */
   static async addDaySchedule(
     theaterId: string,
@@ -103,7 +122,6 @@ export class InitDbService {
         hallId,
         startTime: screeningTime,
         price: PRICES[i % PRICES.length],
-        quality: QUALITY_CHOICES[i % QUALITY_CHOICES.length],
         createdAt: new Date(),
         updatedAt: new Date(),
       });
@@ -113,7 +131,11 @@ export class InitDbService {
 }
 
 /**
- * Helper function: Returns the number of days in a month.
+ * Helper function: Returns the number of days in a given month and year.
+ *
+ * @param {number} month - Month (1-12).
+ * @param {number} year - Full year (e.g., 2025).
+ * @returns {number} Number of days in the month.
  */
 function daysInMonth(month: number, year: number): number {
   return new Date(year, month, 0).getDate();

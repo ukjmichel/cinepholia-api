@@ -63,19 +63,20 @@ export const login = async (
     const { userId, username, firstName, lastName, email } = plainUser;
 
     // Set the accessToken cookie (for API, httpOnly & sameSite are good defaults)
+    const isSecure = process.env.NODE_ENV === 'production';
+
     res.cookie('accessToken', tokens.accessToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: isSecure, // ✅ test env uses false
       sameSite: 'lax',
-      maxAge: 1000 * 60 * 60, // 1 hour
+      maxAge: 1000 * 60 * 60,
     });
 
-    // Set the refreshToken cookie
     res.cookie('refreshToken', tokens.refreshToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: isSecure,
       sameSite: 'lax',
-      maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
+      maxAge: 1000 * 60 * 60 * 24 * 7,
     });
 
     // Send user info (never include sensitive info)
@@ -113,7 +114,7 @@ export async function refreshToken(
       return next(new UnauthorizedError('Missing refresh token'));
     }
 
-    // ATTENTION: Use jwtRefreshSecret to verify the refresh token
+    // Verify the refresh token
     const payload = jwt.verify(token, config.jwtRefreshSecret) as any;
 
     // Get the user from DB
@@ -130,7 +131,7 @@ export async function refreshToken(
     const newAccessToken = jwt.sign(
       { userId: user.userId, role },
       config.jwtSecret,
-      { expiresIn: '1h' } // ← string ou number, pas d’erreur
+      { expiresIn: '1h' }
     );
 
     const newRefreshToken = jwt.sign(
@@ -139,25 +140,25 @@ export async function refreshToken(
       { expiresIn: '7d' }
     );
 
-    // Set the new access token cookie
+    // ✅ use the same secure flag logic as in login
+    const isSecure = process.env.NODE_ENV === 'production';
+
     res.cookie('accessToken', newAccessToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: isSecure,
       sameSite: 'lax',
-      maxAge: 1000 * 60 * 60, // 1 hour
+      maxAge: 1000 * 60 * 60,
     });
 
-    // Set the new refresh token cookie
     res.cookie('refreshToken', newRefreshToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: isSecure,
       sameSite: 'lax',
-      maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
+      maxAge: 1000 * 60 * 60 * 24 * 7,
     });
 
     res.status(200).json({ message: 'Token refreshed successfully' });
   } catch (error: unknown) {
-    // Only JWT errors should be mapped to Unauthorized
     if (
       error &&
       typeof error === 'object' &&

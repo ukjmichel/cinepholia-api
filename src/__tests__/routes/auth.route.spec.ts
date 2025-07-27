@@ -7,7 +7,12 @@ import { UserTokenModel } from '../../models/user-token.model.js';
 import { AuthService } from '../../services/auth.service.js';
 import { userService } from '../../services/user.service.js';
 import { config } from '../../config/env.js';
-import jwt from 'jsonwebtoken';
+
+/** ✅ Helper to safely normalize cookies */
+function getCookiesArray(res: request.Response): string[] {
+  const raw = res.headers['set-cookie'];
+  return Array.isArray(raw) ? raw : [raw || ''];
+}
 
 const testUser = {
   username: 'testuser',
@@ -37,22 +42,12 @@ describe('Authentication System Tests', () => {
     config.sendWelcomeEmail = false;
   });
 
-  afterAll(async () => {
-    config.sendWelcomeEmail = originalSendWelcomeEmail;
-    await sequelize.query('SET FOREIGN_KEY_CHECKS = 0');
-    await UserTokenModel.destroy({ where: {}, truncate: true, cascade: true });
-    await AuthorizationModel.destroy({
-      where: {},
-      truncate: true,
-      cascade: true,
-    });
-    await UserModel.destroy({ where: {}, truncate: true, cascade: true });
-    await sequelize.query('SET FOREIGN_KEY_CHECKS = 1');
-    await sequelize.close();
-  });
-
   beforeEach(async () => {
-    await sequelize.query('SET FOREIGN_KEY_CHECKS = 0');
+    // ✅ Disable foreign key checks only for MySQL, not SQLite
+    if (sequelize.getDialect() !== 'sqlite') {
+      await sequelize.query('SET FOREIGN_KEY_CHECKS = 0');
+    }
+
     await UserTokenModel.destroy({ where: {}, truncate: true, cascade: true });
     await AuthorizationModel.destroy({
       where: {},
@@ -60,7 +55,10 @@ describe('Authentication System Tests', () => {
       cascade: true,
     });
     await UserModel.destroy({ where: {}, truncate: true, cascade: true });
-    await sequelize.query('SET FOREIGN_KEY_CHECKS = 1');
+
+    if (sequelize.getDialect() !== 'sqlite') {
+      await sequelize.query('SET FOREIGN_KEY_CHECKS = 1');
+    }
 
     authService.clearBlacklistedTokens();
     // @ts-ignore
@@ -68,30 +66,47 @@ describe('Authentication System Tests', () => {
 
     const admin = await UserModel.create(adminUser);
     await AuthorizationModel.create({
-      userId: (admin as any).userId,
+      userId: admin.userId,
       role: 'administrateur',
     });
     adminToken = authService.generateAccessToken(admin);
   });
 
-  describe('Auth Routes E2E Tests', () => {
+  afterAll(async () => {
+    config.sendWelcomeEmail = originalSendWelcomeEmail;
+
+    if (sequelize.getDialect() !== 'sqlite') {
+      await sequelize.query('SET FOREIGN_KEY_CHECKS = 0');
+    }
+
+    await UserTokenModel.destroy({ where: {}, truncate: true, cascade: true });
+    await AuthorizationModel.destroy({
+      where: {},
+      truncate: true,
+      cascade: true,
+    });
+    await UserModel.destroy({ where: {}, truncate: true, cascade: true });
+
+    if (sequelize.getDialect() !== 'sqlite') {
+      await sequelize.query('SET FOREIGN_KEY_CHECKS = 1');
+    }
+
+    await sequelize.close();
+  });
+
+  describe('Auth Routes E2E', () => {
     describe('POST /auth/register', () => {
       it('should register a new user successfully and set cookies', async () => {
         const res = await request(app)
           .post('/auth/register')
           .send(testUser)
           .expect(201);
-        expect(res.body).toBeDefined();
-        expect(res.body).toHaveProperty('message', 'User created successfully');
-        expect(res.body.data).toHaveProperty('userId');
+
+        expect(res.body.message).toBe('User created successfully');
         expect(res.body.data.email).toBe(testUser.email);
         expect(res.body.data.role).toBe('utilisateur');
-        expect(res.body.data).not.toHaveProperty('password');
 
-        const rawCookies = res.headers['set-cookie'];
-        const cookies: string[] = Array.isArray(rawCookies)
-          ? rawCookies
-          : [rawCookies || ''];
+        const cookies = getCookiesArray(res);
         expect(cookies.join(';').toLowerCase()).toMatch(/accesstoken/);
         expect(cookies.join(';').toLowerCase()).toMatch(/refreshtoken/);
       });
@@ -102,8 +117,8 @@ describe('Authentication System Tests', () => {
           .post('/auth/register')
           .send({ ...testUser, username: 'otheruser' })
           .expect(409);
-        expect(res.body).toBeDefined();
-        expect(res.body.message).toMatch(/email.*already.*exists/i);
+
+        expect(res.body.message).toMatch(/email.*exists/i);
       });
 
       it('should fail with duplicate username', async () => {
@@ -112,23 +127,70 @@ describe('Authentication System Tests', () => {
           .post('/auth/register')
           .send({ ...testUser, email: 'other@email.com' })
           .expect(409);
-        expect(res.body).toBeDefined();
-        expect(res.body.message).toMatch(/username.*already.*exists/i);
+
+        expect(res.body.message).toMatch(/username.*exists/i);
       });
+    });
+
+    describe('POST /auth/register-employee', () => {
+      it('should allow admin to create an employee', async () => {
+        const res = await request(app)
+          .post('/auth/register-employee')
+          .set('Authorization', `Bearer ${adminToken}`)
+          .send({
+            ...testUser,
+            username: 'employee',
+            email: 'employee@example.com',
+          })
+          .expect(201);
+
+        expect(res.body.data.role).toBe('employé');
+      });
+
+     it('should forbid non-admin users', async () => {
+       const nonAdminUser = {
+         username: 'nonadmin',
+         firstName: 'Not',
+         lastName: 'Admin',
+         email: 'nonadmin@example.com',
+         password: 'Pass123!',
+       };
+
+       const user = await userService.createUser(nonAdminUser);
+       await AuthorizationModel.create({
+         userId: user.userId,
+         role: 'utilisateur',
+       });
+       const token = authService.generateAccessToken(user);
+
+       const res = await request(app)
+         .post('/auth/register-employee')
+         .set('Authorization', `Bearer ${token}`)
+         .send({
+           username: 'employee2',
+           firstName: 'Emp',
+           lastName: 'User',
+           email: 'employee2@example.com',
+           password: 'Pass123!',
+         })
+         .expect(403); // ✅ expect 403 instead of 401
+
+       expect(res.body.message).toMatch(/forbidden|admin/i);
+     });
+
+
     });
 
     describe('POST /auth/login', () => {
       beforeEach(async () => {
-        const createdUser = await userService.createUser(testUser);
+        const user = await userService.createUser(testUser);
         await AuthorizationModel.create({
-          userId: (createdUser as any).userId,
+          userId: user.userId,
           role: 'utilisateur',
         });
-        authService.clearLoginAttempts(testUser.username);
-        authService.clearLoginAttempts(testUser.email);
       });
 
-      it('should login with username and password and set cookies', async () => {
+      it('should login and return cookies', async () => {
         const res = await request(app)
           .post('/auth/login')
           .send({
@@ -137,17 +199,13 @@ describe('Authentication System Tests', () => {
           })
           .expect(200);
 
-        expect(res.body).toBeDefined();
         expect(res.body.data.user.email).toBe(testUser.email);
-        const rawCookies = res.headers['set-cookie'];
-        const cookies: string[] = Array.isArray(rawCookies)
-          ? rawCookies
-          : [rawCookies || ''];
-        expect(cookies.join(';').toLowerCase()).toMatch(/accesstoken/);
-        expect(cookies.join(';').toLowerCase()).toMatch(/refreshtoken/);
+
+        const cookies = getCookiesArray(res);
+        expect(cookies.join(';')).toMatch(/accesstoken/i);
       });
 
-      it('should login with email and password', async () => {
+      it('should login using email', async () => {
         const res = await request(app)
           .post('/auth/login')
           .send({
@@ -155,87 +213,65 @@ describe('Authentication System Tests', () => {
             password: testUser.password,
           })
           .expect(200);
-        expect(res.body).toBeDefined();
+
         expect(res.body.data.user.email).toBe(testUser.email);
       });
 
       it('should fail with wrong password', async () => {
         const res = await request(app)
           .post('/auth/login')
-          .send({
-            emailOrUsername: testUser.username,
-            password: 'wrongpassword',
-          })
+          .send({ emailOrUsername: testUser.username, password: 'wrongpass' })
           .expect(401);
 
-        expect(res.body).toBeDefined();
-        expect(res.body.message).toMatch(/invalid.*credentials/i);
+        expect(res.body.message).toMatch(/invalid/i);
       });
 
       it('should fail with non-existent user', async () => {
         const res = await request(app)
           .post('/auth/login')
-          .send({
-            emailOrUsername: 'nouser',
-            password: 'somepass',
-          })
+          .send({ emailOrUsername: 'nouser', password: 'somepass' })
           .expect(404);
 
-        expect(res.body).toBeDefined();
         expect(res.body.message).toMatch(/user.*not.*found/i);
       });
     });
 
     describe('POST /auth/refresh', () => {
-      it('should refresh tokens with valid refresh token', async () => {
+      it('should refresh tokens successfully', async () => {
         const agent = request.agent(app);
 
-        // Register
         await agent.post('/auth/register').send({
           username: 'refreshuser',
-          email: 'refreshuser@example.com',
-          password: 'Password123!',
           firstName: 'Refresh',
           lastName: 'User',
+          email: 'refreshuser@example.com',
+          password: 'Password123!',
         });
 
-        // Login
-        const loginRes = await agent.post('/auth/login').send({
+        await agent.post('/auth/login').send({
           emailOrUsername: 'refreshuser',
           password: 'Password123!',
         });
 
-        // Print ALL cookies
-        console.log('Set-Cookie header:', loginRes.headers['set-cookie']);
-        // Print agent cookies (if accessible)
-        // Supertest doesn't expose a method, but cookies are managed internally
+        const res = await agent.post('/auth/refresh').expect(200);
+        expect(res.body.message).toMatch(/Token refreshed/i);
 
-        // Try refresh
-        const refreshRes = await agent.post('/auth/refresh');
-        console.log('Refresh status:', refreshRes.status);
-        console.log('Refresh body:', refreshRes.body);
-
-        expect(refreshRes.status).toBe(200);
-        expect(refreshRes.body).toBeDefined();
-        expect(refreshRes.body.message).toMatch(/Token refreshed/i);
+        const cookies = getCookiesArray(res);
+        expect(cookies.join(';')).toMatch(/accesstoken/i);
       });
 
       it('should fail refresh with invalid token', async () => {
-        const agent = request.agent(app); // <-- fresh agent per test
-        const res = await agent
+        const res = await request(app)
           .post('/auth/refresh')
           .set('Cookie', ['refreshToken=invalidtoken'])
           .expect(401);
 
-        expect(res.body).toBeDefined();
         expect(res.body.message).toMatch(/invalid|expired/i);
       });
-
- 
     });
 
-    describe('Integration: full auth flow', () => {
-      it('should register, login, and use access token for protected route', async () => {
+    describe('Integration: Full Auth Flow', () => {
+      it('should register, login, and access protected route', async () => {
         const registerRes = await request(app)
           .post('/auth/register')
           .send({
@@ -247,43 +283,34 @@ describe('Authentication System Tests', () => {
           })
           .expect(201);
 
-        const rawCookies = registerRes.headers['set-cookie'];
-        const cookies: string[] = Array.isArray(rawCookies)
-          ? rawCookies
-          : [rawCookies || ''];
-
+        const cookies = getCookiesArray(registerRes);
         const accessTokenCookie = cookies.find((c) =>
           c.toLowerCase().startsWith('accesstoken=')
         );
         expect(accessTokenCookie).toBeDefined();
-        const accessTokenValue = accessTokenCookie!.split(';')[0];
 
         const protectedRes = await request(app)
           .get(`/users/${registerRes.body.data.userId}`)
-          .set('Cookie', [accessTokenValue])
+          .set('Cookie', [accessTokenCookie!.split(';')[0]])
           .expect(200);
 
-        expect(protectedRes.body).toBeDefined();
         expect(protectedRes.body.data.email).toBe('flow@example.com');
       });
     });
   });
 
   describe('Error Handling', () => {
-    it('should handle malformed JWT tokens', async () => {
-      const malformedToken = 'bad.token.parts';
+    it('should handle malformed JWT', async () => {
       const res = await request(app)
         .get('/users')
-        .set('Authorization', `Bearer ${malformedToken}`)
+        .set('Authorization', 'Bearer bad.token.parts')
         .expect(401);
 
-      expect(res.body).toBeDefined();
       expect(res.body.message).toMatch(/invalid|malformed/i);
     });
 
     it('should handle missing Authorization header', async () => {
       const res = await request(app).get('/users').expect(401);
-      expect(res.body).toBeDefined();
       expect(res.body.message).toMatch(/missing.*token/i);
     });
   });

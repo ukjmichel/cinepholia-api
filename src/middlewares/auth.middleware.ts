@@ -5,6 +5,7 @@ import jwt from 'jsonwebtoken';
 import { config } from '../config/env.js';
 import { NotFoundError } from '../errors/not-found-error.js';
 import { UserService } from '../services/user.service.js';
+import { authService } from '../services/auth.service.js'; // ✅ add this for blacklist check
 
 const authorizationService = new AuthorizationService();
 const userService = new UserService();
@@ -14,7 +15,7 @@ declare global {
   namespace Express {
     interface Request {
       user?: import('../models/user.model.js').UserModel;
-      userRole?: string; // Or: Role
+      userRole?: string;
       userJwtPayload?: import('../services/auth.service.js').AccessTokenPayload;
     }
   }
@@ -25,7 +26,6 @@ export async function decodeJwtToken(
   res: Response,
   next: NextFunction
 ) {
-  // Try to get token from cookie first, then from Authorization header
   let token = req.cookies?.accessToken;
 
   if (!token && req.headers.authorization) {
@@ -40,6 +40,14 @@ export async function decodeJwtToken(
   }
 
   try {
+    // ✅ Check if token is blacklisted
+    const isBlacklisted = await authService.isTokenBlacklisted(token);
+    if (isBlacklisted) {
+      return next(
+        new UnauthorizedError('Token has been revoked or blacklisted')
+      );
+    }
+
     const payload = jwt.verify(token, JWT_SECRET) as any;
     req.userJwtPayload = payload;
 
@@ -50,7 +58,7 @@ export async function decodeJwtToken(
     const auth = await authorizationService.getAuthorizationByUserId(
       user.userId
     );
-    req.userRole = auth.role;
+    req.userRole = auth?.role;
 
     next();
   } catch (err) {

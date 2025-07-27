@@ -114,12 +114,29 @@ router.get(
  *         schema:
  *           type: string
  *         description: Hall ID filter
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *         description: Max number of results
+ *       - in: query
+ *         name: offset
+ *         schema:
+ *           type: integer
+ *         description: Number of results to skip
  *     responses:
  *       200:
  *         description: List of halls matching the filters
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/MovieHall'
  *       400:
  *         description: Validation error
  */
+
 router.get(
   '/search',
   searchMovieHallValidator,

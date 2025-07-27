@@ -1,25 +1,53 @@
 /**
- * Contrôleur pour la gestion des films (Movies).
+ * @module controllers/movies.controller
  *
- * Fournit les handlers Express pour toutes les opérations CRUD sur les films :
- * création (avec ou sans image), mise à jour, récupération (par ID ou tous),
- * suppression et recherche filtrée. Délègue toute la logique métier à movieService
- * et gère le formatage des réponses HTTP ainsi que la gestion des erreurs.
+ * @description
+ * Controller for managing movies.
  *
- * Toutes les erreurs sont transmises au middleware Express suivant.
+ * This controller provides Express handlers for:
+ * - Creating, updating, deleting, and retrieving movies.
+ * - Listing all movies, upcoming movies, and movies by theater.
+ * - Searching for movies using filters.
+ *
+ * Each response is enriched with the average `rating` field
+ * retrieved from booking comments.
+ *
+ * Business logic is delegated to `movieService`, and ratings
+ * are fetched from `bookingCommentService`.
+ *
+ * @since 2025
  */
 
 import { Request, Response, NextFunction } from 'express';
 import { movieService } from '../services/movie.service.js';
+import { bookingCommentService } from '../services/booking-comment.service.js';
 
 /**
- * Met à jour un film existant par son identifiant.
- * Accepte les champs à modifier dans le body, ainsi qu'un fichier d'image en option.
+ * Converts a Sequelize movie instance to a plain object and adds its average rating.
+ * @param {any} movie - Sequelize movie instance or plain object.
+ * @returns {Promise<any>} Movie object with the `rating` field.
+ */
+async function enrichMovieWithRating(movie: any) {
+  if (!movie) return null;
+  const plain = movie.get ? movie.get({ plain: true }) : movie;
+  const avgRating = await bookingCommentService.getAverageRatingForMovie(
+    plain.movieId
+  );
+  return { ...plain, rating: avgRating };
+}
+
+/**
+ * Converts an array of Sequelize movies to plain objects and adds ratings.
+ * @param {any[]} movies - Array of Sequelize movies.
+ * @returns {Promise<any[]>} Array of movie objects with `rating`.
+ */
+async function enrichMoviesWithRatings(movies: any[]) {
+  return Promise.all(movies.map((m) => enrichMovieWithRating(m)));
+}
+
+/**
+ * Updates an existing movie and returns it with the `rating` field.
  * @route PUT /movies/:movieId
- * @param {Request} req - Requête Express (params: movieId, body: champs à modifier, file: image)
- * @param {Response} res - Réponse Express
- * @param {NextFunction} next - Middleware Express suivant
- * @returns {Promise<void>} Répond avec le film mis à jour ou une erreur.
  */
 export async function updateMovie(
   req: Request,
@@ -32,19 +60,16 @@ export async function updateMovie(
       req.body,
       req.file
     );
-    res.json({ message: 'Movie updated successfully', data: movie });
+    const enriched = await enrichMovieWithRating(movie);
+    res.json({ message: 'Movie updated successfully', data: enriched });
   } catch (error) {
     next(error);
   }
 }
 
 /**
- * Crée un nouveau film (avec ou sans image d'affiche).
+ * Creates a new movie (with optional poster) and returns it with the `rating` field.
  * @route POST /movies
- * @param {Request} req - Requête Express (body: données du film, file: image en option)
- * @param {Response} res - Réponse Express
- * @param {NextFunction} next - Middleware Express suivant
- * @returns {Promise<void>} Répond avec le film créé.
  */
 export async function createMovie(
   req: Request,
@@ -53,21 +78,18 @@ export async function createMovie(
 ) {
   try {
     const movie = await movieService.createMovie(req.body, req.file);
+    const enriched = await enrichMovieWithRating(movie);
     res
       .status(201)
-      .json({ message: 'Movie created successfully', data: movie });
+      .json({ message: 'Movie created successfully', data: enriched });
   } catch (error) {
     next(error);
   }
 }
 
 /**
- * Récupère un film par son identifiant unique.
+ * Retrieves a movie by its ID and includes the `rating` field.
  * @route GET /movies/:movieId
- * @param {Request} req - Requête Express (params: movieId)
- * @param {Response} res - Réponse Express
- * @param {NextFunction} next - Middleware Express suivant
- * @returns {Promise<void>} Répond avec le film ou une erreur.
  */
 export async function getMovieById(
   req: Request,
@@ -76,19 +98,16 @@ export async function getMovieById(
 ) {
   try {
     const movie = await movieService.getMovieById(req.params.movieId);
-    res.json({ message: 'Movie fetched successfully', data: movie });
+    const enriched = await enrichMovieWithRating(movie);
+    res.json({ message: 'Movie fetched successfully', data: enriched });
   } catch (error) {
     next(error);
   }
 }
 
 /**
- * Supprime un film par son identifiant.
+ * Deletes a movie by its ID.
  * @route DELETE /movies/:movieId
- * @param {Request} req - Requête Express (params: movieId)
- * @param {Response} res - Réponse Express
- * @param {NextFunction} next - Middleware Express suivant
- * @returns {Promise<void>} Répond avec un message de suppression.
  */
 export async function deleteMovie(
   req: Request,
@@ -104,12 +123,8 @@ export async function deleteMovie(
 }
 
 /**
- * Récupère la liste de tous les films.
+ * Retrieves all movies with their ratings.
  * @route GET /movies
- * @param {Request} req - Requête Express
- * @param {Response} res - Réponse Express
- * @param {NextFunction} next - Middleware Express suivant
- * @returns {Promise<void>} Répond avec la liste des films.
  */
 export async function getAllMovies(
   req: Request,
@@ -118,23 +133,16 @@ export async function getAllMovies(
 ) {
   try {
     const movies = await movieService.getAllMovies();
-    res.json({
-      message: 'Movies fetched successfully',
-      data: movies,
-    });
+    const enriched = await enrichMoviesWithRatings(movies);
+    res.json({ message: 'Movies fetched successfully', data: enriched });
   } catch (error) {
     next(error);
   }
 }
 
 /**
- * Recherche de films par filtres multiples (titre, réalisateur, genre, etc.).
- * Tous les paramètres de req.query sont optionnels.
+ * Searches for movies using query filters and includes ratings.
  * @route GET /movies/search
- * @param {Request} req - Requête Express (query: filtres de recherche)
- * @param {Response} res - Réponse Express
- * @param {NextFunction} next - Middleware Express suivant
- * @returns {Promise<void>} Répond avec la liste des films correspondants.
  */
 export async function searchMovie(
   req: Request,
@@ -144,23 +152,16 @@ export async function searchMovie(
   try {
     const filters = req.query;
     const movies = await movieService.searchMovie(filters);
-    res.json({ message: 'Movies search completed', data: movies });
+    const enriched = await enrichMoviesWithRatings(movies);
+    res.json({ message: 'Movies search completed', data: enriched });
   } catch (error) {
     next(error);
   }
 }
 
 /**
- * Récupère la liste des films à venir (dont la date de sortie est future).
+ * Retrieves all upcoming movies (future release dates) with ratings.
  * @route GET /movies/upcoming
- * @param {Request} req - Requête Express
- * @param {Response} res - Réponse Express
- * @param {NextFunction} next - Middleware Express suivant
- * @returns {Promise<void>} Répond avec la liste des films à venir.
- *
- * @example
- * // GET /movies/upcoming
- * // Réponse : { message: 'Upcoming movies fetched successfully', data: [...] }
  */
 export async function getUpcomingMovies(
   req: Request,
@@ -169,9 +170,10 @@ export async function getUpcomingMovies(
 ) {
   try {
     const movies = await movieService.getUpcomingMovies();
+    const enriched = await enrichMoviesWithRatings(movies);
     res.json({
       message: 'Upcoming movies fetched successfully',
-      data: movies,
+      data: enriched,
     });
   } catch (error) {
     next(error);
@@ -179,17 +181,8 @@ export async function getUpcomingMovies(
 }
 
 /**
- * Récupère la liste des films diffusés dans un cinéma donné (par theaterId).
- * Un film est considéré "diffusé" s'il existe au moins une séance (screening) dans ce cinéma.
+ * Retrieves all movies shown in a specific theater with ratings.
  * @route GET /theaters/:theaterId/movies
- * @param {Request} req - Requête Express (params: theaterId)
- * @param {Response} res - Réponse Express
- * @param {NextFunction} next - Middleware Express suivant
- * @returns {Promise<void>} Répond avec la liste des films diffusés dans le cinéma.
- *
- * @example
- * // GET /theaters/abc123/movies
- * // Réponse : { message: 'Movies by theater fetched successfully', data: [...] }
  */
 export async function getMoviesByTheater(
   req: Request,
@@ -197,11 +190,11 @@ export async function getMoviesByTheater(
   next: NextFunction
 ) {
   try {
-    const { theaterId } = req.params;
-    const movies = await movieService.getMoviesByTheater(theaterId);
+    const movies = await movieService.getMoviesByTheater(req.params.theaterId);
+    const enriched = await enrichMoviesWithRatings(movies);
     res.json({
       message: 'Movies by theater fetched successfully',
-      data: movies,
+      data: enriched,
     });
   } catch (error) {
     next(error);

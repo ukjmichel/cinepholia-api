@@ -87,7 +87,10 @@ describe('BookingCommentService (unit)', () => {
 
     it('throws ConflictError if comment already exists', async () => {
       (BookingModel.findOne as jest.Mock).mockResolvedValue({ status: 'used' });
-      (BookingCommentModel.exists as jest.Mock).mockResolvedValue(true);
+      (BookingCommentModel.create as jest.Mock).mockRejectedValue({
+        code: 11000,
+      });
+
       await expect(
         bookingCommentService.createComment(mockComment)
       ).rejects.toThrow(ConflictError);
@@ -285,9 +288,10 @@ describe('BookingCommentService (unit)', () => {
       (BookingModel.findAll as jest.Mock).mockResolvedValue([
         { bookingId: 'B1' },
       ]);
-      (BookingCommentModel.find as jest.Mock).mockReturnValue({
-        lean: jest.fn().mockResolvedValue([{ rating: 4 }, { rating: 5 }]),
-      });
+      (BookingCommentModel.aggregate as jest.Mock).mockResolvedValue([
+        { avgRating: 4.5 },
+      ]);
+
       const avg = await bookingCommentService.getAverageRatingForMovie('M1');
       expect(avg).toBe(4.5);
     });
@@ -314,9 +318,8 @@ describe('BookingCommentService (unit)', () => {
       (BookingModel.findAll as jest.Mock).mockResolvedValue([
         { bookingId: 'B1' },
       ]);
-      (BookingCommentModel.find as jest.Mock).mockReturnValue({
-        lean: jest.fn().mockResolvedValue([]),
-      });
+      (BookingCommentModel.aggregate as jest.Mock).mockResolvedValue([]);
+
       const avg = await bookingCommentService.getAverageRatingForMovie('M1');
       expect(avg).toBeNull();
     });

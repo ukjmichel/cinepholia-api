@@ -1,17 +1,14 @@
 /**
  * Booking comments management service.
  *
- * This service allows creating, reading, updating, deleting, and searching for comments
- * associated with bookings, with filtering by status or by movie, and conflict management.
- * It is also possible to confirm a comment and perform a text search.
+ * This service provides operations to create, read, update, delete, and search comments
+ * linked to bookings. It also supports filtering by status, movie, user, and text search.
+ * Business rules such as preventing duplicate comments and restricting comments to used bookings
+ * are enforced. Additionally, it can confirm comments and calculate average ratings for movies.
  *
- * Main features:
- * - Creation of comments linked to a booking
- * - Updating or deleting existing comments
- * - Confirmation of comments (status change)
- * - Retrieval of all comments or filtered by status/movie
- * - Text search within comments
- * - Management of business errors (404, conflict)
+ * Integrates:
+ *  - MongoDB (Mongoose) for comment storage
+ *  - Sequelize (SQL) for bookings and screenings lookup
  *
  * @module services/booking-comment.service
  * @since 2024
@@ -23,15 +20,11 @@ import {
 } from '../models/booking-comment.schema.js';
 import { NotFoundError } from '../errors/not-found-error.js';
 import { ConflictError } from '../errors/conflict-error.js';
-import mongoose from 'mongoose';
 import { BookingModel } from '../models/booking.model.js';
 import { ScreeningModel } from '../models/screening.model.js';
-import { Op } from 'sequelize';
 import { MovieModel } from '../models/movie.model.js';
+import { Op } from 'sequelize';
 
-/**
- * Advanced search filters for booking comments.
- */
 export interface BookingCommentFilter {
   comment?: string;
   status?: 'pending' | 'confirmed';
@@ -42,59 +35,58 @@ export interface BookingCommentFilter {
 }
 
 /**
- * Service class for operations on booking comments.
+ * Service class responsible for all booking comment operations.
  */
 export class BookingCommentService {
   /**
-   * Retrieves a comment based on the booking ID.
-   * @param bookingId Booking identifier.
-   * @returns Promise resolving to the found comment.
-   * @throws NotFoundError If no comment is found.
+   * Retrieves a comment by its booking ID.
+   * @param bookingId - UUID of the booking.
+   * @returns The found comment.
+   * @throws NotFoundError If no comment is found for the given booking ID.
    */
   async getCommentByBookingId(bookingId: string): Promise<BookingComment> {
     const comment = await BookingCommentModel.findOne({ bookingId }).lean();
-    if (!comment)
+    if (!comment) {
       throw new NotFoundError(`No comment found for bookingId ${bookingId}`);
+    }
     return comment;
   }
 
   /**
-   * Creates a new comment for a booking, only if the booking is used.
-   * @param data Comment data.
-   * @returns Promise resolving to the created comment.
-   * @throws ConflictError If a comment already exists for this booking.
-   * @throws NotFoundError If the booking does not exist or is not used.
+   * Creates a new comment for a booking if the booking is used and no comment exists yet.
+   * @param data - The comment data to create.
+   * @returns The created comment.
+   * @throws NotFoundError If the booking does not exist.
+   * @throws ConflictError If the booking is not used or a comment already exists.
    */
   async createComment(data: BookingComment): Promise<BookingComment> {
-    // Check if the booking exists and has status 'used'
     const booking = (await BookingModel.findOne({
       where: { bookingId: data.bookingId },
     })) as { status: string } | null;
-    if (!booking) {
-      throw new NotFoundError(`Booking with id ${data.bookingId} not found`);
-    }
-    if (booking.status !== 'used') {
-      throw new ConflictError('You can only comment on used bookings');
-    }
 
-    // Check for existing comment
-    const exists = await BookingCommentModel.exists({
-      bookingId: data.bookingId,
-    });
-    if (exists) {
-      throw new ConflictError(
-        `Comment already exists for bookingId ${data.bookingId}`
-      );
+    if (!booking)
+      throw new NotFoundError(`Booking with id ${data.bookingId} not found`);
+    if (booking.status !== 'used')
+      throw new ConflictError('You can only comment on used bookings');
+
+    try {
+      const created = await BookingCommentModel.create(data);
+      return created.toObject();
+    } catch (err: any) {
+      if (err.code === 11000) {
+        throw new ConflictError(
+          `Comment already exists for bookingId ${data.bookingId}`
+        );
+      }
+      throw err;
     }
-    const created = await BookingCommentModel.create(data);
-    return created.toObject();
   }
 
   /**
-   * Updates an existing comment via its booking ID.
-   * @param bookingId Booking identifier.
-   * @param updateData Data to update.
-   * @returns Promise resolving to the updated comment.
+   * Updates an existing comment by booking ID.
+   * @param bookingId - UUID of the booking.
+   * @param updateData - Partial comment data to update.
+   * @returns The updated comment.
    * @throws NotFoundError If no comment is found.
    */
   async updateComment(
@@ -106,6 +98,7 @@ export class BookingCommentService {
       updateData,
       { new: true }
     ).lean();
+
     if (!updated)
       throw new NotFoundError(`No comment found for bookingId ${bookingId}`);
     return updated;
@@ -113,29 +106,29 @@ export class BookingCommentService {
 
   /**
    * Deletes a comment by booking ID.
-   * @param bookingId Booking identifier.
-   * @returns Promise<void>
+   * @param bookingId - UUID of the booking.
    * @throws NotFoundError If no comment is found.
    */
   async deleteComment(bookingId: string): Promise<void> {
     const result = await BookingCommentModel.deleteOne({ bookingId });
-    if (result.deletedCount === 0)
+    if (result.deletedCount === 0) {
       throw new NotFoundError(`No comment found for bookingId ${bookingId}`);
+    }
   }
 
   /**
-   * Retrieves all existing comments, sorted by creation date (newest to oldest).
-   * @returns Promise resolving to a list of all comments.
+   * Retrieves all comments sorted by creation date (newest first).
+   * @returns A list of comments.
    */
   async getAllComments(): Promise<BookingComment[]> {
     return BookingCommentModel.find().sort({ createdAt: -1 }).lean();
   }
 
   /**
-   * Retrieves all comments related to a movie.
-   * First, it finds the bookings associated with the movie.
-   * @param movieId Movie identifier.
-   * @returns Promise resolving to a list of comments related to this movie.
+   * Retrieves all comments linked to a specific movie.
+   * Uses SQL queries to get screenings and bookings, then fetches Mongo comments.
+   * @param movieId - UUID of the movie.
+   * @returns A list of comments for the movie.
    */
   async getCommentsByMovie(movieId: string): Promise<BookingComment[]> {
     const screenings = await ScreeningModel.findAll({
@@ -154,17 +147,15 @@ export class BookingCommentService {
     const bookingIds = bookings.map((b) => b.bookingId);
     if (!bookingIds.length) return [];
 
-    return BookingCommentModel.find({
-      bookingId: { $in: bookingIds },
-    })
+    return BookingCommentModel.find({ bookingId: { $in: bookingIds } })
       .sort({ createdAt: -1 })
       .lean();
   }
 
   /**
-   * Retrieves all comments with a given status ('pending' or 'confirmed').
-   * @param status The comment status to filter by.
-   * @returns Promise resolving to a list of matching comments.
+   * Retrieves comments filtered by status.
+   * @param status - The status to filter ('pending' or 'confirmed').
+   * @returns A list of comments.
    */
   async getCommentsByStatus(
     status: 'pending' | 'confirmed'
@@ -173,54 +164,38 @@ export class BookingCommentService {
   }
 
   /**
-   * Retrieves all comments made by a specific user, including related movie title and movieId.
-   * @param userId The user identifier.
-   * @returns Promise resolving to a list of comments with movie information.
+   * Retrieves all comments submitted by a user, enriched with related movie information.
+   * @param userId - UUID of the user.
+   * @returns A list of comments with additional movie data.
    */
   async getCommentsByUser(userId: string): Promise<any[]> {
-    // Step 1: Find all bookings for this user
     const bookings = await BookingModel.findAll({
       where: { userId },
       attributes: ['bookingId', 'screeningId'],
       raw: true,
     });
-
     if (!bookings.length) return [];
 
-    // Step 2: Map bookingId to screeningId
-    const bookingMap = new Map<string, string>();
-    for (const booking of bookings) {
-      bookingMap.set(booking.bookingId, booking.screeningId);
-    }
-
+    const bookingMap = new Map(
+      bookings.map((b) => [b.bookingId, b.screeningId])
+    );
     const bookingIds = [...bookingMap.keys()];
 
-    // Step 3: Find all comments for these bookings
     const comments = await BookingCommentModel.find({
       bookingId: { $in: bookingIds },
     })
       .sort({ createdAt: -1 })
       .lean();
-
     if (!comments.length) return [];
 
-    // Step 4: Get all screeningIds from the bookings
     const screeningIds = [...new Set(bookings.map((b) => b.screeningId))];
-
-    // Step 5: Fetch screenings and populate movies
     const screenings = await ScreeningModel.findAll({
       where: { screeningId: screeningIds },
-      include: [
-        {
-          model: MovieModel,
-          attributes: ['movieId', 'title'],
-        },
-      ],
+      include: [{ model: MovieModel, attributes: ['movieId', 'title'] }],
       raw: true,
       nest: true,
     });
 
-    // Step 6: Create a map of screeningId to movie info
     const screeningToMovieMap = new Map<
       string,
       { movieId: string; title: string }
@@ -234,27 +209,23 @@ export class BookingCommentService {
       }
     }
 
-    // Step 7: Combine comment with movie info
-    const enrichedComments = comments.map((comment) => {
+    return comments.map((comment) => {
       const screeningId = bookingMap.get(comment.bookingId);
       const movie = screeningToMovieMap.get(screeningId || '');
-
       return {
         ...comment,
         movieId: movie?.movieId || null,
         movieTitle: movie?.title || null,
       };
     });
-
-    return enrichedComments;
   }
 
   /**
-   * Performs an advanced search for booking comments: full-text and/or filters.
-   * Possible filters: status, rating, bookingId, movieId, createdAt, and free-text search in comment.
-   * @param q Free-text to search in comments.
-   * @param filters Advanced field filters.
-   * @returns Promise resolving to a list of matching comments.
+   * Performs an advanced search for comments using text search and field filters.
+   * Supports filtering by status, rating, booking, movie, creation date, and text query.
+   * @param q - Optional free-text search in the comment.
+   * @param filters - Optional structured filters.
+   * @returns A list of matching comments.
    */
   async searchComments(
     q?: string,
@@ -269,7 +240,6 @@ export class BookingCommentService {
       if (filters.createdAt) mongoFilter.createdAt = filters.createdAt;
 
       if (filters.movieId) {
-        // Find all screenings for the movie
         const screenings = await ScreeningModel.findAll({
           where: { movieId: filters.movieId },
           attributes: ['screeningId'],
@@ -278,33 +248,27 @@ export class BookingCommentService {
         const screeningIds = screenings.map((s) => s.screeningId);
         if (!screeningIds.length) return [];
 
-        // Find all bookings for those screenings
         const bookings = await BookingModel.findAll({
           where: { screeningId: { [Op.in]: screeningIds } },
           attributes: ['bookingId'],
           raw: true,
         });
         const bookingIds = bookings.map((b) => b.bookingId);
-        if (bookingIds.length) {
-          mongoFilter.bookingId = { $in: bookingIds };
-        } else {
-          return [];
-        }
+        if (bookingIds.length) mongoFilter.bookingId = { $in: bookingIds };
+        else return [];
       }
     }
 
-    if (q) {
-      mongoFilter.comment = { $regex: q, $options: 'i' };
-    }
+    if (q) mongoFilter.comment = { $regex: q, $options: 'i' };
 
     return BookingCommentModel.find(mongoFilter).sort({ createdAt: -1 }).lean();
   }
 
   /**
-   * Confirms a comment by updating its status to "confirmed".
-   * @param bookingId Booking identifier.
-   * @returns Promise resolving to the confirmed comment.
-   * @throws NotFoundError If no comment is found for the given bookingId.
+   * Confirms a comment by setting its status to 'confirmed'.
+   * @param bookingId - UUID of the booking.
+   * @returns The updated comment.
+   * @throws NotFoundError If no comment is found.
    */
   async confirmComment(bookingId: string): Promise<BookingComment> {
     const updated = await BookingCommentModel.findOneAndUpdate(
@@ -318,12 +282,12 @@ export class BookingCommentService {
   }
 
   /**
-   * Calculates the average rating (notation) for a given movie.
-   * @param movieId The movie identifier.
-   * @returns Promise resolving to the average rating, or null if no ratings found.
+   * Calculates the average rating for a given movie using MongoDB aggregation.
+   * Only confirmed comments are considered.
+   * @param movieId - UUID of the movie.
+   * @returns The average rating rounded to 2 decimals, or null if no ratings are found.
    */
   async getAverageRatingForMovie(movieId: string): Promise<number | null> {
-    // 1. Find all screenings for this movie (SQL)
     const screenings = await ScreeningModel.findAll({
       where: { movieId },
       attributes: ['screeningId'],
@@ -332,7 +296,6 @@ export class BookingCommentService {
     const screeningIds = screenings.map((s) => s.screeningId);
     if (!screeningIds.length) return null;
 
-    // 2. Find all bookings for these screenings (SQL)
     const bookings = await BookingModel.findAll({
       where: { screeningId: { [Op.in]: screeningIds } },
       attributes: ['bookingId'],
@@ -341,22 +304,12 @@ export class BookingCommentService {
     const bookingIds = bookings.map((b) => b.bookingId);
     if (!bookingIds.length) return null;
 
-    // 3. Find all comments for these bookings (MongoDB)
-    const comments = await BookingCommentModel.find({
-      bookingId: { $in: bookingIds },
-      status: 'confirmed', // Only confirmed ratings
-    }).lean();
+    const result = await BookingCommentModel.aggregate([
+      { $match: { bookingId: { $in: bookingIds }, status: 'confirmed' } },
+      { $group: { _id: null, avgRating: { $avg: '$rating' } } },
+    ]);
 
-    if (!comments.length) return null;
-
-    // 4. Compute the average rating
-    const sum = comments.reduce(
-      (acc, comment) => acc + (comment.rating ?? 0),
-      0
-    );
-    const avg = sum / comments.length;
-
-    return Number(avg.toFixed(2)); // rounded to 2 decimals
+    return result.length ? Number(result[0].avgRating.toFixed(2)) : null;
   }
 }
 

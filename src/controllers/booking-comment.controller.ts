@@ -2,27 +2,76 @@
  * @module controllers/booking-comment.controller
  *
  * @description
- * Handles CRUD operations for booking comments:
- * - Create, read, update, and delete comments related to bookings.
- * - Search for comments by status, movie, or full-text.
- * - Confirm comments.
+ * Handles all booking comment endpoints with:
+ * - **CRUD operations** (create, read, update, delete)
+ * - **Search and filtering** by status, movie, or text query
+ * - **Confirmation workflow** (approve pending comments)
+ * - **Average movie rating** retrieval
+ * - ✅ **Security:** Sanitizes user input to prevent XSS attacks (via DOMPurify + jsdom)
  *
- * Dependencies:
- * - bookingCommentService: business logic for comment management.
- * - NotFoundError, BadRequestError: explicit error handling.
+ * ## Response Structure
+ * All endpoints return JSON with the format:
+ * ```json
+ * {
+ *   "message": "Description of response",
+ *   "data": { ... } | [ ... ]
+ * }
+ * ```
  *
- * Each Express handler follows RESTful conventions: status codes, messages, and consistent response structure.
- *
+ * ## Security
+ * - **XSS Prevention:** User comments are cleaned server-side with DOMPurify.
+ * - **Input Validation:** Status, IDs, and query parameters are checked before use.
  */
 
 import { Request, Response, NextFunction } from 'express';
 import { bookingCommentService } from '../services/booking-comment.service.js';
-import { NotFoundError } from '../errors/not-found-error.js';
 import { BadRequestError } from '../errors/bad-request-error.js';
 import { BookingComment } from '../models/booking-comment.schema.js';
 import { UserModel } from '../models/user.model.js';
 import { BookingModel } from '../models/booking.model.js';
+import createDOMPurify, { DOMPurify } from 'dompurify';
+import { JSDOM } from 'jsdom';
 
+// ✅ DOMPurify instance for sanitizing comments
+// Create a jsdom window (server-side DOM)
+const { window } = new JSDOM('');
+const DOMPurifyInstance = createDOMPurify(window as any);
+
+/**
+ * Sanitize a comment to prevent XSS.
+ * Strips all tags and attributes.
+ *
+ * @param input - The user-provided comment
+ * @returns A safe, sanitized string
+ */
+export function sanitizeComment(input: string): string {
+  return DOMPurifyInstance.sanitize(input, {
+    ALLOWED_TAGS: [],
+    ALLOWED_ATTR: [],
+  });
+}
+
+/**
+ * ✅ Formats a raw comment by adding user details from the SQL database.
+ *
+ * @async
+ * @param {BookingComment} comment - Comment document retrieved from MongoDB.
+ * @returns {Promise<object>} Comment with embedded `user` object, or `null` if user not found.
+ *
+ * @example
+ * ```json
+ * {
+ *   "_id": "123",
+ *   "comment": "Nice!",
+ *   "rating": 4,
+ *   "user": {
+ *     "userId": "u1",
+ *     "username": "john",
+ *     "email": "john@mail.com"
+ *   }
+ * }
+ * ```
+ */
 export const formatCommentResponse = async (comment: BookingComment) => {
   const booking = await BookingModel.findOne({
     where: { bookingId: comment.bookingId },
@@ -43,24 +92,17 @@ export const formatCommentResponse = async (comment: BookingComment) => {
   };
 };
 
-/**
- * Retrieve all comments, sorted by creation date (newest first).
- *
- * @function getAllComments
- * @param {Request} req - Express request object.
- * @param {Response} res - Express response object.
- * @param {NextFunction} next - Express next middleware.
- * @returns {Promise<void>} JSON response with all comments.
- */
+/* --------------------------------------------------------------------------
+   ✅ CRUD HANDLERS
+   -------------------------------------------------------------------------- */
 
 /**
- * Retrieve all comments, sorted by creation date (newest first).
+ * **GET /comments**
  *
- * @function getAllComments
- * @param {Request} req - Express request object.
- * @param {Response} res - Express response object.
- * @param {NextFunction} next - Express next middleware.
- * @returns {Promise<void>} JSON response with all comments.
+ * Retrieve all comments, sorted by creation date.
+ *
+ * @route GET /comments
+ * @returns {Promise<Response>} `200 OK` with all comments.
  */
 export async function getAllComments(
   req: Request,
@@ -69,23 +111,21 @@ export async function getAllComments(
 ) {
   try {
     const comments = await bookingCommentService.getAllComments();
-    const formattedComments = await Promise.all(
-      comments.map((comment) => formatCommentResponse(comment))
-    );
-    res.json({ message: 'All comments', data: formattedComments });
+    const formatted = await Promise.all(comments.map(formatCommentResponse));
+    res.json({ message: 'All comments', data: formatted });
   } catch (error) {
     next(error);
   }
 }
 
 /**
+ * **GET /movies/:movieId/comments**
+ *
  * Retrieve all comments for a specific movie.
  *
- * @function getCommentsByMovie
- * @param {Request<{ movieId: string }>} req - Express request object with movieId param.
- * @param {Response} res - Express response object.
- * @param {NextFunction} next - Express next middleware.
- * @returns {Promise<void>} JSON response with comments for the movie.
+ * @route GET /movies/:movieId/comments
+ * @param {string} req.params.movieId - UUID of the movie.
+ * @returns {Promise<Response>} `200 OK` with an array of comments.
  */
 export async function getCommentsByMovie(
   req: Request<{ movieId: string }>,
@@ -93,25 +133,25 @@ export async function getCommentsByMovie(
   next: NextFunction
 ) {
   try {
-    const { movieId } = req.params;
-    const comments = await bookingCommentService.getCommentsByMovie(movieId);
-    const formattedComments = await Promise.all(
-      comments.map((comment) => formatCommentResponse(comment))
+    const comments = await bookingCommentService.getCommentsByMovie(
+      req.params.movieId
     );
-    res.json({ message: 'Comments for movie', data: formattedComments });
+    const formatted = await Promise.all(comments.map(formatCommentResponse));
+    res.json({ message: 'Comments for movie', data: formatted });
   } catch (error) {
     next(error);
   }
 }
 
 /**
- * Retrieve comments filtered by status ('pending' or 'confirmed').
+ * **GET /comments/status/:status**
  *
- * @function getCommentsByStatus
- * @param {Request<{ status: string }>} req - Express request object with status param.
- * @param {Response} res - Express response object.
- * @param {NextFunction} next - Express next middleware.
- * @returns {Promise<void>} JSON response with comments filtered by status.
+ * Retrieve comments filtered by status.
+ *
+ * @route GET /comments/status/:status
+ * @param {string} req.params.status - Must be either `pending` or `confirmed`.
+ * @throws {BadRequestError} If invalid status is provided.
+ * @returns {Promise<Response>} `200 OK` with filtered comments.
  */
 export async function getCommentsByStatus(
   req: Request<{ status: string }>,
@@ -126,26 +166,20 @@ export async function getCommentsByStatus(
     const comments = await bookingCommentService.getCommentsByStatus(
       status as 'pending' | 'confirmed'
     );
-    const formattedComments = await Promise.all(
-      comments.map((comment) => formatCommentResponse(comment))
-    );
-    res.json({
-      message: `Comments with status ${status}`,
-      data: formattedComments,
-    });
+    const formatted = await Promise.all(comments.map(formatCommentResponse));
+    res.json({ message: `Comments with status ${status}`, data: formatted });
   } catch (error) {
     next(error);
   }
 }
 
 /**
- * Retrieve a comment by bookingId.
+ * **GET /comments/booking/:bookingId**
  *
- * @function getCommentByBookingId
- * @param {Request<{ bookingId: string }>} req - Express request object with bookingId param.
- * @param {Response} res - Express response object.
- * @param {NextFunction} next - Express next middleware.
- * @returns {Promise<void>} JSON response with the found comment.
+ * Retrieve a comment by its booking ID.
+ *
+ * @route GET /comments/booking/:bookingId
+ * @throws {NotFoundError} If no comment exists for the booking.
  */
 export async function getCommentByBookingId(
   req: Request<{ bookingId: string }>,
@@ -153,26 +187,22 @@ export async function getCommentByBookingId(
   next: NextFunction
 ) {
   try {
-    const { bookingId } = req.params;
-    const comment =
-      await bookingCommentService.getCommentByBookingId(bookingId);
-    const formattedComment = comment
-      ? await formatCommentResponse(comment)
-      : null;
-    res.json({ message: 'Comment found', data: formattedComment });
+    const comment = await bookingCommentService.getCommentByBookingId(
+      req.params.bookingId
+    );
+    const formatted = await formatCommentResponse(comment);
+    res.json({ message: 'Comment found', data: formatted });
   } catch (error) {
     next(error);
   }
 }
 
 /**
- * Retrieve all comments made by a specific user.
+ * **GET /comments/user/:userId**
  *
- * @function getCommentsByUser
- * @param {Request<{ userId: string }>} req - Express request object with userId param.
- * @param {Response} res - Express response object.
- * @param {NextFunction} next - Express next middleware.
- * @returns {Promise<void>} JSON response with the user's comments.
+ * Retrieve all comments written by a user.
+ *
+ * @route GET /comments/user/:userId
  */
 export async function getCommentsByUser(
   req: Request<{ userId: string }>,
@@ -180,14 +210,13 @@ export async function getCommentsByUser(
   next: NextFunction
 ) {
   try {
-    const { userId } = req.params;
-    const comments = await bookingCommentService.getCommentsByUser(userId);
-    const formattedComments = await Promise.all(
-      comments.map((comment) => formatCommentResponse(comment))
+    const comments = await bookingCommentService.getCommentsByUser(
+      req.params.userId
     );
+    const formatted = await Promise.all(comments.map(formatCommentResponse));
     res.json({
-      message: `Comments by user ${userId}`,
-      data: formattedComments,
+      message: `Comments by user ${req.params.userId}`,
+      data: formatted,
     });
   } catch (error) {
     next(error);
@@ -195,11 +224,16 @@ export async function getCommentsByUser(
 }
 
 /**
- * Create a new comment for a booking.
- * @param {Request} req - Express request object (param: bookingId, body: comment fields).
- * @param {Response} res - Express response object.
- * @param {NextFunction} next - Express next middleware.
- * @returns {Promise<void>} JSON response with the created comment.
+ * **POST /comments/:bookingId**
+ *
+ * Create a new comment (XSS sanitized).
+ *
+ * @security
+ * - Sanitizes `req.body.comment` to prevent malicious HTML/JS.
+ *
+ * @route POST /comments/:bookingId
+ * @body {string} comment - User-provided text.
+ * @body {number} rating - Rating from 1 to 5.
  */
 export async function createComment(
   req: Request<{ bookingId: string }>,
@@ -207,30 +241,26 @@ export async function createComment(
   next: NextFunction
 ) {
   try {
-    const { bookingId } = req.params;
-    if (!bookingId) {
+    if (!req.params.bookingId) {
       res.status(400).json({ message: 'bookingId is required in URL' });
       return;
     }
-    const payload = { ...req.body, bookingId };
+
+    if (req.body.comment) req.body.comment = sanitizeComment(req.body.comment);
+
+    const payload = { ...req.body, bookingId: req.params.bookingId };
     const created = await bookingCommentService.createComment(payload);
-    const formattedComment = await formatCommentResponse(created);
-    res
-      .status(201)
-      .json({ message: 'Comment created', data: formattedComment });
+    const formatted = await formatCommentResponse(created);
+    res.status(201).json({ message: 'Comment created', data: formatted });
   } catch (error) {
     next(error);
   }
 }
 
 /**
- * Update an existing comment by bookingId.
+ * **PUT /comments/:bookingId**
  *
- * @function updateComment
- * @param {Request<{ bookingId: string }>} req - Express request object (params: bookingId, body: updates).
- * @param {Response} res - Express response object.
- * @param {NextFunction} next - Express next middleware.
- * @returns {Promise<void>} JSON response with the updated comment.
+ * Update an existing comment (with XSS sanitization).
  */
 export async function updateComment(
   req: Request<{ bookingId: string }>,
@@ -238,26 +268,22 @@ export async function updateComment(
   next: NextFunction
 ) {
   try {
-    const { bookingId } = req.params;
+    if (req.body.comment) req.body.comment = sanitizeComment(req.body.comment);
     const updated = await bookingCommentService.updateComment(
-      bookingId,
+      req.params.bookingId,
       req.body
     );
-    const formattedComment = await formatCommentResponse(updated);
-    res.json({ message: 'Comment updated', data: formattedComment });
+    const formatted = await formatCommentResponse(updated);
+    res.json({ message: 'Comment updated', data: formatted });
   } catch (error) {
     next(error);
   }
 }
 
 /**
- * Delete a comment by bookingId.
+ * **DELETE /comments/:bookingId**
  *
- * @function deleteComment
- * @param {Request<{ bookingId: string }>} req - Express request object with bookingId param.
- * @param {Response} res - Express response object.
- * @param {NextFunction} next - Express next middleware.
- * @returns {Promise<void>} Sends 204 No Content on success.
+ * Delete a comment by its booking ID.
  */
 export async function deleteComment(
   req: Request<{ bookingId: string }>,
@@ -265,8 +291,7 @@ export async function deleteComment(
   next: NextFunction
 ) {
   try {
-    const { bookingId } = req.params;
-    await bookingCommentService.deleteComment(bookingId);
+    await bookingCommentService.deleteComment(req.params.bookingId);
     res.status(204).send();
   } catch (error) {
     next(error);
@@ -274,13 +299,9 @@ export async function deleteComment(
 }
 
 /**
- * Confirm a comment (set its status to 'confirmed').
+ * **PATCH /comments/:bookingId/confirm**
  *
- * @function confirmComment
- * @param {Request<{ bookingId: string }>} req - Express request object with bookingId param.
- * @param {Response} res - Express response object.
- * @param {NextFunction} next - Express next middleware.
- * @returns {Promise<void>} JSON response with the confirmed comment.
+ * Confirm a pending comment.
  */
 export async function confirmComment(
   req: Request<{ bookingId: string }>,
@@ -288,27 +309,29 @@ export async function confirmComment(
   next: NextFunction
 ) {
   try {
-    const { bookingId } = req.params;
-    const updated = await bookingCommentService.confirmComment(bookingId);
-    const formattedComment = await formatCommentResponse(updated);
-    res.json({ message: 'Comment confirmed', data: formattedComment });
+    const updated = await bookingCommentService.confirmComment(
+      req.params.bookingId
+    );
+    const formatted = await formatCommentResponse(updated);
+    res.json({ message: 'Comment confirmed', data: formatted });
   } catch (error) {
     next(error);
   }
 }
 
+/* --------------------------------------------------------------------------
+   ✅ SEARCH & RATING
+   -------------------------------------------------------------------------- */
+
 /**
- * Search for comments using optional full-text and advanced filters.
+ * **GET /comments/search**
  *
- * Query parameters:
- *  - q: search text in comment
- *  - status, rating, bookingId, movieId, createdAt (for advanced filtering)
+ * Search for comments by text or filters.
  *
- * @function searchComments
- * @param {Request} req - Express request object with search query params.
- * @param {Response} res - Express response object.
- * @param {NextFunction} next - Express next middleware.
- * @returns {Promise<void>} JSON response with the search results.
+ * @query {string} q - Full-text search in comment.
+ * @query {string} status - Filter by status (`pending`, `confirmed`).
+ * @query {number} rating - Filter by exact rating.
+ * @query {string} movieId - Filter by movie.
  */
 export async function searchComments(
   req: Request,
@@ -317,8 +340,6 @@ export async function searchComments(
 ) {
   try {
     const { q, status, rating, bookingId, movieId, createdAt } = req.query;
-
-    // Build filters for the service
     const filters: any = {};
     if (status) filters.status = status;
     if (bookingId) filters.bookingId = bookingId;
@@ -330,26 +351,17 @@ export async function searchComments(
       q as string | undefined,
       filters
     );
-    const formattedResults = await Promise.all(
-      results.map((comment) => formatCommentResponse(comment))
-    );
-    res.json({ message: 'Search results', data: formattedResults });
+    const formatted = await Promise.all(results.map(formatCommentResponse));
+    res.json({ message: 'Search results', data: formatted });
   } catch (error) {
     next(error);
   }
 }
 
 /**
- * Get the average rating (notation) for a specific movie.
+ * **GET /movies/:movieId/average-rating**
  *
- * @param req - Express request (params: movieId)
- * @param res - Express response
- * @param next - Express next (error handler)
- *
- * @returns 200 OK with average rating (or null if no ratings)
- *
- * Example response:
- *   { "message": "Average rating", "data": 4.25 }
+ * Get the average rating for a movie.
  */
 export async function getAverageRatingForMovie(
   req: Request<{ movieId: string }>,
@@ -357,12 +369,10 @@ export async function getAverageRatingForMovie(
   next: NextFunction
 ) {
   try {
-    const { movieId } = req.params;
-    const avg = await bookingCommentService.getAverageRatingForMovie(movieId);
-    res.json({
-      message: 'Average rating',
-      data: avg,
-    });
+    const avg = await bookingCommentService.getAverageRatingForMovie(
+      req.params.movieId
+    );
+    res.json({ message: 'Average rating', data: avg });
   } catch (error) {
     next(error);
   }

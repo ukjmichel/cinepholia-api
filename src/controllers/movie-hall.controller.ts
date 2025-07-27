@@ -161,10 +161,12 @@ export async function searchMovieHalls(
   next: NextFunction
 ) {
   try {
-    const { theaterId, hallId } = req.query;
+    const { theaterId, hallId, limit, offset } = req.query;
     const halls = await service.searchByTheaterIdOrHallId({
       theaterId: theaterId as string | undefined,
       hallId: hallId as string | undefined,
+      limit: limit ? Number(limit) : undefined,
+      offset: offset ? Number(offset) : undefined,
     });
     res.json(halls);
   } catch (err) {
