@@ -33,13 +33,17 @@ const testHall = {
     ['A1', 'A2'],
     ['B1', 'B2'],
   ],
+  quality: '2D' as '2D',
 };
 
 /**
  * Clean all relevant tables between tests
  */
 const cleanDatabase = async () => {
-  await sequelize.query('SET FOREIGN_KEY_CHECKS = 0'); 
+  if (sequelize.getDialect() !== 'sqlite') {
+    await sequelize.query('SET FOREIGN_KEY_CHECKS = 0');
+  }
+
   await AuthorizationModel.destroy({
     where: {},
     truncate: true,
@@ -48,14 +52,17 @@ const cleanDatabase = async () => {
   await UserModel.destroy({ where: {}, truncate: true, cascade: true });
   await MovieHallModel.destroy({ where: {}, truncate: true, cascade: true });
   await MovieTheaterModel.destroy({ where: {}, truncate: true, cascade: true });
-  await sequelize.query('SET FOREIGN_KEY_CHECKS = 1');
+
+  if (sequelize.getDialect() !== 'sqlite') {
+    await sequelize.query('SET FOREIGN_KEY_CHECKS = 1');
+  }
 };
 
 describe('MovieHall E2E Routes', () => {
   let staffToken: string;
 
   beforeAll(async () => {
-    await syncDB(); // Make sure to call this so tables exist!
+    await syncDB();
   });
 
   beforeEach(async () => {

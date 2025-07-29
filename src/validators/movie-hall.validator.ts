@@ -57,10 +57,13 @@ export const updateMovieHallValidator = [
   body().custom((value, { req }) => {
     if (
       !req.body ||
-      (!req.body.seatsLayout && !req.body.hallId && !req.body.theaterId)
+      (!req.body.seatsLayout &&
+        !req.body.hallId &&
+        !req.body.theaterId &&
+        !req.body.quality)
     ) {
       throw new Error(
-        'At least one updatable field (seatsLayout, hallId, theaterId) must be provided'
+        'At least one updatable field (seatsLayout, hallId, theaterId, quality) must be provided'
       );
     }
     return true;
@@ -106,6 +109,12 @@ export const updateMovieHallValidator = [
       }
       return true;
     }),
+  body('quality')
+    .optional()
+    .isString()
+    .withMessage('quality must be a string')
+    .isIn(['2D', '3D', 'IMAX', '4DX'])
+    .withMessage('quality must be one of: 2D, 3D, IMAX, 4DX'),
 ];
 
 /**

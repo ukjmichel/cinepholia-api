@@ -1,46 +1,56 @@
-import mongoose, { Document } from 'mongoose';
+import mongoose, { Document, Schema, Model } from 'mongoose';
 
-// Booking subdocument interface and schema
-interface Booking {
-  bookingId: string;
-  userId: string;
-  bookedAt: Date;
-  seatsNumber: number;
+/** Interface for daily booking number entries */
+export interface BookingNumber {
+  date: string; // "YYYY-MM-DD"
+  number: number;
 }
 
-const bookingSchema = new mongoose.Schema<Booking>(
+/** BookingNumber subdocument schema */
+const bookingNumberSchema = new Schema<BookingNumber>(
   {
-    bookingId: { type: String, required: true },
-    userId: { type: String, required: true },
-    bookedAt: { type: Date, default: Date.now, required: true },
-    seatsNumber: { type: Number, required: true },
+    date: { type: String, required: true },
+    number: { type: Number, required: true, default: 0 },
   },
   { _id: false }
 );
 
-// MovieStats document interface
+/** Main MovieStats document interface */
 export interface MovieStatsDocument extends Document {
   movieId: string;
-  bookings: Booking[];
+  bookingNumbers: BookingNumber[];
 }
 
-// Main schema
-const movieStatsSchema = new mongoose.Schema<MovieStatsDocument>({
+/** MovieStats schema */
+const movieStatsSchema = new Schema<MovieStatsDocument>({
   movieId: { type: String, required: true, index: true },
-  bookings: [bookingSchema],
+  bookingNumbers: { type: [bookingNumberSchema], default: [] },
 });
 
-// Pre-save hook for unique bookingId in bookings array
+/**
+ * Pre-save hook:
+ * - Sorts by date DESC
+ * - Removes duplicate dates (keeps first/most recent)
+ * - Keeps only last 7 days
+ */
 movieStatsSchema.pre<MovieStatsDocument>('save', function (next) {
-  const bookingIds = this.bookings.map((b) => b.bookingId);
-  const uniqueBookingIds = new Set(bookingIds);
-  if (bookingIds.length !== uniqueBookingIds.size) {
-    return next(new Error('Duplicate bookingId detected in bookings array'));
-  }
+  // Sort by date DESC
+  this.bookingNumbers.sort((a, b) => b.date.localeCompare(a.date));
+
+  // Remove duplicates (by date, keep first)
+  const seen = new Set<string>();
+  const deduped = this.bookingNumbers.filter((entry) => {
+    if (seen.has(entry.date)) return false;
+    seen.add(entry.date);
+    return true;
+  });
+
+  // Only keep last 7 days
+  this.set('bookingNumbers', deduped.slice(0, 7));
+
   next();
 });
 
-export default mongoose.model<MovieStatsDocument>(
-  'MovieStats',
-  movieStatsSchema
-);
+const MovieStats: Model<MovieStatsDocument> =
+  mongoose.model<MovieStatsDocument>('MovieStats', movieStatsSchema);
+export default MovieStats;

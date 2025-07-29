@@ -1,5 +1,5 @@
 import QRCode from 'qrcode';
-import { QrCodeService } from '../../services/qrcode.service';
+import { qrCodeService } from '../../services/qrcode.service.js';
 
 // Mock the 'qrcode' package
 jest.mock('qrcode', () => ({
@@ -7,7 +7,7 @@ jest.mock('qrcode', () => ({
   toBuffer: jest.fn(),
 }));
 
-describe('QrCodeService', () => {
+describe('qrCodeService', () => {
   const mockData = 'test-booking-id';
 
   beforeEach(() => {
@@ -19,7 +19,7 @@ describe('QrCodeService', () => {
       const fakeDataUrl = 'data:image/png;base64,FAKEQRDATA';
       (QRCode.toDataURL as jest.Mock).mockResolvedValue(fakeDataUrl);
 
-      const result = await QrCodeService.generateDataUrl(mockData);
+      const result = await qrCodeService.generateDataUrl(mockData);
 
       expect(QRCode.toDataURL).toHaveBeenCalledWith(
         mockData,
@@ -37,7 +37,7 @@ describe('QrCodeService', () => {
         new Error('Generation failed')
       );
 
-      await expect(QrCodeService.generateDataUrl(mockData)).rejects.toThrow(
+      await expect(qrCodeService.generateDataUrl(mockData)).rejects.toThrow(
         'Failed to generate QR code'
       );
     });
@@ -48,7 +48,7 @@ describe('QrCodeService', () => {
       const fakeBuffer = Buffer.from([0x00, 0x01, 0x02]);
       (QRCode.toBuffer as jest.Mock).mockResolvedValue(fakeBuffer);
 
-      const result = await QrCodeService.generatePngBuffer(mockData);
+      const result = await qrCodeService.generatePngBuffer(mockData);
 
       expect(QRCode.toBuffer).toHaveBeenCalledWith(
         mockData,
@@ -66,7 +66,7 @@ describe('QrCodeService', () => {
         new Error('Generation failed')
       );
 
-      await expect(QrCodeService.generatePngBuffer(mockData)).rejects.toThrow(
+      await expect(qrCodeService.generatePngBuffer(mockData)).rejects.toThrow(
         'Failed to generate QR code'
       );
     });

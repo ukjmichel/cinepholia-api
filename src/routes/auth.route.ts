@@ -1,7 +1,9 @@
 import { Router } from 'express';
-import { login } from '../controllers/auth.controller.js';
+import { login, refreshToken } from '../controllers/auth.controller.js';
 import { validate } from '../middlewares/validate.js';
-import { decodeJwtToken } from '../middlewares/auth.middleware.js';
+import {
+  decodeJwtToken,
+} from '../middlewares/auth.middleware.js';
 import { permission } from '../middlewares/permission.js';
 import { validateCreateUser } from '../validators/user.validator.js';
 import { createAccount } from '../controllers/user.controller.js';
@@ -111,3 +113,5 @@ export default router;
  *         password:
  *           type: string
  */
+
+router.post('/refresh', refreshToken);

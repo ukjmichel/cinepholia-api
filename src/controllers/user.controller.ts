@@ -1,113 +1,214 @@
+/**
+ * User Controller
+ *
+ * Handles user-related operations:
+ * - Account creation (with role assignment, welcome email, and tokens)
+ * - Retrieve, update, delete, and verify users (all with role)
+ * - Password update
+ * - Paginated/filtered listing and flexible search (with role)
+ * - Credential validation for authentication
+ * - Retrieve current authenticated user (with role)
+ */
+
 import { Request, Response, NextFunction } from 'express';
 import { userService } from '../services/user.service.js';
-import { UserAttributes } from '../models/user.model.js';
+import { authorizationService } from '../services/authorization.service.js';
+import { UserAttributes, UserModel } from '../models/user.model.js';
 import { BadRequestError } from '../errors/bad-request-error.js';
 import { NotFoundError } from '../errors/not-found-error.js';
 import { UnauthorizedError } from '../errors/unauthorized-error.js';
 import { sequelize } from '../config/db.js';
 import { EmailService } from '../services/email.service.js';
 import { config } from '../config/env.js';
-import { AuthorizationService } from '../services/authorization.service.js';
-import { Role } from '../models/authorization.model.js';
 import { AuthService } from '../services/auth.service.js';
+import { Role } from '../models/authorization.model.js';
 
-/**
- * Email service instance for sending user-related emails
- */
 export const emailService = new EmailService();
-
-/**
- * Authorization service instance for managing user roles and permissions
- */
-export const authorizationService = new AuthorizationService();
-
-/**
- * Authentication service instance for token generation and validation
- */
 export const authService = new AuthService();
 
 /**
- * Creates a new user account with specified role
+ * Interface representing a public user with their associated role.
+ */
+export interface PublicUserWithRole extends Omit<UserAttributes, 'password'> {
+  /** The user's authorization role */
+  role: Role;
+}
+
+/**
+ * Converts a UserModel instance to a public user object (password removed) and adds their role.
+ * @param user - The Sequelize user instance.
+ * @returns Promise<PublicUserWithRole|null>
+ */
+async function toPublicUserWithRole(
+  user: UserModel | null
+): Promise<PublicUserWithRole | null> {
+  if (!user) return null;
+  const data =
+    typeof user.get === 'function' ? user.get({ plain: true }) : user;
+  const { password, ...publicFields } = data;
+  const authorization = await authorizationService.getAuthorizationByUserId(
+    user.userId
+  );
+  return {
+    ...(publicFields as Omit<UserAttributes, 'password'>),
+    role: (authorization?.role as Role) ?? 'utilisateur',
+  };
+}
+
+/**
+ * Creates a new user account with a specified role.
+ * Handles user creation, role assignment, welcome email, and cookie-based tokens within a transaction.
  *
- * This is a higher-order function that returns an Express middleware
- * configured for a specific user role. The middleware handles user creation,
- * role assignment, welcome email sending, and token generation within a database transaction.
+ * @param role - Role to assign to the user ('utilisateur', 'employé', etc.)
+ * @returns Express middleware function
  *
- * @param role - The role to assign to the newly created user
- * @returns Express middleware function for handling account creation
- *
- * @example
- * // Create middleware for regular users
- * const createUserAccount = createAccount('utilisateur');
- * router.post('/users', createUserAccount);
- *
- * // Create middleware for admin users
- * const createAdminAccount = createAccount('admin');
- * router.post('/admins', createAdminAccount);
+ * @throws ConflictError if user already exists
+ * @throws Any error from child services, rolled back if within transaction
  */
 export const createAccount =
   (role: Role) =>
-  /**
-   * Express middleware for creating a user account
-   * @param req - Express request object containing user data in body
-   * @param res - Express response object
-   * @param next - Express next function for error handling
-   */
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     const transaction = await sequelize.transaction();
-
     try {
       const userData = req.body;
-
-      // Create user in transaction
       const user = await userService.createUser(userData, { transaction });
-
-      // Create authorization in transaction, with fixed role
-      const authorization = await authorizationService.createAuthorization(
+      await authorizationService.createAuthorization(
         { userId: user.userId, role },
         { transaction }
       );
-
-      // Send welcome email if enabled
       if (config.sendWelcomeEmail) {
         await emailService.sendWelcomeEmail(user.email, user.firstName);
       }
-
       await transaction.commit();
 
-      // If role is 'utilisateur', generate both access and refresh tokens
-      let tokens = undefined;
       if (role === 'utilisateur') {
-        tokens = authService.generateTokens(user);
+        const tokens = authService.generateTokens(user);
+        res.cookie('accessToken', tokens.accessToken, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax',
+          maxAge: 1000 * 60 * 60,
+        });
+        res.cookie('refreshToken', tokens.refreshToken, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax',
+          maxAge: 1000 * 60 * 60 * 24 * 7,
+        });
       }
 
+      const publicUser = await toPublicUserWithRole(user);
       res.status(201).json({
         message: 'User created successfully',
-        data: {
-          ...user.toJSON(),
-          role: authorization.role,
-          ...(tokens ? { tokens } : {}),
-        },
+        data: publicUser,
       });
     } catch (error) {
-      await transaction.rollback();
+      try {
+        await transaction.rollback();
+      } catch (rollbackErr) {
+        // Optionally log rollback errors here
+      }
       next(error);
     }
   };
 
 /**
- * Retrieves a user by their unique identifier
- *
- * @param req - Express request object with userId in params
- * @param req.params.userId - The unique identifier of the user to retrieve
- * @param res - Express response object
- * @param next - Express next function for error handling
- *
- * @throws {NotFoundError} When the user with the specified ID is not found
+ * Retrieves a paginated list of users with optional filtering (staff only).
+ * Returns role with each user.
  *
  * @example
- * // GET /users/123e4567-e89b-12d3-a456-426614174000
- * // Returns: { message: 'User found successfully', data: { userId: '...', ... } }
+ * // GET /users?page=1&pageSize=20&verified=true&username=john
+ *
+ * @param req - Express Request (query params for filters)
+ * @param res - Express Response
+ * @param next - Express NextFunction
+ */
+export const listUsers = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const page = req.query.page
+      ? parseInt(req.query.page as string, 10)
+      : undefined;
+    const pageSize = req.query.pageSize
+      ? parseInt(req.query.pageSize as string, 10)
+      : undefined;
+    const filters = {
+      username: req.query.username as string | undefined,
+      email: req.query.email as string | undefined,
+      verified:
+        req.query.verified !== undefined
+          ? req.query.verified === 'true'
+          : undefined,
+    };
+
+    const result = await userService.listUsers({ page, pageSize, filters });
+    const usersWithRoles: PublicUserWithRole[] = await Promise.all(
+      result.users.map(
+        (u) => toPublicUserWithRole(u) as Promise<PublicUserWithRole>
+      )
+    );
+    res.status(200).json({
+      message: 'Users found successfully',
+      data: { ...result, users: usersWithRoles },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * Flexible search: find users by global or field filters, including role.
+ * @example
+ * // GET /users/search?q=ana&verified=true
+ *
+ * @param req - Express Request (query params for filters)
+ * @param res - Express Response
+ * @param next - Express NextFunction
+ */
+export const searchUsers = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const filters: Record<string, any> = {};
+    if (typeof req.query.q === 'string') filters.q = req.query.q;
+    if (typeof req.query.userId === 'string') filters.userId = req.query.userId;
+    if (typeof req.query.username === 'string')
+      filters.username = req.query.username;
+    if (typeof req.query.email === 'string') filters.email = req.query.email;
+    if (typeof req.query.firstName === 'string')
+      filters.firstName = req.query.firstName;
+    if (typeof req.query.lastName === 'string')
+      filters.lastName = req.query.lastName;
+    if (typeof req.query.verified !== 'undefined') {
+      filters.verified =
+        req.query.verified === 'true' || req.query.verified === '1';
+    }
+    const users = await userService.searchUsers(filters);
+    const usersWithRoles: PublicUserWithRole[] = await Promise.all(
+      users.map((u) => toPublicUserWithRole(u) as Promise<PublicUserWithRole>)
+    );
+    res.status(200).json({
+      message: 'Users found successfully',
+      data: usersWithRoles,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * Retrieves a user by their unique ID (self or staff), including role.
+ *
+ * @param req - Express Request (params.userId)
+ * @param res - Express Response
+ * @param next - Express NextFunction
+ *
+ * @throws NotFoundError if user does not exist
  */
 export const getUserById = async (
   req: Request,
@@ -116,12 +217,11 @@ export const getUserById = async (
 ): Promise<void> => {
   try {
     const user = await userService.getUserById(req.params.userId);
-    if (!user) {
-      throw new NotFoundError('User not found');
-    }
+    if (!user) throw new NotFoundError('User not found');
+    const publicUser = await toPublicUserWithRole(user);
     res.status(200).json({
       message: 'User found successfully',
-      data: user,
+      data: publicUser,
     });
   } catch (err) {
     next(err);
@@ -129,24 +229,48 @@ export const getUserById = async (
 };
 
 /**
- * Updates user information
+ * Returns the current authenticated user, including role.
  *
- * Updates the specified user with the provided data. Password updates
- * are not allowed through this endpoint and will be ignored.
+ * @param req - Express Request (must contain req.user.userId)
+ * @param res - Express Response
+ * @param next - Express NextFunction
  *
- * @param req - Express request object with userId in params and update data in body
- * @param req.params.userId - The unique identifier of the user to update
- * @param req.body - Partial user attributes to update
- * @param res - Express response object
- * @param next - Express next function for error handling
+ * @throws 401 if no user in request
+ * @throws 404 if user not found
+ */
+export const getCurrentUser = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    if (!req.user || !req.user.userId) {
+      res.status(401).json({ message: 'Not authenticated' });
+      return;
+    }
+    const user = await userService.getUserById(req.user.userId);
+    if (!user) {
+      res.status(404).json({ message: 'User not found' });
+      return;
+    }
+    const publicUser = await toPublicUserWithRole(user);
+    res.status(200).json({
+      message: 'Current user found',
+      data: publicUser,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * Updates user information (self or staff), returns updated user including role.
  *
- * @throws {NotFoundError} When the user with the specified ID is not found
- * @throws {ConflictError} When updated email/username conflicts with existing user
+ * @param req - Express Request (params.userId, body)
+ * @param res - Express Response
+ * @param next - Express NextFunction
  *
- * @example
- * // PUT /users/123e4567-e89b-12d3-a456-426614174000
- * // Body: { "firstName": "John", "email": "john@example.com" }
- * // Returns: { message: 'User updated successfully', data: { userId: '...', ... } }
+ * @throws NotFoundError if user not found
  */
 export const updateUser = async (
   req: Request,
@@ -158,9 +282,10 @@ export const updateUser = async (
       req.params.userId,
       req.body as Partial<UserAttributes>
     );
+    const publicUser = await toPublicUserWithRole(user);
     res.status(200).json({
       message: 'User updated successfully',
-      data: user,
+      data: publicUser,
     });
   } catch (err) {
     next(err);
@@ -168,24 +293,13 @@ export const updateUser = async (
 };
 
 /**
- * Changes a user's password
+ * Changes a user's password.
  *
- * Updates the password for the specified user. The new password will be
- * automatically hashed before storage.
+ * @param req - Express Request (params.userId, body.newPassword)
+ * @param res - Express Response
+ * @param next - Express NextFunction
  *
- * @param req - Express request object with userId in params and newPassword in body
- * @param req.params.userId - The unique identifier of the user
- * @param req.body.newPassword - The new password for the user
- * @param res - Express response object
- * @param next - Express next function for error handling
- *
- * @throws {BadRequestError} When newPassword is not provided
- * @throws {NotFoundError} When the user with the specified ID is not found
- *
- * @example
- * // PUT /users/123e4567-e89b-12d3-a456-426614174000/password
- * // Body: { "newPassword": "newSecurePassword123" }
- * // Returns: { message: 'Password changed successfully', data: { userId: '...', ... } }
+ * @throws BadRequestError if newPassword is missing
  */
 export const changePassword = async (
   req: Request,
@@ -199,9 +313,10 @@ export const changePassword = async (
       req.params.userId,
       newPassword
     );
+    const publicUser = await toPublicUserWithRole(user);
     res.status(200).json({
       message: 'Password changed successfully',
-      data: user,
+      data: publicUser,
     });
   } catch (err) {
     next(err);
@@ -209,54 +324,13 @@ export const changePassword = async (
 };
 
 /**
- * Marks a user as verified
+ * Deletes a user from the system.
  *
- * Sets the verified status of the specified user to true. This is typically
- * used after email verification or administrative approval.
+ * @param req - Express Request (params.userId)
+ * @param res - Express Response
+ * @param next - Express NextFunction
  *
- * @param req - Express request object with userId in params
- * @param req.params.userId - The unique identifier of the user to verify
- * @param res - Express response object
- * @param next - Express next function for error handling
- *
- * @throws {NotFoundError} When the user with the specified ID is not found
- *
- * @example
- * // PUT /users/123e4567-e89b-12d3-a456-426614174000/verify
- * // Returns: { message: 'User verified', data: { userId: '...', verified: true, ... } }
- */
-export const verifyUser = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-): Promise<void> => {
-  try {
-    const user = await userService.verifyUser(req.params.userId);
-    res.status(200).json({
-      message: 'User verified',
-      data: user,
-    });
-  } catch (err) {
-    next(err);
-  }
-};
-
-/**
- * Deletes a user from the system
- *
- * Permanently removes the specified user from the database. This action
- * cannot be undone.
- *
- * @param req - Express request object with userId in params
- * @param req.params.userId - The unique identifier of the user to delete
- * @param res - Express response object
- * @param next - Express next function for error handling
- *
- * @throws {NotFoundError} When the user with the specified ID is not found
- *
- * @example
- * // DELETE /users/123e4567-e89b-12d3-a456-426614174000
- * // Returns: { message: 'User deleted', data: null }
+ * @throws NotFoundError if user not found
  */
 export const deleteUser = async (
   req: Request,
@@ -276,58 +350,23 @@ export const deleteUser = async (
 };
 
 /**
- * Retrieves a paginated list of users with optional filtering
+ * Verifies a user (sets 'verified' flag to true).
  *
- * Returns users based on query parameters for pagination and filtering.
- * Supports filtering by username, email, and verification status.
- *
- * @param req - Express request object with query parameters
- * @param req.query.page - Page number (1-based, defaults to 1)
- * @param req.query.pageSize - Number of items per page (max 100, defaults to 10)
- * @param req.query.username - Filter by username (partial match, case-insensitive)
- * @param req.query.email - Filter by email (partial match, case-insensitive)
- * @param req.query.verified - Filter by verification status ('true' or 'false')
- * @param res - Express response object
- * @param next - Express next function for error handling
- *
- * @example
- * // GET /users?page=1&pageSize=20&verified=true&username=john
- * // Returns: {
- * //   message: 'Users found successfully',
- * //   data: {
- * //     users: [...],
- * //     total: 150,
- * //     page: 1,
- * //     pageSize: 20
- * //   }
- * // }
+ * @param req - Express Request (params.userId)
+ * @param res - Express Response
+ * @param next - Express NextFunction
  */
-export const listUsers = async (
+export const verifyUser = async (
   req: Request,
   res: Response,
   next: NextFunction
 ): Promise<void> => {
   try {
-    // Parse pagination and filters from query
-    const page = req.query.page
-      ? parseInt(req.query.page as string, 10)
-      : undefined;
-    const pageSize = req.query.pageSize
-      ? parseInt(req.query.pageSize as string, 10)
-      : undefined;
-    const filters = {
-      username: req.query.username as string | undefined,
-      email: req.query.email as string | undefined,
-      verified:
-        req.query.verified !== undefined
-          ? req.query.verified === 'true'
-          : undefined,
-    };
-
-    const result = await userService.listUsers({ page, pageSize, filters });
+    const user = await userService.verifyUser(req.params.userId);
+    const publicUser = await toPublicUserWithRole(user);
     res.status(200).json({
-      message: 'Users found successfully',
-      data: result,
+      message: 'User verified',
+      data: publicUser,
     });
   } catch (err) {
     next(err);
@@ -335,32 +374,20 @@ export const listUsers = async (
 };
 
 /**
- * Validates user credentials for authentication
+ * Validates user credentials (username/email + password).
  *
- * Verifies the provided email/username and password combination.
- * Returns the user data if credentials are valid.
+ * @param req - Express Request (body.emailOrUsername, body.password)
+ * @param res - Express Response
+ * @param next - Express NextFunction
  *
- * @param req - Express request object with credentials in body
- * @param req.body.emailOrUsername - Email address or username to authenticate
- * @param req.body.password - Password to validate
- * @param res - Express response object
- * @param next - Express next function for error handling
- * @returns Promise that resolves when validation is complete
- *
- * @throws {BadRequestError} When email/username or password is missing
- * @throws {NotFoundError} When the user is not found
- * @throws {UnauthorizedError} When the password is invalid
- *
- * @example
- * // POST /users/validate-password
- * // Body: { "emailOrUsername": "john@example.com", "password": "myPassword123" }
- * // Returns: { message: 'User validated successfully', data: { userId: '...', ... } }
+ * @throws BadRequestError if missing fields
+ * @throws UnauthorizedError if invalid credentials
  */
 export const validatePassword = async (
   req: Request,
   res: Response,
   next: NextFunction
-): Promise<any> => {
+): Promise<void> => {
   try {
     const { emailOrUsername, password } = req.body;
     if (!emailOrUsername || !password) {
@@ -370,9 +397,10 @@ export const validatePassword = async (
     if (!user) {
       throw new UnauthorizedError('Invalid email or username or password');
     }
+    const publicUser = await toPublicUserWithRole(user);
     res.status(200).json({
       message: 'User validated successfully',
-      data: user,
+      data: publicUser,
     });
   } catch (err) {
     next(err);

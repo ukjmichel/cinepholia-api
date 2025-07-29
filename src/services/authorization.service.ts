@@ -1,3 +1,21 @@
+/**
+ * User authorizations and roles management service.
+ *
+ * This service allows the creation, retrieval, modification, and deletion
+ * of permissions (roles) associated with each user, with conflict management
+ * and transactional management to ensure data consistency.
+ *
+ * Main features:
+ * - Creation of authorization for a given user, handling cases where authorization already exists
+ * - Retrieval of a user's authorization by their identifier
+ * - Modification of the role assigned to a user
+ * - Deletion of a user's authorization
+ * - Paginated and filtered list of authorizations by role
+ *
+ * Integrates Sequelize models for data access and allows the use of transactions.
+ *
+ */
+
 import {
   AuthorizationAttributes,
   AuthorizationModel,
@@ -12,8 +30,21 @@ interface ServiceOptions {
   transaction?: Transaction;
 }
 
+/**
+ * Main authorization management service.
+ * Allows managing user roles and ensuring the integrity of associations.
+ */
 export class AuthorizationService {
-  // Create a new authorization entry
+  /**
+   * Creates a new authorization (role) for a user.
+   * Prevents creation if an authorization already exists for the user.
+   *
+   * @param data - Authorization attributes (userId, role)
+   * @param options - Optional options (transaction)
+   * @returns {Promise<AuthorizationModel>} Created authorization
+   * @throws {ConflictError} If an authorization already exists for this user
+   * @throws {NotFoundError} If the user does not exist
+   */
   async createAuthorization(
     data: AuthorizationAttributes,
     options?: ServiceOptions
@@ -36,13 +67,20 @@ export class AuthorizationService {
     return AuthorizationModel.create(
       {
         userId: data.userId,
-        role: data.role ?? 'utilisateur',
+        role: data.role ?? 'user',
       },
       { transaction: options?.transaction }
     );
   }
 
-  // Get authorization by user ID
+  /**
+   * Retrieves the authorization (role) associated with a user via their ID.
+   *
+   * @param userId - User identifier
+   * @param options - Optional options (transaction)
+   * @returns {Promise<AuthorizationModel>} Found authorization
+   * @throws {NotFoundError} If no authorization is found
+   */
   async getAuthorizationByUserId(
     userId: string,
     options?: ServiceOptions
@@ -58,7 +96,15 @@ export class AuthorizationService {
     return auth;
   }
 
-  // Update authorization role
+  /**
+   * Updates the role assigned to a user.
+   *
+   * @param userId - User identifier
+   * @param role - New role to assign
+   * @param options - Optional options (transaction)
+   * @returns {Promise<AuthorizationModel>} Updated authorization
+   * @throws {NotFoundError} If no authorization is found
+   */
   async updateAuthorizationRole(
     userId: string,
     role: Role,
@@ -76,7 +122,14 @@ export class AuthorizationService {
     return auth;
   }
 
-  // Delete authorization for a user
+  /**
+   * Deletes the authorization associated with a user.
+   *
+   * @param userId - User identifier
+   * @param options - Optional options (transaction)
+   * @returns {Promise<void>}
+   * @throws {NotFoundError} If no authorization is found
+   */
   async deleteAuthorization(
     userId: string,
     options?: ServiceOptions
@@ -90,7 +143,15 @@ export class AuthorizationService {
     }
   }
 
-  // List all authorizations, optionally filtered by role and paginated
+  /**
+   * Lists all existing authorizations.
+   * Allows filtering by role and paginating the results.
+   *
+   * @param role - (optional) Role to filter by
+   * @param page - Page number (default: 1)
+   * @param pageSize - Page size (default: 10)
+   * @returns {Promise<{ authorizations: AuthorizationModel[], total: number, page: number, pageSize: number }>}
+   */
   async listAuthorizations(
     role?: Role,
     page: number = 1,
@@ -115,4 +176,8 @@ export class AuthorizationService {
   }
 }
 
+/**
+ * Singleton instance of the authorization service.
+ * To be used throughout the application.
+ */
 export const authorizationService = new AuthorizationService();

@@ -1,6 +1,10 @@
 import * as MovieController from '../../controllers/movie.controller.js';
+import { movieService } from '../../services/movie.service.js';
+import { bookingCommentService } from '../../services/booking-comment.service.js';
 import { MovieModel } from '../../models/movie.model.js';
-import { MovieService } from '../../services/movie.service.js';
+
+jest.mock('../../services/movie.service.js');
+jest.mock('../../services/booking-comment.service.js');
 
 const mockRes = () => {
   const res: any = {};
@@ -26,144 +30,241 @@ const mockMovie: Partial<MovieModel> = {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  // ✅ Ensure enrichment always has a rating
+  (
+    bookingCommentService.getAverageRatingForMovie as jest.Mock
+  ).mockResolvedValue(4.5);
 });
 
 describe('MovieController', () => {
   describe('getMovieById', () => {
-    it('returns { message, data } with the movie', async () => {
-      jest
-        .spyOn(MovieService, 'getMovieById')
-        .mockResolvedValue(mockMovie as MovieModel);
-
+    it('returns enriched movie with rating', async () => {
+      (movieService.getMovieById as jest.Mock).mockResolvedValue(mockMovie);
       const req = { params: { movieId: 'movie-1' } } as any;
       const res = mockRes();
 
       await MovieController.getMovieById(req, res, next);
+
       expect(res.json).toHaveBeenCalledWith({
         message: 'Movie fetched successfully',
-        data: mockMovie,
+        data: { ...mockMovie, rating: 4.5 },
       });
+    });
+
+    it('calls next on error', async () => {
+      (movieService.getMovieById as jest.Mock).mockRejectedValue(
+        new Error('DB fail')
+      );
+      const req = { params: { movieId: 'movie-1' } } as any;
+      const res = mockRes();
+
+      await MovieController.getMovieById(req, res, next);
+      expect(next).toHaveBeenCalledWith(expect.any(Error));
     });
   });
 
   describe('createMovie', () => {
-    it('returns { message, data } with the created movie and 201', async () => {
-      jest
-        .spyOn(MovieService, 'createMovie')
-        .mockResolvedValue(mockMovie as MovieModel);
-
+    it('creates movie and returns 201 with rating', async () => {
+      (movieService.createMovie as jest.Mock).mockResolvedValue(mockMovie);
       const req = { body: mockMovie } as any;
       const res = mockRes();
 
       await MovieController.createMovie(req, res, next);
+
       expect(res.status).toHaveBeenCalledWith(201);
       expect(res.json).toHaveBeenCalledWith({
         message: 'Movie created successfully',
-        data: mockMovie,
+        data: { ...mockMovie, rating: 4.5 },
       });
+    });
+
+    it('calls next on error', async () => {
+      (movieService.createMovie as jest.Mock).mockRejectedValue(
+        new Error('fail')
+      );
+      const req = { body: mockMovie } as any;
+      const res = mockRes();
+
+      await MovieController.createMovie(req, res, next);
+      expect(next).toHaveBeenCalledWith(expect.any(Error));
     });
   });
 
   describe('updateMovie', () => {
-    it('returns { message, data } with the updated movie', async () => {
-      const updated = { ...mockMovie, title: 'Updated Title' };
-      jest
-        .spyOn(MovieService, 'updateMovie')
-        .mockResolvedValue(updated as MovieModel);
-
+    it('updates movie and returns enriched data', async () => {
+      const updated = { ...mockMovie, title: 'Updated' };
+      (movieService.updateMovie as jest.Mock).mockResolvedValue(updated);
       const req = {
         params: { movieId: 'movie-1' },
-        body: { title: 'Updated Title' },
+        body: { title: 'Updated' },
       } as any;
       const res = mockRes();
 
       await MovieController.updateMovie(req, res, next);
+
       expect(res.json).toHaveBeenCalledWith({
         message: 'Movie updated successfully',
-        data: updated,
+        data: { ...updated, rating: 4.5 },
       });
+    });
+
+    it('calls next on error', async () => {
+      (movieService.updateMovie as jest.Mock).mockRejectedValue(
+        new Error('fail')
+      );
+      const req = { params: { movieId: 'movie-1' }, body: {} } as any;
+      const res = mockRes();
+
+      await MovieController.updateMovie(req, res, next);
+      expect(next).toHaveBeenCalledWith(expect.any(Error));
     });
   });
 
   describe('deleteMovie', () => {
-    it('returns { message, data } with null after delete', async () => {
-      jest.spyOn(MovieService, 'deleteMovie').mockResolvedValue(undefined);
-
+    it('deletes movie and returns 204', async () => {
+      (movieService.deleteMovie as jest.Mock).mockResolvedValue(undefined);
       const req = { params: { movieId: 'movie-1' } } as any;
       const res = mockRes();
 
       await MovieController.deleteMovie(req, res, next);
-      // Accept either 204 or default (200) with json (per your last code suggestion)
-      // Here, expect status 204 with json:
+
       expect(res.status).toHaveBeenCalledWith(204);
       expect(res.json).toHaveBeenCalledWith({
         message: 'Movie deleted successfully',
         data: null,
       });
     });
+
+    it('calls next on error', async () => {
+      (movieService.deleteMovie as jest.Mock).mockRejectedValue(
+        new Error('fail')
+      );
+      const req = { params: { movieId: 'movie-1' } } as any;
+      const res = mockRes();
+
+      await MovieController.deleteMovie(req, res, next);
+      expect(next).toHaveBeenCalledWith(expect.any(Error));
+    });
   });
 
   describe('getAllMovies', () => {
-    it('returns { message, data } with all movies', async () => {
-      jest
-        .spyOn(MovieService, 'getAllMovies')
-        .mockResolvedValue([mockMovie as MovieModel]);
-
+    it('returns all movies enriched with ratings', async () => {
+      (movieService.getAllMovies as jest.Mock).mockResolvedValue([mockMovie]);
       const req = {} as any;
       const res = mockRes();
 
       await MovieController.getAllMovies(req, res, next);
+
       expect(res.json).toHaveBeenCalledWith({
         message: 'Movies fetched successfully',
-        data: [mockMovie],
+        data: [{ ...mockMovie, rating: 4.5 }],
       });
+    });
+
+    it('calls next on error', async () => {
+      (movieService.getAllMovies as jest.Mock).mockRejectedValue(
+        new Error('fail')
+      );
+      const req = {} as any;
+      const res = mockRes();
+
+      await MovieController.getAllMovies(req, res, next);
+      expect(next).toHaveBeenCalledWith(expect.any(Error));
     });
   });
 
   describe('searchMovie', () => {
-    it('returns { message, data } with matched movies', async () => {
-      jest.spyOn(MovieService, 'searchMovie').mockResolvedValue([
-        /*...*/
-      ]);
+    it('returns matched movies', async () => {
+      (movieService.searchMovie as jest.Mock).mockResolvedValue([mockMovie]);
       const req = { query: { q: 'Inception' } } as any;
       const res = mockRes();
-      const next = jest.fn();
 
       await MovieController.searchMovie(req, res, next);
+
       expect(res.json).toHaveBeenCalledWith({
         message: 'Movies search completed',
-        data: expect.any(Array),
+        data: [{ ...mockMovie, rating: 4.5 }],
       });
     });
 
-    it('calls next with BadRequestError if query is missing', async () => {
+    it('returns empty array when no movies match', async () => {
+      (movieService.searchMovie as jest.Mock).mockResolvedValue([]);
       const req = { query: {} } as any;
       const res = mockRes();
-      const next = jest.fn();
 
       await MovieController.searchMovie(req, res, next);
-      expect(next).toHaveBeenCalledWith(
-        expect.objectContaining({
-          name: 'BadRequestError',
-          message: 'Missing or invalid search query',
-          status: 400,
-        })
-      );
+
+      expect(res.json).toHaveBeenCalledWith({
+        message: 'Movies search completed',
+        data: [],
+      });
     });
 
-    it('calls next with BadRequestError if query is an empty string', async () => {
-      const req = { query: { q: '' } } as any;
+    it('calls next on error', async () => {
+      (movieService.searchMovie as jest.Mock).mockRejectedValue(
+        new Error('fail')
+      );
+      const req = { query: {} } as any;
       const res = mockRes();
-      const next = jest.fn();
 
       await MovieController.searchMovie(req, res, next);
-      expect(next).toHaveBeenCalledWith(
-        expect.objectContaining({
-          name: 'BadRequestError',
-          message: 'Missing or invalid search query',
-          status: 400,
-        })
+      expect(next).toHaveBeenCalledWith(expect.any(Error));
+    });
+  });
+
+  describe('getUpcomingMovies', () => {
+    it('returns upcoming movies enriched with ratings', async () => {
+      (movieService.getUpcomingMovies as jest.Mock).mockResolvedValue([
+        mockMovie,
+      ]);
+      const req = {} as any;
+      const res = mockRes();
+
+      await MovieController.getUpcomingMovies(req, res, next);
+
+      expect(res.json).toHaveBeenCalledWith({
+        message: 'Upcoming movies fetched successfully',
+        data: [{ ...mockMovie, rating: 4.5 }],
+      });
+    });
+
+    it('calls next on error', async () => {
+      (movieService.getUpcomingMovies as jest.Mock).mockRejectedValue(
+        new Error('fail')
       );
+      const req = {} as any;
+      const res = mockRes();
+
+      await MovieController.getUpcomingMovies(req, res, next);
+      expect(next).toHaveBeenCalledWith(expect.any(Error));
+    });
+  });
+
+  describe('getMoviesByTheater', () => {
+    it('returns movies by theater enriched with ratings', async () => {
+      (movieService.getMoviesByTheater as jest.Mock).mockResolvedValue([
+        mockMovie,
+      ]);
+      const req = { params: { theaterId: 't-1' } } as any;
+      const res = mockRes();
+
+      await MovieController.getMoviesByTheater(req, res, next);
+
+      expect(res.json).toHaveBeenCalledWith({
+        message: 'Movies by theater fetched successfully',
+        data: [{ ...mockMovie, rating: 4.5 }],
+      });
+    });
+
+    it('calls next on error', async () => {
+      (movieService.getMoviesByTheater as jest.Mock).mockRejectedValue(
+        new Error('fail')
+      );
+      const req = { params: { theaterId: 't-1' } } as any;
+      const res = mockRes();
+
+      await MovieController.getMoviesByTheater(req, res, next);
+      expect(next).toHaveBeenCalledWith(expect.any(Error));
     });
   });
 });

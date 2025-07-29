@@ -21,8 +21,12 @@ import { movieIdParamValidator } from '../validators/movie.validator.js';
 import { handleValidationError } from '../middlewares/handleValidatonError.middleware.js';
 import { decodeJwtToken } from '../middlewares/auth.middleware.js';
 import { permission } from '../middlewares/permission.js';
-import { movieHallIdParamsValidator, theaterIdParamValidator } from '../validators/movie-hall.validator.js';
+import {
+  movieHallIdParamsValidator,
+  theaterIdParamValidator,
+} from '../validators/movie-hall.validator.js';
 import { dateParamValidator } from '../validators/date.validator.js';
+import { getBookedSeatsByScreeningId } from '../controllers/booked-seat.controller.js';
 
 const router = express.Router();
 
@@ -97,5 +101,7 @@ router.get(
   handleValidationError,
   getScreeningsByDate
 );
+
+router.get('/:screeningId/booked-seats', getBookedSeatsByScreeningId);
 
 export default router;

@@ -84,24 +84,6 @@ describe('MovieModel', () => {
     ).rejects.toThrow(/Duration must be an integer value in minutes/);
   });
 
-  it('should fail if releaseDate is in the future', async () => {
-    const futureDate = new Date();
-    futureDate.setFullYear(futureDate.getFullYear() + 1);
-
-    await expect(
-      MovieModel.create({
-        title: 'Future Movie',
-        description: 'desc',
-        ageRating: 'PG-13',
-        genre: 'Sci-Fi',
-        releaseDate: futureDate,
-        director: 'Christopher Nolan',
-        durationMinutes: 100,
-        recommended: false,
-      })
-    ).rejects.toThrow(/Release date cannot be in the future/);
-  });
-
   it('should fail if ageRating is invalid', async () => {
     await expect(
       MovieModel.create({

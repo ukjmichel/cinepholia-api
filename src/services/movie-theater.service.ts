@@ -1,14 +1,30 @@
+/**
+ * Service class for managing movie theaters in the database.
+ *
+ * Main functionalities:
+ * - Create a movie theater (throws ConflictError if already exists)
+ * - Retrieve by ID (throws NotFoundError if not found)
+ * - Retrieve all theaters
+ * - Update a theater (throws NotFoundError if not found)
+ * - Delete a theater (throws NotFoundError if not found)
+ * - Search theaters by city, address, postalCode, or theaterId (partial match)
+ *
+ * Explicitly handled errors:
+ * - ConflictError if a theater with the same ID already exists
+ * - NotFoundError if a theater is not found for read/update/delete
+ *
+ */
+
 import {
   MovieTheaterModel,
   MovieTheaterAttributes,
 } from '../models/movie-theater.model.js';
 import { ConflictError } from '../errors/conflict-error.js';
 import { NotFoundError } from '../errors/not-found-error.js';
-import { Op } from 'sequelize';
+import { Op, Transaction } from 'sequelize';
+import { param } from 'express-validator';
+import { sequelize } from '../config/db.js';
 
-/**
- * Service class for managing movie theaters in the database.
- */
 export class MovieTheaterService {
   /**
    * Creates a new movie theater.
@@ -18,16 +34,21 @@ export class MovieTheaterService {
    * @returns {Promise<MovieTheaterModel>} The created movie theater instance.
    * @throws {ConflictError} If a theater with the same ID already exists.
    */
-  static async create(
+  async create(
     theaterData: MovieTheaterAttributes
   ): Promise<MovieTheaterModel> {
-    const existing = await MovieTheaterModel.findByPk(theaterData.theaterId);
-    if (existing) {
-      throw new ConflictError(
-        `A movie theater with ID "${theaterData.theaterId}" already exists.`
-      );
-    }
-    return await MovieTheaterModel.create(theaterData);
+    return await sequelize.transaction(async (t: Transaction) => {
+      const existing = await MovieTheaterModel.findByPk(theaterData.theaterId, {
+        transaction: t,
+        lock: t.LOCK.UPDATE,
+      });
+      if (existing) {
+        throw new ConflictError(
+          `A movie theater with ID "${theaterData.theaterId}" already exists.`
+        );
+      }
+      return await MovieTheaterModel.create(theaterData, { transaction: t });
+    });
   }
 
   /**
@@ -38,7 +59,7 @@ export class MovieTheaterService {
    * @returns {Promise<MovieTheaterModel>} The found movie theater instance.
    * @throws {NotFoundError} If the theater is not found.
    */
-  static async getById(theaterId: string): Promise<MovieTheaterModel> {
+  async getById(theaterId: string): Promise<MovieTheaterModel> {
     const theater = await MovieTheaterModel.findByPk(theaterId);
     if (!theater) {
       throw new NotFoundError(
@@ -53,7 +74,7 @@ export class MovieTheaterService {
    *
    * @returns {Promise<MovieTheaterModel[]>} An array of all movie theaters.
    */
-  static async getAll(): Promise<MovieTheaterModel[]> {
+  async getAll(): Promise<MovieTheaterModel[]> {
     return await MovieTheaterModel.findAll();
   }
 
@@ -66,19 +87,22 @@ export class MovieTheaterService {
    * @returns {Promise<MovieTheaterModel>} The updated movie theater instance.
    * @throws {NotFoundError} If the theater is not found.
    */
-  static async update(
+  async update(
     theaterId: string,
     updateData: Partial<MovieTheaterAttributes>
   ): Promise<MovieTheaterModel> {
-    const theater = await MovieTheaterModel.findByPk(theaterId);
-    if (!theater) {
-      throw new NotFoundError(
-        `Movie theater with ID "${theaterId}" not found.`
-      );
-    }
-    // Optionally, capture the updated instance returned by update
-    const updated = await theater.update(updateData);
-    return updated;
+    return await sequelize.transaction(async (t: Transaction) => {
+      const theater = await MovieTheaterModel.findByPk(theaterId, {
+        transaction: t,
+        lock: t.LOCK.UPDATE,
+      });
+      if (!theater) {
+        throw new NotFoundError(
+          `Movie theater with ID "${theaterId}" not found.`
+        );
+      }
+      return await theater.update(updateData, { transaction: t });
+    });
   }
 
   /**
@@ -89,15 +113,18 @@ export class MovieTheaterService {
    * @returns {Promise<void>}
    * @throws {NotFoundError} If the theater is not found.
    */
-  static async delete(theaterId: string): Promise<void> {
-    const deletedRows = await MovieTheaterModel.destroy({
-      where: { theaterId },
+  async delete(theaterId: string): Promise<void> {
+    return await sequelize.transaction(async (t: Transaction) => {
+      const deletedRows = await MovieTheaterModel.destroy({
+        where: { theaterId },
+        transaction: t,
+      });
+      if (deletedRows === 0) {
+        throw new NotFoundError(
+          `Movie theater with ID "${theaterId}" not found.`
+        );
+      }
     });
-    if (deletedRows === 0) {
-      throw new NotFoundError(
-        `Movie theater with ID "${theaterId}" not found.`
-      );
-    }
   }
 
   /**
@@ -108,7 +135,7 @@ export class MovieTheaterService {
    *   The search filters: city, address, postalCode, or theaterId.
    * @returns {Promise<MovieTheaterModel[]>} The list of matched movie theaters.
    */
-  static async search(
+  async search(
     filters: Partial<
       Pick<
         MovieTheaterAttributes,
@@ -119,7 +146,7 @@ export class MovieTheaterService {
     const where: any = {};
 
     if (filters.city) {
-      where.city = { [Op.like]: `%${filters.city}%` }; // case-insensitive if collation is set
+      where.city = { [Op.like]: `%${filters.city}%` };
     }
     if (filters.address) {
       where.address = { [Op.like]: `%${filters.address}%` };
@@ -133,4 +160,62 @@ export class MovieTheaterService {
 
     return await MovieTheaterModel.findAll({ where });
   }
+
+  /**
+   * Bulk-creates multiple movie theaters in a single transaction.
+   * Throws a ConflictError if any theater with a duplicate ID already exists.
+   *
+   * @param {MovieTheaterAttributes[]} theatersData - The array of movie theaters to create.
+   * @returns {Promise<MovieTheaterModel[]>} The created movie theater instances, or an empty array if no input.
+   * @throws {ConflictError} If any theater with the same ID already exists.
+   */
+  async bulkCreate(
+    theatersData: MovieTheaterAttributes[]
+  ): Promise<MovieTheaterModel[]> {
+    // ✅ Early return for empty input to prevent unnecessary DB queries
+    if (!theatersData || theatersData.length === 0) {
+      return [];
+    }
+
+    return await sequelize.transaction(async (t: Transaction) => {
+      const theaterIds = theatersData.map((t) => t.theaterId);
+
+      const existing = await MovieTheaterModel.findAll({
+        where: { theaterId: theaterIds },
+        transaction: t,
+        lock: t.LOCK.UPDATE,
+      });
+
+      if (existing.length > 0) {
+        const existingIds = existing.map((t) => t.theaterId).join(', ');
+        throw new ConflictError(
+          `One or more movie theaters already exist with IDs: ${existingIds}`
+        );
+      }
+
+      return await MovieTheaterModel.bulkCreate(theatersData, {
+        transaction: t,
+      });
+    });
+  }
 }
+
+/**
+ * Validator for the `theaterId` route parameter.
+ * Checks that theaterId exists, is a string, not empty, and matches allowed pattern.
+ */
+export const theaterIdParamValidator = [
+  param('theaterId')
+    .exists()
+    .withMessage('Theater ID is required')
+    .bail()
+    .isString()
+    .withMessage('Theater ID must be a string')
+    .bail()
+    .notEmpty()
+    .withMessage('Theater ID cannot be empty'),
+  // You can add a regex if you want to restrict the allowed format, e.g.:
+  // .matches(/^[a-zA-Z0-9\-]+$/).withMessage('Invalid theater ID format')
+];
+
+export const movieTheaterService = new MovieTheaterService();

@@ -1,3 +1,19 @@
+/**
+ * Seat reservation management service.
+ *
+ * This service manages all operations related to reservations:
+ * creation with verification of available seats, reading by various identifiers,
+ * updating, deletion, and searching by user, session, or status.
+ *
+ * Main features:
+ * - Secure creation of reservations (checks the number of remaining seats)
+ * - Reading a reservation or list by user, session, or status
+ * - Modification and deletion of a reservation
+ * - Simple search with keywords (userId, screeningId, status)
+ * - Integration with user, session, and room models
+ *
+ */
+
 import {
   BookingModel,
   BookingAttributes,
@@ -12,20 +28,26 @@ import { ScreeningModel } from '../models/screening.model.js';
 import { MovieHallModel } from '../models/movie-hall.model.js';
 
 /**
- * Service class for managing bookings.
+ * Main service for CRUD operations and search on reservations.
  */
 export class BookingService {
-  // CRUD
+  // === CRUD Operations ===
 
   /**
-   * Get a booking by its ID.
-   * @param {string} bookingId - UUID of the booking.
-   * @returns {Promise<BookingModel>} BookingModel instance.
-   * @throws {NotFoundError} If the booking does not exist.
+   * Retrieves a reservation by its unique identifier.
+   *
+   * @param {string} bookingId - UUID of the reservation.
+   * @param {Transaction} [transaction] - Optional transaction.
+   * @returns {Promise<BookingModel>} Found reservation with user and screening.
+   * @throws {NotFoundError} If the reservation does not exist.
    */
-  static async getBookingById(bookingId: string): Promise<BookingModel> {
+  async getBookingById(
+    bookingId: string,
+    transaction?: Transaction
+  ): Promise<BookingModel | null> {
     const booking = await BookingModel.findByPk(bookingId, {
       include: [UserModel, ScreeningModel],
+      transaction,
     });
     if (!booking) {
       throw new NotFoundError(`Booking with id ${bookingId} not found`);
@@ -34,205 +56,190 @@ export class BookingService {
   }
 
   /**
-   * Create a new booking after verifying seat availability.
-   * @param {BookingCreationAttributes} payload - Booking creation data.
-   * @returns {Promise<BookingModel>} Created BookingModel instance.
-   * @throws {NotFoundError} If the screening or hall is not found.
-   * @throws {ConflictError} If not enough seats are available.
+   * Creates a new reservation after checking available seats.
+   *
+   * @param {BookingCreationAttributes} payload - Reservation data.
+   * @param {Transaction} [transaction] - Optional transaction.
+   * @returns {Promise<BookingModel>} Created reservation.
+   * @throws {NotFoundError} If the screening or hall does not exist.
+   * @throws {ConflictError} If the number of requested seats exceeds available seats.
    */
-  static async createBooking(
-    payload: BookingCreationAttributes
+  async createBooking(
+    payload: BookingCreationAttributes,
+    transaction?: Transaction
   ): Promise<BookingModel> {
-    return await sequelize.transaction(async (t: Transaction) => {
-      const screening = await ScreeningModel.findByPk(payload.screeningId, {
-        include: [MovieHallModel],
-        transaction: t,
-      });
-      if (!screening) throw new NotFoundError('Screening not found');
-
-      const hall = await screening.$get('hall', { transaction: t });
-      if (!hall) throw new NotFoundError('Hall not found for this screening');
-
-      const totalSeats = hall.seatsLayout.reduce(
-        (sum, row) => sum + row.length,
-        0
-      );
-
-      const bookedSeats = await BookingModel.sum('seatsNumber', {
-        where: { screeningId: payload.screeningId },
-        transaction: t,
-      });
-
-      const remainingSeats = totalSeats - (bookedSeats || 0);
-      if (payload.seatsNumber > remainingSeats) {
-        throw new ConflictError(
-          `Only ${remainingSeats} seat(s) left for this screening`
-        );
-      }
-
-      return await BookingModel.create(payload, { transaction: t });
-    });
+    // Only booking creation, no seat logic
+    return BookingModel.create(payload, { transaction });
   }
 
-  /**
-   * Update a booking by ID.
-   * @param {string} bookingId - UUID of the booking.
-   * @param {Partial<BookingAttributes>} update - Partial booking data.
-   * @returns {Promise<BookingModel>} Updated BookingModel instance.
-   * @throws {NotFoundError} If the booking is not found.
-   */
-  static async updateBooking(
+  async updateBooking(
     bookingId: string,
-    update: Partial<BookingAttributes>
+    update: Partial<BookingAttributes>,
+    transaction?: Transaction
   ): Promise<BookingModel> {
-    return await sequelize.transaction(async (t: Transaction) => {
-      const booking = await BookingModel.findByPk(bookingId, {
-        transaction: t,
-      });
-      if (!booking) {
-        throw new NotFoundError(`Booking with id ${bookingId} not found`);
-      }
-
-      await booking.update(update, { transaction: t });
-      await booking.reload({ transaction: t });
-
-      return booking;
-    });
+    const booking = await BookingModel.findByPk(bookingId, { transaction });
+    if (!booking)
+      throw new NotFoundError(`Booking with id ${bookingId} not found`);
+    await booking.update(update, { transaction });
+    await booking.reload({ transaction });
+    return booking;
   }
 
   /**
-   * Delete a booking by ID.
-   * @param {string} bookingId - UUID of the booking.
+   * Deletes a reservation.
+   *
+   * @param {string} bookingId - UUID of the reservation.
+   * @param {Transaction} [transaction] - Optional transaction.
    * @returns {Promise<void>}
-   * @throws {NotFoundError} If the booking is not found.
+   * @throws {NotFoundError} If the reservation does not exist.
    */
-  static async deleteBooking(bookingId: string): Promise<void> {
-    return await sequelize.transaction(async (t: Transaction) => {
+  async deleteBooking(
+    bookingId: string,
+    transaction?: Transaction
+  ): Promise<void> {
+    const run = async (t: Transaction) => {
       const booking = await BookingModel.findByPk(bookingId, {
         transaction: t,
       });
       if (!booking) {
         throw new NotFoundError(`Booking with id ${bookingId} not found`);
       }
-
       await booking.destroy({ transaction: t });
-    });
+    };
+
+    if (transaction) {
+      return run(transaction);
+    } else {
+      return await sequelize.transaction(run);
+    }
   }
 
   /**
-   * Get all bookings.
-   * @returns {Promise<BookingModel[]>} Array of BookingModel instances.
+   * Retrieves all reservations, sorted by descending date.
+   *
+   * @param {Transaction} [transaction] - Optional transaction.
+   * @returns {Promise<BookingModel[]>} List of reservations.
    */
-  static async getAllBookings(): Promise<BookingModel[]> {
+  async getAllBookings(transaction?: Transaction): Promise<BookingModel[]> {
     return BookingModel.findAll({
       include: [UserModel, ScreeningModel],
       order: [['bookingDate', 'DESC']],
+      transaction,
     });
   }
 
-  // Find by X
+  // === Filters ===
 
   /**
-   * Get all bookings by user ID.
+   * Retrieves the reservations of a user.
+   *
    * @param {string} userId - UUID of the user.
-   * @returns {Promise<BookingModel[]>} Array of BookingModel instances.
+   * @param {Transaction} [transaction] - Optional transaction.
+   * @returns {Promise<BookingModel[]>} User's reservations.
    */
-  static async getBookingsByUser(userId: string): Promise<BookingModel[]> {
+  async getBookingsByUser(
+    userId: string,
+    transaction?: Transaction
+  ): Promise<BookingModel[]> {
     return BookingModel.findAll({
       where: { userId },
       include: [ScreeningModel],
       order: [['bookingDate', 'DESC']],
+      transaction,
     });
   }
 
   /**
-   * Get all bookings by screening ID.
+   * Retrieves the reservations associated with a screening.
+   *
    * @param {string} screeningId - UUID of the screening.
-   * @returns {Promise<BookingModel[]>} Array of BookingModel instances.
+   * @param {Transaction} [transaction] - Optional transaction.
+   * @returns {Promise<BookingModel[]>} Screening's reservations.
    */
-  static async getBookingsByScreening(
-    screeningId: string
+  async getBookingsByScreening(
+    screeningId: string,
+    transaction?: Transaction
   ): Promise<BookingModel[]> {
     return BookingModel.findAll({
       where: { screeningId },
       include: [UserModel],
       order: [['bookingDate', 'DESC']],
+      transaction,
     });
   }
 
   /**
-   * Get all bookings by status (pending, used, canceled).
-   * @param {string} status - Booking status.
-   * @returns {Promise<BookingModel[]>} Array of BookingModel instances.
+   * Retrieves reservations by status (e.g., pending, used, canceled).
+   *
+   * @param {string} status - Status of the reservation.
+   * @param {Transaction} [transaction] - Optional transaction.
+   * @returns {Promise<BookingModel[]>} List of reservations with this status.
    */
-  static async getBookingsByStatus(status: string): Promise<BookingModel[]> {
+  async getBookingsByStatus(
+    status: string,
+    transaction?: Transaction
+  ): Promise<BookingModel[]> {
     return BookingModel.findAll({
       where: { status },
       include: [UserModel, ScreeningModel],
       order: [['bookingDate', 'DESC']],
+      transaction,
+    });
+  }
+
+  // === Search ===
+
+  /**
+   * Searches for reservations (with joins) on status, screeningId, or userId fields.
+   *
+   * @param {string} query - Search term.
+   * @param {Transaction} [transaction] - Optional transaction.
+   * @returns {Promise<BookingModel[]>} Matching reservations.
+   */
+  async searchBookingSimple(
+    query: string,
+    transaction?: Transaction
+  ): Promise<BookingModel[]> {
+    return BookingModel.findAll({
+      where: {
+        [Op.or]: [
+          { status: { [Op.like]: `%${query}%` } },
+          { screeningId: { [Op.like]: `%${query}%` } },
+          { userId: { [Op.like]: `%${query}%` } },
+        ],
+      },
+      include: [
+        { model: UserModel, as: 'user', required: false },
+        { model: ScreeningModel, as: 'screening', required: false },
+      ],
+      order: [['bookingDate', 'DESC']],
+      transaction,
     });
   }
 
   /**
-   * Search bookings with a simple text query.
-   * Searches status, screeningId, or userId fields using LIKE.
-   * Includes user and screening associations.
+   * Simplified search (without joins) on status, screeningId, or userId fields.
+   *
    * @param {string} query - Search term.
-   * @returns {Promise<BookingModel[]>} Array of matching BookingModel instances.
+   * @param {Transaction} [transaction] - Optional transaction.
+   * @returns {Promise<BookingModel[]>} Matching reservations.
    */
-  static async searchBookingSimple(query: string): Promise<BookingModel[]> {
-    try {
-      const bookings = await BookingModel.findAll({
-        where: {
-          [Op.or]: [
-            { status: { [Op.like]: `%${query}%` } },
-            { screeningId: { [Op.like]: `%${query}%` } },
-            { userId: { [Op.like]: `%${query}%` } },
-          ],
-        },
-        include: [
-          {
-            model: UserModel,
-            as: 'user',
-            required: false,
-          },
-          {
-            model: ScreeningModel,
-            as: 'screening',
-            required: false,
-          },
+  async searchBookingVerySimple(
+    query: string,
+    transaction?: Transaction
+  ): Promise<BookingModel[]> {
+    return BookingModel.findAll({
+      where: {
+        [Op.or]: [
+          { status: { [Op.like]: `%${query}%` } },
+          { screeningId: { [Op.like]: `%${query}%` } },
+          { userId: { [Op.like]: `%${query}%` } },
         ],
-        order: [['bookingDate', 'DESC']],
-      });
-
-      return bookings;
-    } catch (error) {
-      throw error;
-    }
-  }
-
-  /**
-   * Very simple booking search (no JOINs).
-   * Searches status, screeningId, or userId fields using LIKE.
-   * @param {string} query - Search term.
-   * @returns {Promise<BookingModel[]>} Array of matching BookingModel instances.
-   */
-  static async searchBookingVerySimple(query: string): Promise<BookingModel[]> {
-    try {
-      const bookings = await BookingModel.findAll({
-        where: {
-          [Op.or]: [
-            { status: { [Op.like]: `%${query}%` } },
-            { screeningId: { [Op.like]: `%${query}%` } },
-            { userId: { [Op.like]: `%${query}%` } },
-          ],
-        },
-        order: [['bookingDate', 'DESC']],
-      });
-
-      return bookings;
-    } catch (error) {
-      throw error;
-    }
+      },
+      order: [['bookingDate', 'DESC']],
+      transaction,
+    });
   }
 }
+
+export const bookingService = new BookingService();

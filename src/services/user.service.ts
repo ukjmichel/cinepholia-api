@@ -1,4 +1,26 @@
-// src/services/user.service.ts
+/**
+ * Service for managing users.
+ *
+ * Provides CRUD operations, uniqueness checks (email and username),
+ * authentication management, password handling, user verification,
+ * and paginated listing functionality.
+ *
+ * Main features:
+ * - Create, retrieve, update, and delete users.
+ * - Ensure uniqueness for usernames and emails.
+ * - Secure password changes.
+ * - User verification.
+ * - Advanced user listing with pagination and filters.
+ *
+ * Explicit errors:
+ * - NotFoundError: User does not exist.
+ * - ConflictError: Duplicate username or email.
+ *
+ * Dependencies:
+ * - UserModel for database interaction.
+ * - Sequelize for querying and transactions.
+ *
+ */
 
 import { ConflictError } from '../errors/conflict-error.js';
 import { NotFoundError } from '../errors/not-found-error.js';
@@ -95,12 +117,15 @@ export class UserService {
   }
 
   /**
-   * Retrieves a user by their unique ID
-   * @param userId - The unique identifier of the user
-   * @returns Promise resolving to the user model or null if not found
+   * Retrieves a user by their unique ID.
+   * @param userId - The unique identifier of the user.
+   * @returns Promise resolving to the user model.
+   * @throws {NotFoundError} If user is not found.
    */
-  async getUserById(userId: string): Promise<UserModel | null> {
-    return UserModel.findByPk(userId);
+  async getUserById(userId: string): Promise<UserModel> {
+    const user = await UserModel.findByPk(userId);
+    if (!user) throw new NotFoundError('User not found');
+    return user;
   }
 
   /**
@@ -108,10 +133,8 @@ export class UserService {
    * @param identifier - Username or email to search for (case-insensitive)
    * @returns Promise resolving to the user model or null if not found
    */
-  async getUserByUsernameOrEmail(
-    identifier: string
-  ): Promise<UserModel | null> {
-    return UserModel.findOne({
+  async getUserByUsernameOrEmail(identifier: string): Promise<UserModel> {
+    const user = await UserModel.findOne({
       where: {
         [Op.or]: [
           { username: identifier.toLowerCase() },
@@ -119,6 +142,8 @@ export class UserService {
         ],
       },
     });
+    if (!user) throw new NotFoundError('User not found');
+    return user;
   }
 
   /**
@@ -303,12 +328,80 @@ export class UserService {
     const isValid = await user.validatePassword(password);
     return isValid ? user : null;
   }
+
+  async searchUsers(filters: any): Promise<UserModel[]> {
+    const where: any = {};
+
+    // Global search as string
+    if (typeof filters === 'string' && filters.trim() !== '') {
+      const value = `%${filters.trim().toLowerCase()}%`;
+      where[Op.or] = [
+        { username: { [Op.like]: value } },
+        { email: { [Op.like]: value } },
+        { firstName: { [Op.like]: value } },
+        { lastName: { [Op.like]: value } },
+        { userId: { [Op.like]: value } },
+      ];
+    }
+    // Object filter: support q/global and individual fields
+    else if (typeof filters === 'object' && filters !== null) {
+      const orArr: any[] = [];
+
+      // Global query
+      if (
+        filters.q &&
+        typeof filters.q === 'string' &&
+        filters.q.trim() !== ''
+      ) {
+        const q = `%${filters.q.trim().toLowerCase()}%`;
+        orArr.push(
+          { username: { [Op.like]: q } },
+          { email: { [Op.like]: q } },
+          { firstName: { [Op.like]: q } },
+          { lastName: { [Op.like]: q } },
+          { userId: { [Op.like]: q } }
+        );
+      }
+
+      // Field-specific string matches (partial)
+      if (filters.username)
+        orArr.push({
+          username: { [Op.like]: `%${filters.username.toLowerCase()}%` },
+        });
+      if (filters.email)
+        orArr.push({
+          email: { [Op.like]: `%${filters.email.toLowerCase()}%` },
+        });
+      if (filters.firstName)
+        orArr.push({
+          firstName: { [Op.like]: `%${filters.firstName.toLowerCase()}%` },
+        });
+      if (filters.lastName)
+        orArr.push({
+          lastName: { [Op.like]: `%${filters.lastName.toLowerCase()}%` },
+        });
+      if (filters.userId)
+        orArr.push({ userId: { [Op.like]: `%${filters.userId}%` } });
+
+      // Combine with OR if needed
+      if (orArr.length > 0) where[Op.or] = orArr;
+
+      // Exact match for boolean
+      if (filters.verified !== undefined) {
+        if (typeof filters.verified === 'string') {
+          where.verified =
+            filters.verified === 'true' || filters.verified === '1';
+        } else {
+          where.verified = !!filters.verified;
+        }
+      }
+    }
+
+    return UserModel.findAll({ where });
+  }
 }
 
 /**
  * Singleton instance of UserService for convenient access
- * @example
- * import { userService } from './services/user.service.js';
- * const user = await userService.createUser(userData);
  */
 export const userService = new UserService();

@@ -1,13 +1,31 @@
+/**
+ * Booking Ticket Controller
+ *
+ * Gère la génération d’un ticket de réservation au format HTML, intégrant les détails de la réservation
+ * et un QR code unique pour vérification. L’endpoint produit un ticket visuel destiné à l’impression
+ * ou à la présentation sur mobile lors de l’entrée.
+ *
+ * Fonctionnalité principale :
+ * - Génération d’un ticket personnalisé avec QR code à partir d’un bookingId.
+ *
+ * Dépendances :
+ * - BookingService : récupération de la réservation et de l’utilisateur.
+ * - qrcode : génération du QR code embarqué dans le ticket.
+ *
+ */
+
 import { Request, Response, NextFunction } from 'express';
 import QRCode from 'qrcode';
-import { BookingService } from '../services/booking.service.js';
+import { bookingService } from '../services/booking.service.js';
+import { NotFoundError } from '../errors/not-found-error.js';
 
 /**
  * Generate a ticket with booking details and a QR code.
- * @route GET /bookings/:bookingId/ticket
  * @param {Request} req - Express request object (expects bookingId in params)
  * @param {Response} res - Express response object (returns ticket HTML)
  * @param {NextFunction} next - Express next middleware
+ * @returns {Promise<void>}
+ * @async
  */
 export const generateTicket = async (
   req: Request,
@@ -16,8 +34,12 @@ export const generateTicket = async (
 ) => {
   try {
     // Fetch booking data (and possibly user info)
-    const booking = await BookingService.getBookingById(req.params.bookingId);
+    const booking = await bookingService.getBookingById(req.params.bookingId);
     // Let's assume booking.User is eager-loaded, and has "nom" and "prenom"
+    if (!booking) {
+      // handle not found (throw error, return 404, etc)
+      throw new NotFoundError('Booking not found');
+    }
     const { bookingId, user } = booking;
     const nom = user?.lastName || user?.firstName || 'N/A';
     const prenom = user?.firstName || user?.lastName || 'N/A';

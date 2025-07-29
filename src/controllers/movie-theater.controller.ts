@@ -1,5 +1,18 @@
+/**
+ * Contrôleur pour la gestion des cinémas/salles de cinéma.
+ *
+ * Fournit les gestionnaires de routes HTTP pour la création, la lecture,
+ * la mise à jour, la suppression et la recherche de cinémas.
+ * Toutes les opérations métier sont déléguées au service movieTheaterService.
+ * Les erreurs sont gérées via le middleware Express.
+ *
+ * Toutes les méthodes sont statiques et utilisables directement comme handlers Express.
+ *
+ * @module controllers/movie-theater.controller
+ * @since 2024
+ */
 import { Request, Response, NextFunction } from 'express';
-import { MovieTheaterService } from '../services/movie-theater.service.js';
+import { movieTheaterService } from '../services/movie-theater.service.js';
 
 /**
  * Controller for Movie Theater endpoints.
@@ -14,7 +27,7 @@ export class MovieTheaterController {
    */
   static async create(req: Request, res: Response, next: NextFunction) {
     try {
-      const theater = await MovieTheaterService.create(req.body);
+      const theater = await movieTheaterService.create(req.body);
       res.status(201).json(theater);
     } catch (err) {
       next(err);
@@ -30,7 +43,7 @@ export class MovieTheaterController {
    */
   static async getAll(req: Request, res: Response, next: NextFunction) {
     try {
-      const theaters = await MovieTheaterService.getAll();
+      const theaters = await movieTheaterService.getAll();
       res.json(theaters);
     } catch (err) {
       next(err);
@@ -46,7 +59,7 @@ export class MovieTheaterController {
    */
   static async getById(req: Request, res: Response, next: NextFunction) {
     try {
-      const theater = await MovieTheaterService.getById(req.params.id);
+      const theater = await movieTheaterService.getById(req.params.id);
       res.json(theater);
     } catch (err) {
       next(err);
@@ -62,7 +75,7 @@ export class MovieTheaterController {
    */
   static async update(req: Request, res: Response, next: NextFunction) {
     try {
-      const theater = await MovieTheaterService.update(req.params.id, req.body);
+      const theater = await movieTheaterService.update(req.params.id, req.body);
       res.json(theater);
     } catch (err) {
       next(err);
@@ -78,7 +91,7 @@ export class MovieTheaterController {
    */
   static async delete(req: Request, res: Response, next: NextFunction) {
     try {
-      await MovieTheaterService.delete(req.params.id);
+      await movieTheaterService.delete(req.params.id);
       res.status(204).send();
     } catch (err) {
       next(err);
@@ -96,7 +109,7 @@ export class MovieTheaterController {
     try {
       // Accept query parameters like ?city=Lyon&postalCode=69000
       const { city, address, postalCode, theaterId } = req.query;
-      const theaters = await MovieTheaterService.search({
+      const theaters = await movieTheaterService.search({
         city: city as string,
         address: address as string,
         postalCode: postalCode as string,

@@ -3,11 +3,12 @@ import { body, param, query } from 'express-validator';
 // For POST /movies
 export const createMovieValidator = [
   body('movieId')
-    .optional()
+    .optional({ checkFalsy: true })
     .isString()
     .withMessage('movieId must be a string')
     .isLength({ min: 1, max: 36 })
     .withMessage('movieId must be between 1 and 36 characters'),
+
   body('title')
     .notEmpty()
     .withMessage('title is required')
@@ -15,6 +16,7 @@ export const createMovieValidator = [
     .withMessage('title must be a string')
     .isLength({ min: 1, max: 255 })
     .withMessage('title must be between 1 and 255 characters'),
+
   body('description')
     .notEmpty()
     .withMessage('description is required')
@@ -22,11 +24,13 @@ export const createMovieValidator = [
     .withMessage('description must be a string')
     .isLength({ min: 1, max: 2000 })
     .withMessage('description must be between 1 and 2000 characters'),
+
   body('ageRating')
     .notEmpty()
     .withMessage('ageRating is required')
     .isIn(['G', 'PG', 'PG-13', 'R', 'NC-17', 'U', 'UA', 'A', 'Not Rated'])
     .withMessage('Invalid age rating'),
+
   body('genre')
     .notEmpty()
     .withMessage('genre is required')
@@ -34,12 +38,14 @@ export const createMovieValidator = [
     .withMessage('genre must be a string')
     .isLength({ min: 1, max: 100 })
     .withMessage('genre must be between 1 and 100 characters'),
+
   body('releaseDate')
     .notEmpty()
     .withMessage('releaseDate is required')
     .isISO8601()
     .withMessage('releaseDate must be a valid date')
     .toDate(),
+
   body('director')
     .notEmpty()
     .withMessage('director is required')
@@ -47,16 +53,19 @@ export const createMovieValidator = [
     .withMessage('director must be a string')
     .isLength({ min: 1, max: 255 })
     .withMessage('director must be between 1 and 255 characters'),
+
   body('durationMinutes')
     .notEmpty()
     .withMessage('durationMinutes is required')
+    .toInt() // Convert to int from string
     .isInt({ min: 1, max: 1000 })
     .withMessage('durationMinutes must be an integer between 1 and 1000'),
+
   body('recommended')
-    .optional()
+    .optional({ checkFalsy: true })
+    .toBoolean() // Convert from string to boolean
     .isBoolean()
-    .withMessage('recommended must be boolean')
-    .toBoolean(),
+    .withMessage('recommended must be boolean'),
 ];
 
 // For PUT /movies/:movieId
@@ -107,17 +116,50 @@ export const updateMovieValidator = [
 
 // For GET /movies/search
 export const searchMovieValidator = [
-  query('q')
-    .exists({ checkNull: true, checkFalsy: true })
-    .withMessage('Search query (q) is required')
+  // All fields optional, but if present must be valid
+  query('title')
+    .optional()
     .isString()
-    .withMessage('Search query must be a string')
-    .trim()
-    .isLength({ min: 1 })
-    .withMessage('Search query cannot be empty'),
+    .withMessage('Title must be a string')
+    .isLength({ min: 1, max: 255 })
+    .withMessage('Title must be between 1 and 255 characters'),
+
+  query('director')
+    .optional()
+    .isString()
+    .withMessage('Director must be a string')
+    .isLength({ min: 1, max: 255 })
+    .withMessage('Director must be between 1 and 255 characters'),
+
+  query('genre')
+    .optional()
+    .isString()
+    .withMessage('Genre must be a string')
+    .isLength({ min: 1, max: 100 })
+    .withMessage('Genre must be between 1 and 100 characters'),
+
+  query('ageRating')
+    .optional()
+    .isIn(['G', 'PG', 'PG-13', 'R', 'NC-17', 'U', 'UA', 'A', 'Not Rated'])
+    .withMessage('Invalid age rating'),
+
+  query('releaseDate')
+    .optional()
+    .isISO8601()
+    .withMessage('Release date must be a valid date'),
+
+  query('recommended')
+    .optional()
+    .isBoolean()
+    .withMessage('Recommended must be boolean')
+    .toBoolean(),
+
+  query('durationMinutes')
+    .optional()
+    .isInt({ min: 1, max: 1000 })
+    .withMessage('Duration must be an integer between 1 and 1000'),
 ];
 
-// For all :movieId params
 export const movieIdParamValidator = [
   param('movieId')
     .exists()
@@ -126,3 +168,4 @@ export const movieIdParamValidator = [
     .isLength({ min: 1, max: 36 })
     .withMessage('movieId must be between 1 and 36 characters'),
 ];
+

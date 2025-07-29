@@ -1,3 +1,26 @@
+/**
+ * Sequelize Model for Movie Screenings (Screening).
+ *
+ * This file defines a relational database model for managing information
+ * related to movie screenings in a cinema, using Sequelize as the ORM.
+ *
+ * Key Features:
+ * - `screeningId`: Unique UUID identifier for the screening.
+ * - `movieId`: Foreign key to the associated Movie.
+ * - `theaterId`: Foreign key to the associated Movie Theater.
+ * - `hallId`: Foreign key to the associated Movie Hall.
+ * - `startTime`: Date and time of the screening.
+ * - `price`: Ticket price with validation to ensure it's non-negative.
+ *
+ * Associations:
+ * - BelongsTo MovieModel
+ * - BelongsTo MovieTheaterModel
+ * - BelongsTo MovieHallModel
+ *
+ * Circular Dependency Note:
+ * All associations are declared after the class definition to avoid circular reference issues.
+ */
+
 import {
   Table,
   Column,
@@ -10,9 +33,15 @@ import {
 } from 'sequelize-typescript';
 import { Optional } from 'sequelize';
 
+/**
+ * ⚠️ Important: Import models *before* referencing them in decorators
+ *
+ * This prevents circular dependency issues and JavaScript "temporal dead zone" (TDZ) errors
+ * where a model is referenced before it's fully initialized.
+ */
 import { MovieModel } from './movie.model.js';
 import { MovieTheaterModel } from './movie-theater.model.js';
-
+import { MovieHallModel } from './movie-hall.model.js'; // ⬅️ Import early to prevent TDZ
 
 export interface ScreeningAttributes {
   screeningId: string;
@@ -21,7 +50,6 @@ export interface ScreeningAttributes {
   hallId: string;
   startTime: Date;
   price: number;
-  quality: string;
 }
 
 export interface ScreeningCreationAttributes
@@ -55,7 +83,6 @@ export class ScreeningModel
   })
   declare theaterId: string;
 
-  
   @ForeignKey(() => MovieHallModel)
   @Column({
     type: DataType.UUID,
@@ -78,36 +105,28 @@ export class ScreeningModel
   })
   declare price: number;
 
-  @Column({
-    type: DataType.STRING,
-    allowNull: false,
-    validate: {
-      isIn: [['2D', '3D', 'IMAX', '4DX', 'Dolby']],
-    },
-  })
-  declare quality: string;
-
-  // Associations non circulaires : dans la classe
-  @BelongsTo(() => MovieModel, {
-    foreignKey: 'movieId',
-    targetKey: 'movieId',
-  })
+  // Declared associations (populated by decorators below)
   declare movie: MovieModel;
-
-  @BelongsTo(() => MovieTheaterModel, {
-    foreignKey: 'theaterId',
-    targetKey: 'theaterId',
-  })
   declare theater: MovieTheaterModel;
+  declare hall: MovieHallModel;
 
-
- declare hall: MovieHallModel;
   declare readonly createdAt: Date;
   declare readonly updatedAt: Date;
 }
 
-// --------------- ASSOCIATION CIRCULAIRE (à placer après la classe) ---------------
-import { MovieHallModel } from './movie-hall.model.js';
+/**
+ * Associations declared AFTER class definition to avoid circular import issues
+ */
+BelongsTo(() => MovieModel, {
+  foreignKey: 'movieId',
+  targetKey: 'movieId',
+})(ScreeningModel.prototype, 'movie');
+
+BelongsTo(() => MovieTheaterModel, {
+  foreignKey: 'theaterId',
+  targetKey: 'theaterId',
+})(ScreeningModel.prototype, 'theater');
+
 BelongsTo(() => MovieHallModel, {
   foreignKey: 'hallId',
   targetKey: 'hallId',

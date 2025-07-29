@@ -1,5 +1,5 @@
 import * as screeningController from '../../controllers/screening.controller.js';
-import { ScreeningService } from '../../services/screening.service.js';
+import { screeningService } from '../../services/screening.service.js';
 import { NotFoundError } from '../../errors/not-found-error.js';
 
 jest.mock('../../services/screening.service.js');
@@ -41,7 +41,7 @@ beforeEach(() => {
 describe('ScreeningController', () => {
   describe('getScreeningById', () => {
     it('should return a screening by id', async () => {
-      (ScreeningService.getScreeningById as jest.Mock).mockResolvedValue(
+      (screeningService.getScreeningById as jest.Mock).mockResolvedValue(
         mockScreening
       );
 
@@ -50,13 +50,13 @@ describe('ScreeningController', () => {
 
       await screeningController.getScreeningById(req, res, mockNext);
 
-      expect(ScreeningService.getScreeningById).toHaveBeenCalledWith('s-1');
+      expect(screeningService.getScreeningById).toHaveBeenCalledWith('s-1');
       expect(res.json).toHaveBeenCalledWith(mockScreening);
       expect(mockNext).not.toHaveBeenCalled();
     });
 
     it('should call next with NotFoundError if not found', async () => {
-      (ScreeningService.getScreeningById as jest.Mock).mockRejectedValue(
+      (screeningService.getScreeningById as jest.Mock).mockRejectedValue(
         new NotFoundError('not found')
       );
 
@@ -72,7 +72,7 @@ describe('ScreeningController', () => {
 
   describe('createScreening', () => {
     it('should create a screening and return 201', async () => {
-      (ScreeningService.createScreening as jest.Mock).mockResolvedValue(
+      (screeningService.createScreening as jest.Mock).mockResolvedValue(
         mockScreening
       );
 
@@ -88,14 +88,14 @@ describe('ScreeningController', () => {
 
       await screeningController.createScreening(req, res, mockNext);
 
-      expect(ScreeningService.createScreening).toHaveBeenCalledWith(req.body);
+      expect(screeningService.createScreening).toHaveBeenCalledWith(req.body);
       expect(res.status).toHaveBeenCalledWith(201);
       expect(res.json).toHaveBeenCalledWith(mockScreening);
       expect(mockNext).not.toHaveBeenCalled();
     });
 
     it('should call next with error if creation fails', async () => {
-      (ScreeningService.createScreening as jest.Mock).mockRejectedValue(
+      (screeningService.createScreening as jest.Mock).mockRejectedValue(
         new Error('fail')
       );
 
@@ -112,7 +112,7 @@ describe('ScreeningController', () => {
 
   describe('updateScreening', () => {
     it('should update and return a screening', async () => {
-      (ScreeningService.updateScreening as jest.Mock).mockResolvedValue({
+      (screeningService.updateScreening as jest.Mock).mockResolvedValue({
         ...mockScreening,
         quality: '3D',
       });
@@ -122,7 +122,7 @@ describe('ScreeningController', () => {
 
       await screeningController.updateScreening(req, res, mockNext);
 
-      expect(ScreeningService.updateScreening).toHaveBeenCalledWith('s-1', {
+      expect(screeningService.updateScreening).toHaveBeenCalledWith('s-1', {
         quality: '3D',
       });
       expect(res.json).toHaveBeenCalledWith({
@@ -133,7 +133,7 @@ describe('ScreeningController', () => {
     });
 
     it('should call next with NotFoundError if not found', async () => {
-      (ScreeningService.updateScreening as jest.Mock).mockRejectedValue(
+      (screeningService.updateScreening as jest.Mock).mockRejectedValue(
         new NotFoundError('nf')
       );
 
@@ -152,7 +152,7 @@ describe('ScreeningController', () => {
 
   describe('deleteScreening', () => {
     it('should delete a screening and return 204', async () => {
-      (ScreeningService.deleteScreening as jest.Mock).mockResolvedValue(
+      (screeningService.deleteScreening as jest.Mock).mockResolvedValue(
         undefined
       );
 
@@ -161,14 +161,14 @@ describe('ScreeningController', () => {
 
       await screeningController.deleteScreening(req, res, mockNext);
 
-      expect(ScreeningService.deleteScreening).toHaveBeenCalledWith('s-1');
+      expect(screeningService.deleteScreening).toHaveBeenCalledWith('s-1');
       expect(res.status).toHaveBeenCalledWith(204);
       expect(res.send).toHaveBeenCalled();
       expect(mockNext).not.toHaveBeenCalled();
     });
 
     it('should call next with NotFoundError if not found', async () => {
-      (ScreeningService.deleteScreening as jest.Mock).mockRejectedValue(
+      (screeningService.deleteScreening as jest.Mock).mockRejectedValue(
         new NotFoundError('not found')
       );
 
@@ -184,7 +184,7 @@ describe('ScreeningController', () => {
 
   describe('getAllScreenings', () => {
     it('should return all screenings', async () => {
-      (ScreeningService.getAllScreenings as jest.Mock).mockResolvedValue(
+      (screeningService.getAllScreenings as jest.Mock).mockResolvedValue(
         mockScreenings
       );
 
@@ -193,13 +193,13 @@ describe('ScreeningController', () => {
 
       await screeningController.getAllScreenings(req, res, mockNext);
 
-      expect(ScreeningService.getAllScreenings).toHaveBeenCalled();
+      expect(screeningService.getAllScreenings).toHaveBeenCalled();
       expect(res.json).toHaveBeenCalledWith(mockScreenings);
       expect(mockNext).not.toHaveBeenCalled();
     });
 
     it('should call next if error thrown', async () => {
-      (ScreeningService.getAllScreenings as jest.Mock).mockRejectedValue(
+      (screeningService.getAllScreenings as jest.Mock).mockRejectedValue(
         new Error('fail')
       );
 
@@ -214,7 +214,7 @@ describe('ScreeningController', () => {
 
   describe('searchScreenings', () => {
     it('should search screenings', async () => {
-      (ScreeningService.searchScreenings as jest.Mock).mockResolvedValue(
+      (screeningService.searchScreenings as jest.Mock).mockResolvedValue(
         mockScreenings
       );
 
@@ -223,13 +223,16 @@ describe('ScreeningController', () => {
 
       await screeningController.searchScreenings(req, res, mockNext);
 
-      expect(ScreeningService.searchScreenings).toHaveBeenCalledWith('IMAX');
-      expect(res.json).toHaveBeenCalledWith(mockScreenings);
+      expect(screeningService.searchScreenings).toHaveBeenCalledWith('IMAX');
+      expect(res.json).toHaveBeenCalledWith({
+        message: 'ok',
+        data: mockScreenings,
+      });
       expect(mockNext).not.toHaveBeenCalled();
     });
 
     it('should call next if error thrown', async () => {
-      (ScreeningService.searchScreenings as jest.Mock).mockRejectedValue(
+      (screeningService.searchScreenings as jest.Mock).mockRejectedValue(
         new Error('fail')
       );
 
@@ -244,7 +247,7 @@ describe('ScreeningController', () => {
 
   describe('getScreeningsByMovieId', () => {
     it('should return screenings for a movie', async () => {
-      (ScreeningService.getScreeningsByMovieId as jest.Mock).mockResolvedValue(
+      (screeningService.getScreeningsByMovieId as jest.Mock).mockResolvedValue(
         mockScreenings
       );
 
@@ -253,7 +256,7 @@ describe('ScreeningController', () => {
 
       await screeningController.getScreeningsByMovieId(req, res, mockNext);
 
-      expect(ScreeningService.getScreeningsByMovieId).toHaveBeenCalledWith(
+      expect(screeningService.getScreeningsByMovieId).toHaveBeenCalledWith(
         'm-1'
       );
       expect(res.json).toHaveBeenCalledWith(mockScreenings);
@@ -263,7 +266,7 @@ describe('ScreeningController', () => {
   describe('getScreeningsByTheaterId', () => {
     it('should return screenings for a theater', async () => {
       (
-        ScreeningService.getScreeningsByTheaterId as jest.Mock
+        screeningService.getScreeningsByTheaterId as jest.Mock
       ).mockResolvedValue(mockScreenings);
 
       const req = mockRequest({}, { theaterId: 't-1' });
@@ -271,7 +274,7 @@ describe('ScreeningController', () => {
 
       await screeningController.getScreeningsByTheaterId(req, res, mockNext);
 
-      expect(ScreeningService.getScreeningsByTheaterId).toHaveBeenCalledWith(
+      expect(screeningService.getScreeningsByTheaterId).toHaveBeenCalledWith(
         't-1'
       );
       expect(res.json).toHaveBeenCalledWith(mockScreenings);
@@ -280,7 +283,7 @@ describe('ScreeningController', () => {
 
   describe('getScreeningsByHallId', () => {
     it('should return screenings for a hall', async () => {
-      (ScreeningService.getScreeningsByHallId as jest.Mock).mockResolvedValue(
+      (screeningService.getScreeningsByHallId as jest.Mock).mockResolvedValue(
         mockScreenings
       );
 
@@ -289,7 +292,7 @@ describe('ScreeningController', () => {
 
       await screeningController.getScreeningsByHallId(req, res, mockNext);
 
-      expect(ScreeningService.getScreeningsByHallId).toHaveBeenCalledWith(
+      expect(screeningService.getScreeningsByHallId).toHaveBeenCalledWith(
         'h-1',
         't-1'
       );
@@ -299,7 +302,7 @@ describe('ScreeningController', () => {
 
   describe('getScreeningsByDate', () => {
     it('should return screenings for a date', async () => {
-      (ScreeningService.getScreeningsByDate as jest.Mock).mockResolvedValue(
+      (screeningService.getScreeningsByDate as jest.Mock).mockResolvedValue(
         mockScreenings
       );
 
@@ -308,7 +311,7 @@ describe('ScreeningController', () => {
 
       await screeningController.getScreeningsByDate(req, res, mockNext);
 
-      expect(ScreeningService.getScreeningsByDate).toHaveBeenCalledWith(
+      expect(screeningService.getScreeningsByDate).toHaveBeenCalledWith(
         new Date('2025-01-01')
       );
       expect(res.json).toHaveBeenCalledWith(mockScreenings);

@@ -1,5 +1,5 @@
 import { generateTicket } from '../../controllers/generate-ticket.controller.js'; // Adjust the path!
-import { BookingService } from '../../services/booking.service.js';
+import { bookingService } from '../../services/booking.service.js';
 import QRCode from 'qrcode';
 
 // Mock dependencies
@@ -21,8 +21,8 @@ describe('generateTicket', () => {
   });
 
   it('should render ticket HTML with QR code and booking/user details', async () => {
-    // Mock BookingService.getBookingById to return fake booking
-    (BookingService.getBookingById as jest.Mock).mockResolvedValue({
+    // Mock bookingService.getBookingById to return fake booking
+    (bookingService.getBookingById as jest.Mock).mockResolvedValue({
       bookingId: 'test-booking-id',
       user: { firstName: 'Jean', lastName: 'Dupont' },
     });
@@ -49,8 +49,8 @@ describe('generateTicket', () => {
   });
 
   it('should call next(err) on error', async () => {
-    // Simulate BookingService.getBookingById throwing error
-    (BookingService.getBookingById as jest.Mock).mockRejectedValue(
+    // Simulate bookingService.getBookingById throwing error
+    (bookingService.getBookingById as jest.Mock).mockRejectedValue(
       new Error('DB Error')
     );
 
@@ -61,7 +61,7 @@ describe('generateTicket', () => {
   });
 
   it('should fallback to N/A if user fields missing', async () => {
-    (BookingService.getBookingById as jest.Mock).mockResolvedValue({
+    (bookingService.getBookingById as jest.Mock).mockResolvedValue({
       bookingId: 'test-booking-id',
       user: null,
     });

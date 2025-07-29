@@ -1,3 +1,29 @@
+/**
+ * Service for managing user tokens.
+ *
+ * Handles CRUD operations for tokens, ensures user existence, and manages
+ * token lifecycles (creation, replacement, validation, expiration).
+ * Supports enforcing single token per user, token expiration, and
+ * type-checking for specialized tokens (refresh, email, etc).
+ *
+ * Main features:
+ * - Create or replace a token for a user (removes any old token).
+ * - Find a token by string value, or by user.
+ * - Update or delete a token for a user.
+ * - Delete all expired tokens in batch.
+ * - Validate a token (existence, expiration, and optionally type).
+ * - Throws NotFoundError, UnauthorizedError, BadRequestError on error conditions.
+ *
+ * Dependencies:
+ * - UserTokenModel for DB access to tokens.
+ * - UserModel for user existence validation.
+ * - Uses custom application errors.
+ *
+ * @author Your development team
+ * @version 1.0.0
+ * @since 2024
+ */
+
 import { Op } from 'sequelize';
 import {
   UserTokenModel,
@@ -19,6 +45,10 @@ export class UserTokenService {
    * Create a new token for a user, deleting any previous token for this user.
    * Throws NotFoundError if user does not exist.
    * Throws Error if the token was not created successfully.
+   * @param {UserTokenAttributes} data - Token attributes for creation.
+   * @returns {Promise<UserTokenModel>} The created user token instance.
+   * @throws {NotFoundError} If the user does not exist.
+   * @throws {Error} If creation failed.
    */
   async createOrReplaceToken(
     data: UserTokenAttributes
@@ -42,7 +72,10 @@ export class UserTokenService {
   }
 
   /**
-   * Find a token by its string value. Throws NotFoundError if not found.
+   * Find a token by its string value.
+   * @param {string} token - Token string.
+   * @returns {Promise<UserTokenModel>} The token instance.
+   * @throws {NotFoundError} If not found.
    */
   async findToken(token: string): Promise<UserTokenModel> {
     const userToken = await this.userTokenModel.findOne({ where: { token } });
@@ -51,7 +84,10 @@ export class UserTokenService {
   }
 
   /**
-   * Find the token for a specific user. Throws NotFoundError if not found.
+   * Find the token for a specific user.
+   * @param {string} userId - User ID.
+   * @returns {Promise<UserTokenModel>} The user's token.
+   * @throws {NotFoundError} If no token is found for the user.
    */
   async findByUserId(userId: string): Promise<UserTokenModel> {
     const userToken = await this.userTokenModel.findOne({ where: { userId } });
@@ -60,7 +96,10 @@ export class UserTokenService {
   }
 
   /**
-   * Delete the token for a user, if it exists. Throws NotFoundError if not found.
+   * Delete the token for a user, if it exists.
+   * @param {string} userId - User ID.
+   * @returns {Promise<void>}
+   * @throws {NotFoundError} If no token is found to delete for this user.
    */
   async deleteTokenForUser(userId: string): Promise<void> {
     const deleted = await this.userTokenModel.destroy({ where: { userId } });
@@ -69,7 +108,8 @@ export class UserTokenService {
   }
 
   /**
-   * Delete all expired tokens (does not throw).
+   * Delete all expired tokens.
+   * @returns {Promise<number>} Number of deleted tokens.
    */
   async deleteExpiredTokens(): Promise<number> {
     return this.userTokenModel.destroy({
@@ -82,7 +122,11 @@ export class UserTokenService {
   }
 
   /**
-   * Update the token for a user. Throws NotFoundError if not found.
+   * Update the token for a user.
+   * @param {string} userId - User ID.
+   * @param {Partial<UserTokenAttributes>} update - Fields to update.
+   * @returns {Promise<UserTokenModel>} The updated token instance.
+   * @throws {NotFoundError} If no token is found for the user.
    */
   async updateTokenForUser(
     userId: string,
@@ -99,16 +143,17 @@ export class UserTokenService {
 
   /**
    * Finds and validates a token, optionally checking the token type.
-   * @param token The token string to validate
-   * @param expectedType Optional: a UserTokenType or array of allowed types
-   * @returns The valid UserTokenModel instance
-   * @throws NotFoundError, BadRequestError
+   * @param {string} token - The token string to validate.
+   * @param {UserTokenType | UserTokenType[]} [expectedType] - Optional: a UserTokenType or array of allowed types.
+   * @returns {Promise<UserTokenModel>} The valid UserTokenModel instance.
+   * @throws {NotFoundError} If the token is not found.
+   * @throws {UnauthorizedError} If the token is expired.
+   * @throws {BadRequestError} If the token type does not match.
    */
   async validateToken(
     token: string,
     expectedType?: UserTokenType | UserTokenType[]
   ): Promise<UserTokenModel> {
-    // Use this.userTokenModel instead of UserTokenModel directly
     const tokenInstance = await this.userTokenModel.findOne({
       where: { token },
     });

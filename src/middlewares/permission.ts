@@ -15,35 +15,59 @@ declare module 'express-serve-static-core' {
   }
 }
 
+/**
+ * Permission middleware class to enforce role-based and resource-based access control.
+ */
 class Permission {
-  // Any authenticated user
+  // ────────────────────────────────────────────────────────────────────────────────
+  // Basic Role-Based Permissions
+  // ────────────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Allow any authenticated user (any role present).
+   * @param req Express request
+   * @param res Express response
+   * @param next Next function
+   */
   isUser(req: Request, res: Response, next: NextFunction) {
-    const role = req.userRole;
-    if (!role) {
+    if (!req.userRole) {
       return next(new NotAuthorizedError('Authentication required'));
     }
     next();
   }
 
-  // Only 'employé' (employee)
+  /**
+   * Allow only 'employé' users.
+   * @param req Express request
+   * @param res Express response
+   * @param next Next function
+   */
   isEmployee(req: Request, res: Response, next: NextFunction) {
-    const role = req.userRole;
-    if (role !== 'employé') {
+    if (req.userRole !== 'employé') {
       return next(new NotAuthorizedError('Employee access required'));
     }
     next();
   }
 
-  // Only 'administrateur'
+  /**
+   * Allow only 'administrateur' users.
+   * @param req Express request
+   * @param res Express response
+   * @param next Next function
+   */
   isAdmin(req: Request, res: Response, next: NextFunction) {
-    const role = req.userRole;
-    if (role !== 'administrateur') {
+    if (req.userRole !== 'administrateur') {
       return next(new NotAuthorizedError('Admin access required'));
     }
     next();
   }
 
-  // 'employé' or 'administrateur' (staff)
+  /**
+   * Allow 'employé' or 'administrateur' (staff).
+   * @param req Express request
+   * @param res Express response
+   * @param next Next function
+   */
   isStaff(req: Request, res: Response, next: NextFunction) {
     const role = req.userRole;
     if (role !== 'employé' && role !== 'administrateur') {
@@ -54,7 +78,12 @@ class Permission {
     next();
   }
 
-  // Only non-staff users
+  /**
+   * Allow only non-staff users (i.e., not 'employé' or 'administrateur').
+   * @param req Express request
+   * @param res Express response
+   * @param next Next function
+   */
   isNotStaff(req: Request, res: Response, next: NextFunction) {
     const role = req.userRole;
     if (role === 'employé' || role === 'administrateur') {
@@ -63,9 +92,19 @@ class Permission {
     next();
   }
 
-  // For routes where user must be staff OR acting on their own resource (userId in params)
+  // ────────────────────────────────────────────────────────────────────────────────
+  // Identity or Role-Based Permissions
+  // ────────────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Allow access if user is staff OR accessing their own userId (from route param).
+   * Common for routes like `/users/:userId` or `/bookings/user/:userId`.
+   * @param req Express request
+   * @param res Express response
+   * @param next Next function
+   */
   async isSelfOrStaff(req: Request, res: Response, next: NextFunction) {
-    const { userId, bookingId } = req.params;
+    const { userId } = req.params;
     const tokenUserId = req.userJwtPayload?.userId;
     const role = req.userRole;
 
@@ -77,36 +116,56 @@ class Permission {
       return next();
     }
 
-    // Handle routes with userId param (e.g., /users/:userId or /bookings/user/:userId)
     if (userId && userId === tokenUserId) {
       return next();
     }
 
-    // Handle routes with bookingId param (e.g., /bookings/:bookingId/ticket)
-    if (bookingId) {
-      try {
-        const booking = await BookingModel.findByPk(bookingId);
-        if (!booking) {
-          return next(new NotFoundError('Booking not found'));
-        }
-        if ((booking as any).userId === tokenUserId) {
-          return next();
-        }
-        return next(
-          new NotAuthorizedError('You are not allowed to access this resource')
-        );
-      } catch (err) {
-        return next(err);
-      }
-    }
-
-    // Fallback: deny
     return next(
       new NotAuthorizedError('You are not allowed to access this resource')
     );
   }
 
-  // For booking creation - check if user can create booking for the specified userId
+  /**
+   * Allow access if user is 'administrateur' OR accessing their own userId (from route param).
+   * Used for strict administrative access with self-service fallback.
+   * @param req Express request
+   * @param res Express response
+   * @param next Next function
+   */
+  isSelfOrAdmin(req: Request, res: Response, next: NextFunction) {
+    const { userId } = req.params;
+    const tokenUserId = req.userJwtPayload?.userId;
+    const role = req.userRole;
+
+    if (!tokenUserId) {
+      return next(new NotAuthorizedError('No user information in token'));
+    }
+
+    if (role === 'administrateur') {
+      return next();
+    }
+
+    if (userId && userId === tokenUserId) {
+      return next();
+    }
+
+    return next(
+      new NotAuthorizedError('You are not allowed to access this resource')
+    );
+  }
+
+  // ────────────────────────────────────────────────────────────────────────────────
+  // Booking-Specific Permissions
+  // ────────────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Allow booking creation if:
+   * - Staff (can create for any user)
+   * - Regular user (can only create for themselves)
+   * @param req Express request
+   * @param res Express response
+   * @param next Next function
+   */
   canCreateBooking(req: Request, res: Response, next: NextFunction) {
     const bookingUserId = req.body.userId;
     const tokenUserId = req.userJwtPayload?.userId;
@@ -116,12 +175,10 @@ class Permission {
       return next(new NotAuthorizedError('No user information in token'));
     }
 
-    // Staff can create bookings for anyone
     if (role === 'employé' || role === 'administrateur') {
       return next();
     }
 
-    // Regular users can only create bookings for themselves
     if (bookingUserId === tokenUserId) {
       return next();
     }
@@ -131,7 +188,14 @@ class Permission {
     );
   }
 
-  // For booking operations - check if user owns the booking or is staff
+  /**
+   * Allow booking access if:
+   * - Staff (can access any booking)
+   * - Owner of the booking
+   * @param req Express request
+   * @param res Express response
+   * @param next Next function
+   */
   async canAccessBooking(req: Request, res: Response, next: NextFunction) {
     const bookingId = req.params.bookingId;
     const tokenUserId = req.userJwtPayload?.userId;
@@ -141,25 +205,23 @@ class Permission {
       return next(new NotAuthorizedError('No user information in token'));
     }
 
-    // Staff can access any booking
-    if (role === 'employé' || role === 'administrateur') {
-      return next();
-    }
-
-    // Regular users can only access their own bookings
     try {
       const booking = await BookingModel.findByPk(bookingId);
       if (!booking) {
         return next(new NotFoundError('Booking not found'));
       }
 
-      if ((booking as any).userId !== tokenUserId) {
-        return next(
-          new NotAuthorizedError('You can only access your own bookings')
-        );
+      if (role === 'employé' || role === 'administrateur') {
+        return next();
       }
 
-      next();
+      if ((booking as any).userId === tokenUserId) {
+        return next();
+      }
+
+      return next(
+        new NotAuthorizedError('You can only access your own bookings')
+      );
     } catch (error) {
       next(error);
     }

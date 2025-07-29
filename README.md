@@ -1,128 +1,184 @@
-## Environment Variables (`.env`)
+# 🌍 Environment Variables (`.env`)
 
-This project uses a `.env` file for configuration.  
-**You must create a `.env` file at the root of your project before running the application.**  
-All sensitive values (passwords, secrets, API keys) are managed here.
+Ce projet utilise un fichier `.env` à la racine pour gérer la configuration.  
+**Vous devez créer ce fichier avant de lancer l'application.**
 
-Below is an overview of all the sections and variables used:
-
----
-
-### ─── Application ─────────────────────────────
-
-- **NODE_ENV** — Set to `development`, `production`, or `test`
-- **PORT** — Port for the Node.js application
-- **HOST_APP_PORT** — Host port mapping for Docker/local environments
+Toutes les valeurs sensibles (mots de passe, clés API, secrets JWT) y sont définies.  
+Ce fichier est ignoré par Git (`.gitignore`) pour des raisons de sécurité.
 
 ---
 
-### ─── MySQL Database Configuration ────────────
+## 🔧 Variables disponibles
 
-- **MYSQL_HOST** — MySQL service hostname (`mysql` if using Docker)
-- **MYSQL_PORT** — Internal MySQL port (default: 3306)
-- **HOST_MYSQL_PORT** — Host port to map MySQL
-- **MYSQL_DATABASE** — Database name
-- **MYSQL_ROOT_PASSWORD** — MySQL root password
-- **MYSQL_USER** — Application database user
-- **MYSQL_PASSWORD** — Application database password
+### 🟩 Application
 
----
-
-### ─── MongoDB Configuration ───────────────────
-
-- **MONGO_INITDB_DATABASE** — Default MongoDB database
-- **MONGO_PORT** — Internal MongoDB port (default: 27017)
-- **HOST_MONGO_PORT** — Host port for MongoDB
-- **MONGO_INITDB_ROOT_USERNAME** — MongoDB root username
-- **MONGO_INITDB_ROOT_PASSWORD** — MongoDB root password
-- **MONGODB_URI** — MongoDB connection string (edit as needed)
+| Variable        | Description                                                 |
+| --------------- | ----------------------------------------------------------- |
+| `NODE_ENV`      | Mode de l’application (`development`, `test`, `production`) |
+| `PORT`          | Port d'exécution de l'application Node.js                   |
+| `HOST_APP_PORT` | Port mappé depuis l'hôte (utile avec Docker)                |
+| `BASE_URL`      | URL publique de l’application                               |
 
 ---
 
-### ─── Mongo Express Configuration ─────────────
+### 🟢 Environnement de développement (`DEV_`)
 
-- **MONGO_EXPRESS_PORT** — Port for Mongo Express web UI
-- **HOST_MONGO_EXPRESS_PORT** — Host port to access Mongo Express
+> Chargé si `NODE_ENV=development`
 
----
+#### MySQL
 
-### ─── Resend Email Configuration ──────────────
+- `DEV_MYSQL_HOST`
+- `DEV_MYSQL_PORT`
+- `DEV_HOST_MYSQL_PORT`
+- `DEV_MYSQL_DATABASE`
+- `DEV_MYSQL_ROOT_PASSWORD`
+- `DEV_MYSQL_USER`
+- `DEV_MYSQL_PASSWORD`
 
-- **RESEND_API_KEY** — Resend service API key
-- **RESEND_FROM** — Default sender email address
-- **SEND_WELCOME_EMAIL** — Enable (`true`) or disable (`false`) welcome email sending
+#### MongoDB
 
----
+- `DEV_MONGO_INITDB_DATABASE`
+- `DEV_MONGO_PORT`
+- `DEV_HOST_MONGO_PORT`
+- `DEV_MONGO_INITDB_ROOT_USERNAME`
+- `DEV_MONGO_INITDB_ROOT_PASSWORD`
+- `DEV_MONGODB_URI`
 
-### ─── JWT Auth Configuration ──────────────────
+#### Mongo Express
 
-- **JWT_SECRET** — Secret key for signing JWT tokens
-- **JWT_REFRESH_SECRET** — Secret key for refresh tokens
-- **JWT_EXPIRES_IN** — Access token lifetime (e.g., `15m`)
-- **JWT_REFRESH_EXPIRES_IN** — Refresh token lifetime (e.g., `7d`)
+- `DEV_MONGO_EXPRESS_PORT`
+- `DEV_HOST_MONGO_EXPRESS_PORT`
 
----
+#### Email Resend
 
-### ─── Test Environment Variables ──────────────
+- `DEV_RESEND_API_KEY`
+- `DEV_RESEND_FROM`
+- `DEV_SEND_WELCOME_EMAIL`
+- `DEV_EMAIL`
 
-All variables prefixed with `TEST_` are used for running tests (using separate databases and credentials):
+#### Authentification JWT
 
-- **TEST_MYSQL_HOST**
-- **TEST_MYSQL_PORT**
-- **TEST_HOST_MYSQL_PORT**
-- **TEST_MYSQL_DATABASE**
-- **TEST_MYSQL_ROOT_PASSWORD**
-- **TEST_MYSQL_USER**
-- **TEST_MYSQL_PASSWORD**
-- **TEST_MONGO_INITDB_DATABASE**
-- **TEST_MONGO_PORT**
-- **TEST_HOST_MONGO_PORT**
-- **TEST_MONGO_INITDB_ROOT_USERNAME**
-- **TEST_MONGO_INITDB_ROOT_PASSWORD**
-- **TEST_MONGODB_URI**
-- **TEST_MONGO_EXPRESS_PORT**
-- **TEST_RESEND_API_KEY**
-- **TEST_RESEND_FROM**
-- **TEST_SEND_WELCOME_EMAIL**
-- **TEST_EMAIL**
-- **TEST_JWT_SECRET**
-- **TEST_JWT_REFRESH_SECRET**
-- **TEST_JWT_EXPIRES_IN**
-- **TEST_JWT_REFRESH_EXPIRES_IN**
+- `DEV_JWT_SECRET`
+- `DEV_JWT_REFRESH_SECRET`
+- `DEV_JWT_EXPIRES_IN`
+- `DEV_JWT_REFRESH_EXPIRES_IN`
 
 ---
 
-> **Important:**  
-> - **Never commit your actual `.env` file to version control!**  
-> - For team sharing, use a `.env.example` file (without secrets) as a template.
-> - Update this section and `.env.example` if you add/remove environment variables.
+### 🧪 Environnement de test (`TEST_`)
+
+> Chargé si `NODE_ENV=test`
+
+Même structure que les variables `DEV_`, mais préfixées par `TEST_`.
 
 ---
 
-<details>
-<summary>Example: `.env` file structure</summary>
+### 🟦 Variables globales (production ou fallback)
+
+Utilisées si aucune variable spécifique (`DEV_`, `TEST_`) n’est définie.
+
+#### MySQL
+
+- `MYSQL_HOST`
+- `MYSQL_PORT`
+- `HOST_MYSQL_PORT`
+- `MYSQL_DATABASE`
+- `MYSQL_ROOT_PASSWORD`
+- `MYSQL_USER`
+- `MYSQL_PASSWORD`
+
+#### MongoDB
+
+- `MONGO_INITDB_DATABASE`
+- `MONGO_PORT`
+- `HOST_MONGO_PORT`
+- `MONGO_INITDB_ROOT_USERNAME`
+- `MONGO_INITDB_ROOT_PASSWORD`
+- `MONGODB_URI`
+
+#### Mongo Express
+
+- `MONGO_EXPRESS_PORT`
+- `HOST_MONGO_EXPRESS_PORT`
+
+#### Email Resend
+
+- `RESEND_API_KEY`
+- `RESEND_FROM`
+- `SEND_WELCOME_EMAIL`
+
+#### Authentification JWT
+
+- `JWT_SECRET`
+- `JWT_REFRESH_SECRET`
+- `JWT_EXPIRES_IN`
+- `JWT_REFRESH_EXPIRES_IN`
+
+---
+
+### 📦 Multer (upload fichiers)
+
+| Variable               | Description                                 |
+| ---------------------- | ------------------------------------------- |
+| `MULTER_STORAGE_TYPE`  | `local` ou `s3`                             |
+| `MULTER_MAX_FILE_SIZE` | Taille max (en octets), ex. `2097152` = 2Mo |
+
+---
+
+## ✅ Exemple de fichier `.env`
 
 ```env
-# ─── Application ────────────────────────────────────────────────────────
+# ─── Application ───────────────────────────────────────────
 NODE_ENV=development
 PORT=3000
 HOST_APP_PORT=3000
+BASE_URL=http://localhost:3000
 
-# ─── MySQL Database Configuration ───────────────────────────────────────
-MYSQL_HOST=mysql
-MYSQL_PORT=3306
-HOST_MYSQL_PORT=3312
-MYSQL_DATABASE=cinepholia_db
-MYSQL_ROOT_PASSWORD=cinepholia_root_password
-MYSQL_USER=cinepholia_admin
-MYSQL_PASSWORD=cinepholia_password
+# ─── Dev MySQL ─────────────────────────────────────────────
+DEV_MYSQL_HOST=mysql
+DEV_MYSQL_PORT=3306
+DEV_HOST_MYSQL_PORT=3312
+DEV_MYSQL_DATABASE=cinepholia_db
+DEV_MYSQL_ROOT_PASSWORD=dev_root
+DEV_MYSQL_USER=dev_user
+DEV_MYSQL_PASSWORD=dev_pass
 
-# ─── MongoDB Configuration ──────────────────────────────────────────────
-MONGO_INITDB_DATABASE=cinepholia_db
-MONGO_PORT=27017
-HOST_MONGO_PORT=27017
-MONGO_INITDB_ROOT_USERNAME=cinepholia_root
-MONGO_INITDB_ROOT_PASSWORD=cinepholia_root_password
-MONGODB_URI=mongodb://cinepholia_root:cinepholia_root_password@mongodb:27017/cinepholia_db?authSource=admin
+# ─── Dev MongoDB ───────────────────────────────────────────
+DEV_MONGO_INITDB_DATABASE=cinepholia_db
+DEV_MONGO_PORT=27017
+DEV_HOST_MONGO_PORT=27017
+DEV_MONGO_INITDB_ROOT_USERNAME=dev_root
+DEV_MONGO_INITDB_ROOT_PASSWORD=dev_pass
+DEV_MONGODB_URI=mongodb://dev_root:dev_pass@mongodb:27017/cinepholia_db?authSource=admin
 
+# ─── Dev Mongo Express ─────────────────────────────────────
+DEV_MONGO_EXPRESS_PORT=8081
+DEV_HOST_MONGO_EXPRESS_PORT=8081
 
+# ─── Dev Email Resend ──────────────────────────────────────
+DEV_RESEND_API_KEY=re_dev_key
+DEV_RESEND_FROM=dev@cinepholia.com
+DEV_SEND_WELCOME_EMAIL=true
+DEV_EMAIL=admin@cinepholia.com
+
+# ─── Dev JWT ───────────────────────────────────────────────
+DEV_JWT_SECRET=supersecret
+DEV_JWT_REFRESH_SECRET=supersecret_refresh
+DEV_JWT_EXPIRES_IN=15m
+DEV_JWT_REFRESH_EXPIRES_IN=7d
+
+# ─── Multer ────────────────────────────────────────────────
+MULTER_STORAGE_TYPE=local
+MULTER_MAX_FILE_SIZE=2097152
+
+# ─── Test Variables ────────────────────────────────────────
+TEST_MYSQL_HOST=mysql
+TEST_MYSQL_PORT=3306
+TEST_MYSQL_DATABASE=cinepholia_test
+TEST_MYSQL_USER=test_user
+TEST_MYSQL_PASSWORD=test_pass
+TEST_MONGODB_URI=mongodb://test:test@localhost:27017/cinepholia_test
+TEST_RESEND_API_KEY=re_test_key
+TEST_JWT_SECRET=test_jwt
+TEST_JWT_REFRESH_SECRET=test_refresh
+```
