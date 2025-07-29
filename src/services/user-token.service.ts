@@ -1,182 +1,110 @@
-/**
- * Service for managing user tokens.
- *
- * Handles CRUD operations for tokens, ensures user existence, and manages
- * token lifecycles (creation, replacement, validation, expiration).
- * Supports enforcing single token per user, token expiration, and
- * type-checking for specialized tokens (refresh, email, etc).
- *
- * Main features:
- * - Create or replace a token for a user (removes any old token).
- * - Find a token by string value, or by user.
- * - Update or delete a token for a user.
- * - Delete all expired tokens in batch.
- * - Validate a token (existence, expiration, and optionally type).
- * - Throws NotFoundError, UnauthorizedError, BadRequestError on error conditions.
- *
- * Dependencies:
- * - UserTokenModel for DB access to tokens.
- * - UserModel for user existence validation.
- * - Uses custom application errors.
- *
- * @author Your development team
- * @version 1.0.0
- * @since 2024
- */
-
+import crypto from 'crypto';
 import { Op } from 'sequelize';
-import {
-  UserTokenModel,
-  UserTokenAttributes,
-  UserTokenType,
-} from '../models/user-token.model.js';
-import { UserModel } from '../models/user.model.js';
-import { NotFoundError } from '../errors/not-found-error.js';
-import { UnauthorizedError } from '../errors/unauthorized-error.js';
-import { BadRequestError } from '../errors/bad-request-error.js';
+import { UserTokenModel } from '../models/user-token.model.js';
 
 export class UserTokenService {
-  constructor(
-    private readonly userTokenModel = UserTokenModel,
-    private readonly userModel = UserModel
-  ) {}
+  private static MAX_ATTEMPTS = 5; // max failed attempts before token is invalidated
+  private static REQUEST_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes between requests
 
   /**
-   * Create a new token for a user, deleting any previous token for this user.
-   * Throws NotFoundError if user does not exist.
-   * Throws Error if the token was not created successfully.
-   * @param {UserTokenAttributes} data - Token attributes for creation.
-   * @returns {Promise<UserTokenModel>} The created user token instance.
-   * @throws {NotFoundError} If the user does not exist.
-   * @throws {Error} If creation failed.
+   * Generate a 6-digit numeric code.
    */
-  async createOrReplaceToken(
-    data: UserTokenAttributes
-  ): Promise<UserTokenModel> {
-    // 1. Check if user exists
-    const user = await this.userModel.findByPk(data.userId);
-    if (!user) {
-      throw new NotFoundError('User not found');
+  private static generateNumericCode(): string {
+    return Math.floor(100000 + Math.random() * 900000).toString();
+  }
+
+  /**
+   * Hash a token using SHA-256.
+   */
+  private static hashToken(token: string): string {
+    return crypto.createHash('sha256').update(token).digest('hex');
+  }
+
+  /**
+   * Create or update a password reset token for a user with rate limiting.
+   * Stores the hashed token in the DB.
+   * @returns The raw 6-digit code (to send via email).
+   * @throws Error if the user requests a token too soon.
+   */
+  static async createPasswordResetToken(
+    userId: string,
+    expiresInMinutes = 30
+  ): Promise<string> {
+    const existing = await UserTokenModel.findByPk(userId);
+
+    // ✅ Enforce rate limit (minimum interval between requests)
+    if (existing?.lastRequestAt) {
+      const elapsed = Date.now() - existing.lastRequestAt.getTime();
+      if (elapsed < this.REQUEST_INTERVAL_MS) {
+        throw new Error('You must wait before requesting another reset code.');
+      }
     }
 
-    // 2. Remove any existing token for this user (no error if nothing deleted)
-    await this.userTokenModel.destroy({ where: { userId: data.userId } });
+    // ✅ Generate and hash token
+    const rawCode = this.generateNumericCode();
+    const hashedCode = this.hashToken(rawCode);
+    const expiresAt = new Date(Date.now() + expiresInMinutes * 60 * 1000);
 
-    // 3. Create the new token
-    const token = await this.userTokenModel.create(data);
-    if (!token) {
-      throw new Error('Failed to create new user token');
-    }
+    // ✅ Save or replace existing token
+    await UserTokenModel.upsert({
+      userId,
+      type: 'reset_password',
+      token: hashedCode,
+      expiresAt,
+      attempts: 0, // reset attempts on new code
+      lastRequestAt: new Date(), // track request time
+    });
 
-    return token;
+    return rawCode; // return the raw code so controller can send it by email
   }
 
   /**
-   * Find a token by its string value.
-   * @param {string} token - Token string.
-   * @returns {Promise<UserTokenModel>} The token instance.
-   * @throws {NotFoundError} If not found.
+   * Validate a provided raw token against the stored hashed token.
+   * Increments attempts on failure and blocks after MAX_ATTEMPTS.
+   * @returns The token record if valid, otherwise null.
+   * @throws Error if max attempts exceeded.
    */
-  async findToken(token: string): Promise<UserTokenModel> {
-    const userToken = await this.userTokenModel.findOne({ where: { token } });
-    if (!userToken) throw new NotFoundError('Token not found');
-    return userToken;
-  }
+  static async validatePasswordResetToken(rawToken: string) {
+    const hashedToken = this.hashToken(rawToken);
 
-  /**
-   * Find the token for a specific user.
-   * @param {string} userId - User ID.
-   * @returns {Promise<UserTokenModel>} The user's token.
-   * @throws {NotFoundError} If no token is found for the user.
-   */
-  async findByUserId(userId: string): Promise<UserTokenModel> {
-    const userToken = await this.userTokenModel.findOne({ where: { userId } });
-    if (!userToken) throw new NotFoundError('Token for this user not found');
-    return userToken;
-  }
-
-  /**
-   * Delete the token for a user, if it exists.
-   * @param {string} userId - User ID.
-   * @returns {Promise<void>}
-   * @throws {NotFoundError} If no token is found to delete for this user.
-   */
-  async deleteTokenForUser(userId: string): Promise<void> {
-    const deleted = await this.userTokenModel.destroy({ where: { userId } });
-    if (deleted === 0)
-      throw new NotFoundError('No token found to delete for this user');
-  }
-
-  /**
-   * Delete all expired tokens.
-   * @returns {Promise<number>} Number of deleted tokens.
-   */
-  async deleteExpiredTokens(): Promise<number> {
-    return this.userTokenModel.destroy({
+    // ✅ Find active (not expired) token
+    const record = await UserTokenModel.findOne({
       where: {
-        expiresAt: {
-          [Op.lt]: new Date(),
-        },
+        type: 'reset_password',
+        expiresAt: { [Op.gt]: new Date() },
       },
     });
+
+    if (!record) return null;
+
+    // ✅ Check max attempts
+    if (record.attempts >= this.MAX_ATTEMPTS) {
+      throw new Error('Too many invalid attempts. Request a new reset code.');
+    }
+
+    // ✅ Compare hashes
+    if (record.token !== hashedToken) {
+      record.attempts += 1;
+      await record.save();
+      return null;
+    }
+
+    return record;
   }
 
   /**
-   * Update the token for a user.
-   * @param {string} userId - User ID.
-   * @param {Partial<UserTokenAttributes>} update - Fields to update.
-   * @returns {Promise<UserTokenModel>} The updated token instance.
-   * @throws {NotFoundError} If no token is found for the user.
+   * Delete a user's token after successful password reset.
    */
-  async updateTokenForUser(
-    userId: string,
-    update: Partial<UserTokenAttributes>
-  ): Promise<UserTokenModel> {
-    const [count, rows] = await this.userTokenModel.update(update, {
-      where: { userId },
-      returning: true,
-    });
-    if (count === 0 || !rows.length)
-      throw new NotFoundError('Token for this user not found');
-    return rows[0];
+  static async consumePasswordResetToken(userId: string) {
+    await UserTokenModel.destroy({ where: { userId, type: 'reset_password' } });
   }
 
   /**
-   * Finds and validates a token, optionally checking the token type.
-   * @param {string} token - The token string to validate.
-   * @param {UserTokenType | UserTokenType[]} [expectedType] - Optional: a UserTokenType or array of allowed types.
-   * @returns {Promise<UserTokenModel>} The valid UserTokenModel instance.
-   * @throws {NotFoundError} If the token is not found.
-   * @throws {UnauthorizedError} If the token is expired.
-   * @throws {BadRequestError} If the token type does not match.
+   * Delete all expired tokens (can be used in a scheduled cleanup job).
    */
-  async validateToken(
-    token: string,
-    expectedType?: UserTokenType | UserTokenType[]
-  ): Promise<UserTokenModel> {
-    const tokenInstance = await this.userTokenModel.findOne({
-      where: { token },
+  static async deleteExpiredTokens() {
+    await UserTokenModel.destroy({
+      where: { expiresAt: { [Op.lt]: new Date() } },
     });
-    if (!tokenInstance) {
-      throw new NotFoundError('Token not found');
-    }
-    if (tokenInstance.expiresAt < new Date()) {
-      // Delete expired token and throw UnauthorizedError to match test expectations
-      await tokenInstance.destroy();
-      throw new UnauthorizedError('Token expired');
-    }
-    if (
-      expectedType &&
-      (Array.isArray(expectedType)
-        ? !expectedType.includes(tokenInstance.type)
-        : tokenInstance.type !== expectedType)
-    ) {
-      throw new BadRequestError(
-        `Invalid token type. Expected ${Array.isArray(expectedType) ? expectedType.join(' or ') : expectedType}, got "${tokenInstance.type}".`
-      );
-    }
-    return tokenInstance;
   }
 }
-
-export const userTokenService = new UserTokenService();

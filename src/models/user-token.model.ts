@@ -1,18 +1,19 @@
 /**
  * Sequelize Model for User Tokens (UserToken).
  *
- * This file defines a relational database model for managing tokens associated with users,
- * used for specific operations such as email verification, password reset,
- * and two-factor authentication (2FA).
+ * This model enforces that each user can have only **one token at a time**,
+ * regardless of the token type. It is used for:
+ * - Email verification
+ * - Password reset
+ * - Two-factor authentication (2FA)
  *
- * Key Points:
- * - `userId`: Unique identifier for the user, serving as the primary and foreign key for association with the user model.
- * - `type`: Type of token, which can be one of the following: 'verify_email', 'reset_password', or '2fa'.
- * - `token`: The token itself, stored as a string.
- * - `expiresAt`: Expiration date of the token, after which the token is no longer valid.
- *
- * The model is designed for use with SQL databases and includes timestamps
- * to automatically track the creation and update dates of records.
+ * Features:
+ * - `userId` is the primary key and foreign key → only one token per user.
+ * - `token` is stored as a **hash** for security (never store raw tokens).
+ * - `attempts` tracks the number of failed validations (for brute-force protection).
+ * - `lastRequestAt` enforces rate limiting between token requests.
+ * - `expiresAt` defines when the token becomes invalid (checked in queries).
+ * - Cascade delete ensures tokens are removed when their user is deleted.
  */
 
 import {
@@ -27,56 +28,70 @@ import {
 import { Optional } from 'sequelize';
 import { UserModel } from './user.model.js';
 
-// Possible user token types
 export type UserTokenType = 'verify_email' | 'reset_password' | '2fa';
 
 export interface UserTokenAttributes {
   userId: string;
   type: UserTokenType;
-  token: string;
+  token: string; // stored as SHA-256 hash
   expiresAt: Date;
+  attempts: number; // failed validation attempts
+  lastRequestAt?: Date; // last time a token was requested
 }
 
 export interface UserTokenCreationAttributes
-  extends Optional<UserTokenAttributes, never> {}
+  extends Optional<UserTokenAttributes, 'attempts' | 'lastRequestAt'> {}
 
 @Table({
   tableName: 'user_tokens',
-  timestamps: true, // Includes createdAt and updatedAt fields
+  timestamps: true,
 })
 export class UserTokenModel
   extends Model<UserTokenAttributes, UserTokenCreationAttributes>
   implements UserTokenAttributes
 {
+  /** User ID is both primary key and foreign key → ensures one token per user */
   @PrimaryKey
   @ForeignKey(() => UserModel)
   @Column({ type: DataType.UUID, allowNull: false })
   declare userId: string;
 
+  /** Token type (email verification, password reset, or 2FA) */
   @Column({
     type: DataType.ENUM('verify_email', 'reset_password', '2fa'),
     allowNull: false,
-    validate: {
-      isIn: [['verify_email', 'reset_password', '2fa']],
-    },
+    validate: { isIn: [['verify_email', 'reset_password', '2fa']] },
   })
   declare type: UserTokenType;
 
+  /**
+   * Token hash (SHA-256). Raw tokens are never stored.
+   * Marked as unique to prevent duplicate hashes.
+   */
   @Column({
     type: DataType.STRING,
     allowNull: false,
+    unique: true,
   })
   declare token: string;
 
-  @Column({
-    type: DataType.DATE,
-    allowNull: false,
-  })
+  /** Expiration date of the token */
+  @Column({ type: DataType.DATE, allowNull: false })
   declare expiresAt: Date;
 
+  /** Number of failed validation attempts */
+  @Column({ type: DataType.INTEGER, allowNull: false, defaultValue: 0 })
+  declare attempts: number;
+
+  /** Timestamp of the last token request (for rate limiting) */
+  @Column({ type: DataType.DATE, allowNull: true })
+  declare lastRequestAt?: Date;
+
+  /** Relation to User (cascade delete when user is removed) */
   @BelongsTo(() => UserModel, {
     foreignKey: 'userId',
     targetKey: 'userId',
+    onDelete: 'CASCADE',
   })
   declare user: UserModel;
 }
