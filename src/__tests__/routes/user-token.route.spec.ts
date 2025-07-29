@@ -1,9 +1,9 @@
 import request from 'supertest';
 import app from '../../app';
-import { sequelize } from '../../config/db';
+import { loadModels, sequelize, syncDB } from '../../config/db';
 import { UserModel } from '../../models/user.model';
 import { UserTokenModel } from '../../models/user-token.model';
-import { AuthorizationModel } from '../../models/authorization.model'; // Si inutile, retire-le ici ET dans cleanDatabase()
+import { AuthorizationModel } from '../../models/authorization.model'; 
 
 const userData = {
   username: 'johndoe',
@@ -18,15 +18,20 @@ const userData = {
  */
 const cleanDatabase = async (): Promise<void> => {
   try {
-    await sequelize.query('SET FOREIGN_KEY_CHECKS = 0');
+    await loadModels(); 
+    if (sequelize.getDialect() === 'mysql') {
+      await sequelize.query('SET FOREIGN_KEY_CHECKS = 0');
+    }
     await UserTokenModel.destroy({ where: {}, truncate: true, cascade: true });
     await AuthorizationModel.destroy({
       where: {},
       truncate: true,
       cascade: true,
-    }); 
+    });
     await UserModel.destroy({ where: {}, truncate: true, cascade: true });
-    await sequelize.query('SET FOREIGN_KEY_CHECKS = 1');
+    if (sequelize.getDialect() === 'mysql') {
+      await sequelize.query('SET FOREIGN_KEY_CHECKS = 1');
+    }
     console.log('✅ Database cleaned successfully');
   } catch (error) {
     console.error('❌ Database cleanup failed:', error);
@@ -45,8 +50,8 @@ describe('Reset Password E2E Routes - Final Working Version', () => {
   let testUserId: string;
 
   beforeAll(async () => {
-    // Surtout pas sequelize.drop() si tu ne sync pas tous les modèles liés !
-    await sequelize.sync();
+    await loadModels(); // ✅ Make sure models are registered
+    await syncDB(); // ✅ Sync database after loading models
     console.log('🚀 Test database synced and ready');
   });
 

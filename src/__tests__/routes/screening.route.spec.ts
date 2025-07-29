@@ -68,7 +68,12 @@ const staffUserData = {
 };
 
 const cleanDatabase = async () => {
-  await sequelize.query('SET FOREIGN_KEY_CHECKS = 0');
+
+
+  if (sequelize.getDialect() === 'mysql') {
+    await sequelize.query('SET FOREIGN_KEY_CHECKS = 0');
+  }
+
   await AuthorizationModel.destroy({
     where: {},
     truncate: true,
@@ -80,7 +85,10 @@ const cleanDatabase = async () => {
   await MovieModel.destroy({ where: {}, truncate: true, cascade: true });
   await MovieHallModel.destroy({ where: {}, truncate: true, cascade: true });
   await MovieTheaterModel.destroy({ where: {}, truncate: true, cascade: true });
-  await sequelize.query('SET FOREIGN_KEY_CHECKS = 1');
+
+  if (sequelize.getDialect() === 'mysql') {
+    await sequelize.query('SET FOREIGN_KEY_CHECKS = 1');
+  }
 };
 
 describe('Booking E2E Routes', () => {

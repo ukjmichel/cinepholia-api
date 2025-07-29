@@ -34,7 +34,10 @@ const altMovie = {
 };
 
 const cleanDatabase = async () => {
-  await sequelize.query('SET FOREIGN_KEY_CHECKS = 0');
+  if (sequelize.getDialect() === 'mysql') {
+    await sequelize.query('SET FOREIGN_KEY_CHECKS = 0');
+  }
+
   await AuthorizationModel.destroy({
     where: {},
     truncate: true,
@@ -42,7 +45,10 @@ const cleanDatabase = async () => {
   });
   await UserModel.destroy({ where: {}, truncate: true, cascade: true });
   await MovieModel.destroy({ where: {}, truncate: true, cascade: true });
-  await sequelize.query('SET FOREIGN_KEY_CHECKS = 1');
+
+  if (sequelize.getDialect() === 'mysql') {
+    await sequelize.query('SET FOREIGN_KEY_CHECKS = 1');
+  }
 };
 
 describe('Movie E2E Routes', () => {
