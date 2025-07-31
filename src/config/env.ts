@@ -1,6 +1,8 @@
 import { envToBool, envToInt, requireEnv } from '../utils/envUtils.js';
 
 const isTest = process.env.NODE_ENV === 'test';
+const isDev = process.env.NODE_ENV === 'development';
+const isProd = process.env.NODE_ENV === 'production';
 
 export const config = {
   // ─── Application ─────────────────────────────
@@ -64,7 +66,7 @@ export const config = {
         : process.env.HOST_MONGO_EXPRESS_PORT
     ) || 8081,
 
-  // ─── Resend email configuration ──────────────
+  // ─── Resend Email Configuration ──────────────
   resendApiKey: isTest
     ? requireEnv('TEST_RESEND_API_KEY')
     : requireEnv('RESEND_API_KEY'),
@@ -87,7 +89,6 @@ export const config = {
   jwtExpiresIn: isTest
     ? process.env.TEST_JWT_EXPIRES_IN || '1h'
     : process.env.JWT_EXPIRES_IN || '1h',
-
   jwtRefreshExpiresIn: isTest
     ? process.env.TEST_JWT_REFRESH_EXPIRES_IN || '7d'
     : process.env.JWT_REFRESH_EXPIRES_IN || '7d',
@@ -96,5 +97,27 @@ export const config = {
   multerMaxFileSize: envToInt(
     process.env.MULTER_MAX_FILE_SIZE,
     2 * 1024 * 1024
+  ),
+
+  // ─── Password Reset Configuration ─────────────
+  resetMaxAttempts: envToInt(
+    isTest
+      ? process.env.TEST_RESET_MAX_ATTEMPTS
+      : isDev
+        ? process.env.DEV_RESET_MAX_ATTEMPTS
+        : isProd
+          ? process.env.RESET_MAX_ATTEMPTS
+          : undefined,
+    5
+  ),
+  resetRequestIntervalMs: envToInt(
+    isTest
+      ? process.env.TEST_RESET_REQUEST_INTERVAL_MS
+      : isDev
+        ? process.env.DEV_RESET_REQUEST_INTERVAL_MS
+        : isProd
+          ? process.env.RESET_REQUEST_INTERVAL_MS
+          : undefined,
+    120000
   ),
 };

@@ -8,9 +8,9 @@
   "type": "module",
   "scripts": {
     "build": "tsc",
-    "start": "pm2 start dist/src/server.js --no-daemon",
-    "deploy": "tsc && npm run start",
-    "dev": "cross-env NODE_ENV=test tsx watch src/server.ts",
+    "start": "cross-env NODE_ENV=production pm2 start dist/src/server.js --no-daemon",
+    "deploy": "cross-env NODE_ENV=production tsc && npm run start",
+    "dev": "cross-env NODE_ENV=development tsx watch src/server.ts",
     "clean": "pm2 stop all && pm2 delete all",
     "test": "cross-env NODE_ENV=test jest",
     "test:watch": "cross-env NODE_ENV=test jest --watch",

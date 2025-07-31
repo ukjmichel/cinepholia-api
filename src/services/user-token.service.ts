@@ -1,10 +1,12 @@
 import crypto from 'crypto';
 import { Op } from 'sequelize';
 import { UserTokenModel } from '../models/user-token.model.js';
+import { config } from '../config/env.js';
 
 export class UserTokenService {
-  private static MAX_ATTEMPTS = 5; // max failed attempts before token is invalidated
-  private static REQUEST_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes between requests
+  // use environment-configured values
+  private static MAX_ATTEMPTS = config.resetMaxAttempts;
+  private static REQUEST_INTERVAL_MS = config.resetRequestIntervalMs;
 
   /**
    * Generate a 6-digit numeric code.
