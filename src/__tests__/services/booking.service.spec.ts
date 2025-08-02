@@ -266,45 +266,32 @@ describe('bookingService', () => {
     });
   });
 
-  // --- searchBookingSimple ---
-  describe('searchBookingSimple', () => {
-    it('should search bookings by status, screeningId, or userId (with join)', async () => {
-      (BookingModel.findAll as jest.Mock).mockResolvedValue(mockBookingList);
-      const result = await bookingService.searchBookingSimple('pending');
-      expect(result).toEqual(mockBookingList);
-      expect(BookingModel.findAll).toHaveBeenCalledWith({
-        where: {
-          [Op.or]: [
-            { status: { [Op.like]: '%pending%' } },
-            { screeningId: { [Op.like]: '%pending%' } },
-            { userId: { [Op.like]: '%pending%' } },
-          ],
-        },
-        include: [
-          { model: UserModel, as: 'user', required: false },
-          { model: ScreeningModel, as: 'screening', required: false },
-        ],
-        order: [['bookingDate', 'DESC']],
-      });
-    });
-  });
+  // --- searchBooking ---
+ describe('searchBooking', () => {
+   it('should search with filters and includeJoins = true', async () => {
+     (BookingModel.findAll as jest.Mock).mockResolvedValue(mockBookingList);
+     const filters = { userId: 'user-1', status: 'pending' };
+     const result = await bookingService.searchBooking(filters, true);
+     expect(result).toEqual(mockBookingList);
+     expect(BookingModel.findAll).toHaveBeenCalledWith({
+       where: { userId: 'user-1', status: 'pending' },
+       order: [['bookingDate', 'DESC']],
+       include: [
+         { model: UserModel, as: 'user', required: false },
+         { model: ScreeningModel, as: 'screening', required: false },
+       ],
+     });
+   });
 
-  // --- searchBookingVerySimple ---
-  describe('searchBookingVerySimple', () => {
-    it('should search bookings by status, screeningId, or userId (no join)', async () => {
-      (BookingModel.findAll as jest.Mock).mockResolvedValue(mockBookingList);
-      const result = await bookingService.searchBookingVerySimple('canceled');
-      expect(result).toEqual(mockBookingList);
-      expect(BookingModel.findAll).toHaveBeenCalledWith({
-        where: {
-          [Op.or]: [
-            { status: { [Op.like]: '%canceled%' } },
-            { screeningId: { [Op.like]: '%canceled%' } },
-            { userId: { [Op.like]: '%canceled%' } },
-          ],
-        },
-        order: [['bookingDate', 'DESC']],
-      });
-    });
-  });
+   it('should search with filters and includeJoins = false', async () => {
+     (BookingModel.findAll as jest.Mock).mockResolvedValue(mockBookingList);
+     const filters = { userId: 'user-1', status: 'pending' };
+     const result = await bookingService.searchBooking(filters, false);
+     expect(result).toEqual(mockBookingList);
+     expect(BookingModel.findAll).toHaveBeenCalledWith({
+       where: { userId: 'user-1', status: 'pending' },
+       order: [['bookingDate', 'DESC']],
+     });
+   });
+ });
 });

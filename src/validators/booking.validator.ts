@@ -1,7 +1,18 @@
 import { body, param, query } from 'express-validator';
 
 /**
- * Validate booking creation fields.
+ * @module booking.validator
+ * @description
+ *   Express-validator middlewares for validating booking-related fields, params, and queries.
+ *   Use in your routes for request validation and security.
+ */
+
+/* -------------------------------------------------------------------------- */
+/*                              BODY VALIDATORS                               */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Validate fields required to create a booking.
  */
 export const createBookingValidator = [
   body('userId').isUUID().withMessage('userId must be a valid UUID'),
@@ -9,7 +20,6 @@ export const createBookingValidator = [
   body('seatsNumber')
     .isInt({ min: 1 })
     .withMessage('seatsNumber must be a positive integer'),
-  // Optional, will default in model/service
   body('status')
     .optional()
     .isIn(['pending', 'used', 'canceled'])
@@ -22,7 +32,7 @@ export const createBookingValidator = [
 ];
 
 /**
- * Validate booking update fields.
+ * Validate fields allowed in a booking update.
  */
 export const updateBookingValidator = [
   body('seatsNumber')
@@ -40,29 +50,33 @@ export const updateBookingValidator = [
     .withMessage('bookingDate must be a valid ISO date'),
 ];
 
+/* -------------------------------------------------------------------------- */
+/*                             PARAM VALIDATORS                               */
+/* -------------------------------------------------------------------------- */
+
 /**
- * Validate bookingId param.
+ * Validate :bookingId route param (UUID).
  */
 export const bookingIdParamValidator = [
   param('bookingId').isUUID().withMessage('bookingId must be a valid UUID'),
 ];
 
 /**
- * Validate userId param.
+ * Validate :userId route param (UUID).
  */
 export const userIdParamValidator = [
   param('userId').isUUID().withMessage('userId must be a valid UUID'),
 ];
 
 /**
- * Validate screeningId param.
+ * Validate :screeningId route param (UUID).
  */
 export const screeningIdParamValidator = [
   param('screeningId').isUUID().withMessage('screeningId must be a valid UUID'),
 ];
 
 /**
- * Validate status param.
+ * Validate :status route param (enum).
  */
 export const statusParamValidator = [
   param('status')
@@ -70,8 +84,13 @@ export const statusParamValidator = [
     .withMessage('status must be pending, used, or canceled'),
 ];
 
+/* -------------------------------------------------------------------------- */
+/*                             QUERY VALIDATORS                               */
+/* -------------------------------------------------------------------------- */
+
 /**
- * Validate search query (?q=...)
+ * Validate query parameters for /bookings/search.
+ * (Add more filters as needed)
  */
 export const searchBookingValidator = [
   query('screeningId')
@@ -82,5 +101,26 @@ export const searchBookingValidator = [
     .optional()
     .isIn(['pending', 'used', 'canceled'])
     .withMessage('status must be pending, used, or canceled'),
-  // add more as needed
+  // Add more query filters as needed (e.g., userId, bookingDate, q)
+];
+
+/**
+ * Validate query parameters for /bookings/restrict-search.
+ * - screeningDate: (YYYY-MM-DD), filters by screening date (Screening.startTime)
+ * - date: (YYYY-MM-DD), filters by booking creation date (Booking.bookingDate)
+ * - status: (pending, used, canceled)
+ */
+export const restrictSearchValidator = [
+  query('screeningDate')
+    .optional()
+    .matches(/^\d{4}-\d{2}-\d{2}$/)
+    .withMessage('screeningDate must be in format YYYY-MM-DD'),
+  query('date')
+    .optional()
+    .matches(/^\d{4}-\d{2}-\d{2}$/)
+    .withMessage('date must be in format YYYY-MM-DD'),
+  query('status')
+    .optional()
+    .isIn(['pending', 'used', 'canceled'])
+    .withMessage('status must be pending, used, or canceled'),
 ];

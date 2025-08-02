@@ -154,6 +154,37 @@ class Permission {
     );
   }
 
+  /**
+   * Allow access if user is 'staff' or accessing their own userId (from route param).
+   * @param req Express request
+   * @param res Express response
+   * @param next Next function
+   */
+  async isOwnerOrStaff(req: Request, res: Response, next: NextFunction) {
+    const { userId } = req.params; // Get userId from route parameter
+    const tokenUserId = req.userJwtPayload?.userId; // Get userId from JWT token
+    const role = req.userRole; // Get user role
+
+    if (!tokenUserId) {
+      return next(new NotAuthorizedError('No user information in token'));
+    }
+
+    // If user is staff (employé or administrateur), allow access
+    if (role === 'employé' || role === 'administrateur') {
+      return next();
+    }
+
+    // If user is accessing their own data, allow access
+    if (userId && userId === tokenUserId) {
+      return next();
+    }
+
+    // If neither staff nor owner, deny access
+    return next(
+      new NotAuthorizedError('You are not allowed to access this resource')
+    );
+  }
+
   // ────────────────────────────────────────────────────────────────────────────────
   // Booking-Specific Permissions
   // ────────────────────────────────────────────────────────────────────────────────

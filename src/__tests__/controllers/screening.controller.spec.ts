@@ -51,7 +51,7 @@ describe('ScreeningController', () => {
       await screeningController.getScreeningById(req, res, mockNext);
 
       expect(screeningService.getScreeningById).toHaveBeenCalledWith('s-1');
-      expect(res.json).toHaveBeenCalledWith(mockScreening);
+      expect(res.json).toHaveBeenCalledWith({ data: mockScreening });
       expect(mockNext).not.toHaveBeenCalled();
     });
 
@@ -90,7 +90,7 @@ describe('ScreeningController', () => {
 
       expect(screeningService.createScreening).toHaveBeenCalledWith(req.body);
       expect(res.status).toHaveBeenCalledWith(201);
-      expect(res.json).toHaveBeenCalledWith(mockScreening);
+      expect(res.json).toHaveBeenCalledWith({ data: mockScreening });
       expect(mockNext).not.toHaveBeenCalled();
     });
 
@@ -126,8 +126,7 @@ describe('ScreeningController', () => {
         quality: '3D',
       });
       expect(res.json).toHaveBeenCalledWith({
-        ...mockScreening,
-        quality: '3D',
+        data: { ...mockScreening, quality: '3D' },
       });
       expect(mockNext).not.toHaveBeenCalled();
     });
@@ -194,7 +193,7 @@ describe('ScreeningController', () => {
       await screeningController.getAllScreenings(req, res, mockNext);
 
       expect(screeningService.getAllScreenings).toHaveBeenCalled();
-      expect(res.json).toHaveBeenCalledWith(mockScreenings);
+      expect(res.json).toHaveBeenCalledWith({ data: mockScreenings });
       expect(mockNext).not.toHaveBeenCalled();
     });
 
@@ -224,10 +223,7 @@ describe('ScreeningController', () => {
       await screeningController.searchScreenings(req, res, mockNext);
 
       expect(screeningService.searchScreenings).toHaveBeenCalledWith('IMAX');
-      expect(res.json).toHaveBeenCalledWith({
-        message: 'ok',
-        data: mockScreenings,
-      });
+      expect(res.json).toHaveBeenCalledWith({ data: mockScreenings });
       expect(mockNext).not.toHaveBeenCalled();
     });
 
@@ -259,7 +255,7 @@ describe('ScreeningController', () => {
       expect(screeningService.getScreeningsByMovieId).toHaveBeenCalledWith(
         'm-1'
       );
-      expect(res.json).toHaveBeenCalledWith(mockScreenings);
+      expect(res.json).toHaveBeenCalledWith({ data: mockScreenings });
     });
   });
 
@@ -277,7 +273,7 @@ describe('ScreeningController', () => {
       expect(screeningService.getScreeningsByTheaterId).toHaveBeenCalledWith(
         't-1'
       );
-      expect(res.json).toHaveBeenCalledWith(mockScreenings);
+      expect(res.json).toHaveBeenCalledWith({ data: mockScreenings });
     });
   });
 
@@ -296,7 +292,7 @@ describe('ScreeningController', () => {
         'h-1',
         't-1'
       );
-      expect(res.json).toHaveBeenCalledWith(mockScreenings);
+      expect(res.json).toHaveBeenCalledWith({ data: mockScreenings });
     });
   });
 
@@ -314,7 +310,7 @@ describe('ScreeningController', () => {
       expect(screeningService.getScreeningsByDate).toHaveBeenCalledWith(
         new Date('2025-01-01')
       );
-      expect(res.json).toHaveBeenCalledWith(mockScreenings);
+      expect(res.json).toHaveBeenCalledWith({ data: mockScreenings });
     });
 
     it('should return 400 for invalid date', async () => {

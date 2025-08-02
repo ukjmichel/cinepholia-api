@@ -7,6 +7,7 @@ import {
 import { permission } from '../middlewares/permission.js';
 import { validateCreateUser } from '../validators/user.validator.js';
 import { createAccount } from '../controllers/user.controller.js';
+import { handleValidationError } from '../middlewares/handleValidatonError.middleware.js';
 
 const router = Router();
 
@@ -31,7 +32,7 @@ const router = Router();
 router.post(
   '/register',
   validateCreateUser,
-  validate,
+  handleValidationError,
   createAccount('utilisateur')
 );
 
@@ -59,10 +60,10 @@ router.post(
  */
 router.post(
   '/register-employee',
-  validateCreateUser,
-  validate,
   decodeJwtToken,
   permission.isAdmin,
+  validateCreateUser,
+  handleValidationError,
   createAccount('employé')
 );
 

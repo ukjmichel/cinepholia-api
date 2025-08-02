@@ -1,4 +1,3 @@
-
 import * as bookingController from '../../controllers/booking.controller.js';
 import { bookingService } from '../../services/booking.service.js';
 import { screeningService } from '../../services/screening.service.js';
@@ -202,26 +201,40 @@ describe('BookingController', () => {
 
   // === SEARCH ===
   describe('searchBooking', () => {
-    it('returns results if query present', async () => {
-      (bookingService.searchBookingSimple as jest.Mock).mockResolvedValue(
+    it('returns results if any search param present', async () => {
+      (bookingService.searchBooking as jest.Mock).mockResolvedValue(
         mockBookings
       );
       const res = mockResponse();
+      // Provide at least one valid param, e.g. q
       await bookingController.searchBooking(
         mockRequest({}, {}, { q: 'alice' }),
         res,
         mockNext
       );
-      expect(res.json).toHaveBeenCalled();
+      expect(res.json).toHaveBeenCalledWith({
+        message: 'Bookings search results',
+        data: mockBookings,
+      });
     });
 
-    it('calls next with BadRequestError if q missing', async () => {
+    it('calls next with BadRequestError if no search filters', async () => {
       await bookingController.searchBooking(
         mockRequest(),
         mockResponse(),
         mockNext
       );
       expect(mockNext).toHaveBeenCalledWith(expect.any(BadRequestError));
+    });
+
+    it('calls next with NotFoundError if no bookings', async () => {
+      (bookingService.searchBooking as jest.Mock).mockResolvedValue([]);
+      await bookingController.searchBooking(
+        mockRequest({}, {}, { q: 'bob' }),
+        mockResponse(),
+        mockNext
+      );
+      expect(mockNext).toHaveBeenCalledWith(expect.any(NotFoundError));
     });
   });
 

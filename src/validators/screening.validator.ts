@@ -1,16 +1,33 @@
 // src/validators/screening.validator.ts
+
 import { body, param, query } from 'express-validator';
 
-const allowedQualities = ['Standard', '3D', 'IMAX', 'Dolby Atmos'];
+/**
+ * Allowed projection qualities (must match MovieHallModel)
+ */
+const allowedQualities = ['2D', '3D', 'IMAX', '4DX'];
 
-// --- Basic param validator for UUID
+/* ----------------------------------------------------------------------
+   Param Validators
+---------------------------------------------------------------------- */
+
+/**
+ * Validate :screeningId param as a UUID v4
+ */
 export const screeningIdParamValidator = [
   param('screeningId')
     .isUUID(4)
     .withMessage('screeningId must be a valid UUID'),
 ];
 
-// --- Create Screening Validator
+/* ----------------------------------------------------------------------
+   Create Screening Validator
+---------------------------------------------------------------------- */
+
+/**
+ * Validate request body for creating a new screening
+ * All fields required except screeningId (auto-generated)
+ */
 export const createScreeningValidator = [
   body('screeningId')
     .optional()
@@ -41,13 +58,21 @@ export const createScreeningValidator = [
     .withMessage('price is required')
     .isFloat({ min: 0 })
     .withMessage('price must be a positive number'),
+  // Optional quality field for advanced API use (screenings normally inherit hall's quality)
   body('quality')
     .optional()
-    .isIn(['Standard', '3D', 'IMAX', 'Dolby Atmos'])
-    .withMessage('quality must be one of Standard, 3D, IMAX, Dolby Atmos'),
+    .isIn(allowedQualities)
+    .withMessage(`quality must be one of: ${allowedQualities.join(', ')}`),
 ];
 
-// --- Update Screening Validator (Partial)
+/* ----------------------------------------------------------------------
+   Update Screening Validator (PATCH)
+---------------------------------------------------------------------- */
+
+/**
+ * Validate request body for partial update of a screening
+ * All fields optional
+ */
 export const updateScreeningValidator = [
   body('movieId')
     .optional()
@@ -68,49 +93,44 @@ export const updateScreeningValidator = [
     .withMessage('price must be a positive number'),
   body('quality')
     .optional()
-    .isIn(['Standard', '3D', 'IMAX', 'Dolby Atmos'])
-    .withMessage('quality must be one of Standard, 3D, IMAX, Dolby Atmos'),
+    .isIn(allowedQualities)
+    .withMessage(`quality must be one of: ${allowedQualities.join(', ')}`),
 ];
 
-// --- Advanced Filter/Query Validator
+/* ----------------------------------------------------------------------
+   Search & Filter Validator for GET /screenings/search
+---------------------------------------------------------------------- */
+
+/**
+ * Validate query params for searching or filtering screenings
+ */
 export const searchScreeningValidator = [
-  // General query string
   query('q')
     .optional()
     .isString()
     .withMessage('Search query must be a string')
     .isLength({ min: 1, max: 100 })
     .withMessage('Search query must be 1-100 chars'),
-
-  // Filter by quality
   query('quality')
     .optional()
     .isIn(allowedQualities)
     .withMessage(`quality must be one of: ${allowedQualities.join(', ')}`),
-
-  // Filter by date (YYYY-MM-DD)
   query('date')
     .optional()
     .isISO8601({ strict: true })
     .withMessage('date must be a valid ISO8601 date (YYYY-MM-DD)'),
-
-  // Filter by theaterId
   query('theaterId')
     .optional()
     .isString()
     .withMessage('theaterId must be a string')
     .isLength({ min: 1, max: 100 })
     .withMessage('theaterId must be 1-100 characters'),
-
-  // Filter by hallId
   query('hallId')
     .optional()
     .isString()
     .withMessage('hallId must be a string')
     .isLength({ min: 1, max: 100 })
     .withMessage('hallId must be 1-100 characters'),
-
-  // Filter by movieId
   query('movieId')
     .optional()
     .isUUID(4)

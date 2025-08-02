@@ -1,18 +1,25 @@
-import { Sequelize } from 'sequelize-typescript';
 import { v4 as uuidv4 } from 'uuid';
-import { BookingModel, BookingStatus } from '../../models/booking.model.js';
+import { sequelize, syncDB } from '../../config/db.js';
 import { UserModel } from '../../models/user.model.js';
-import { ScreeningModel } from '../../models/screening.model.js';
 import { MovieModel } from '../../models/movie.model.js';
 import { MovieTheaterModel } from '../../models/movie-theater.model.js';
 import { MovieHallModel } from '../../models/movie-hall.model.js';
+import { ScreeningModel } from '../../models/screening.model.js';
+import { BookingModel, BookingStatus } from '../../models/booking.model.js';
 
-// Fixed: this will always use the shared, correct FK unless overridden
+// Shared test UUIDs for FKs
+const userId = uuidv4();
+const movieId = uuidv4();
+const theaterId = 'theater1';
+const hallId = 'hallA';
+const screeningId = uuidv4();
+
+// Helper for valid booking creation
 function makeBooking(overrides: Partial<any> = {}) {
   return {
     bookingId: uuidv4(),
-    userId, // Shared static user
-    screeningId, // Shared static screening
+    userId,
+    screeningId,
     seatsNumber: 2,
     status: 'pending' as BookingStatus,
     bookingDate: new Date(),
@@ -21,34 +28,10 @@ function makeBooking(overrides: Partial<any> = {}) {
   };
 }
 
-// Use shared variables for correct referential integrity
-const userId = uuidv4();
-const movieId = uuidv4();
-const theaterId = 'theater1';
-const hallId = 'hallA';
-const screeningId = uuidv4();
-
-describe('BookingModel', () => {
-  let sequelize: Sequelize;
-
+describe('BookingModel (MySQL)', () => {
   beforeAll(async () => {
-    sequelize = new Sequelize({
-      dialect: 'sqlite',
-      storage: ':memory:',
-      logging: false,
-      models: [
-        BookingModel,
-        UserModel,
-        ScreeningModel,
-        MovieModel,
-        MovieTheaterModel,
-        MovieHallModel,
-      ],
-    });
-
-    await sequelize.sync({ force: true });
-
-    // --- Setup static entities for FK integrity ---
+    await syncDB();
+    // Static data for FK integrity
     await UserModel.create({
       userId,
       username: 'janedoe',
@@ -58,7 +41,6 @@ describe('BookingModel', () => {
       password: 'password123',
       verified: true,
     });
-
     await MovieModel.create({
       movieId,
       title: 'A Movie',
@@ -69,7 +51,6 @@ describe('BookingModel', () => {
       director: 'Jane Director',
       durationMinutes: 100,
     });
-
     await MovieTheaterModel.create({
       theaterId,
       address: '123 Main St',
@@ -78,7 +59,6 @@ describe('BookingModel', () => {
       phone: '0102030405',
       email: 'test@theater.com',
     });
-
     await MovieHallModel.create({
       theaterId,
       hallId,
@@ -88,7 +68,6 @@ describe('BookingModel', () => {
       ],
       quality: '2D',
     });
-
     await ScreeningModel.create({
       screeningId,
       movieId,
@@ -100,70 +79,87 @@ describe('BookingModel', () => {
   });
 
   afterAll(async () => {
-    if (sequelize) await sequelize.close();
+    if (sequelize.getDialect() === 'mysql') {
+      await sequelize.query('SET FOREIGN_KEY_CHECKS = 0');
+    }
+    await BookingModel.destroy({ where: {}, truncate: true, cascade: true });
+    await ScreeningModel.destroy({ where: {}, truncate: true, cascade: true });
+    await MovieHallModel.destroy({ where: {}, truncate: true, cascade: true });
+    await MovieTheaterModel.destroy({
+      where: {},
+      truncate: true,
+      cascade: true,
+    });
+    await MovieModel.destroy({ where: {}, truncate: true, cascade: true });
+    await UserModel.destroy({ where: {}, truncate: true, cascade: true });
+    if (sequelize.getDialect() === 'mysql') {
+      await sequelize.query('SET FOREIGN_KEY_CHECKS = 1');
+    }
+    await sequelize.close();
   });
 
   beforeEach(async () => {
     await BookingModel.destroy({ where: {} });
   });
 
-  it('should create a booking with valid attributes and associate with User and Screening', async () => {
+  it('creates a booking and associates it with User and Screening', async () => {
     const booking = await BookingModel.create(makeBooking());
-
     expect(booking).toBeDefined();
     expect(booking.userId).toBe(userId);
     expect(booking.screeningId).toBe(screeningId);
     expect(booking.seatsNumber).toBe(2);
     expect(booking.status).toBe('pending');
-    expect(booking.bookingDate).toBeDefined();
+    expect(booking.bookingDate).toBeInstanceOf(Date);
+    expect(typeof booking.totalPrice).toBe('number');
 
-    // Associations
-    const foundBooking = await BookingModel.findByPk(booking.bookingId, {
+    // Check associations are populated on fetch
+    const found = await BookingModel.findByPk(booking.bookingId, {
       include: [UserModel, ScreeningModel],
     });
-
-    expect(foundBooking).toBeDefined();
-    expect(foundBooking!.user).toBeDefined();
-    expect(foundBooking!.user.username).toBe('janedoe');
-    expect(foundBooking!.screening).toBeDefined();
-    expect(foundBooking!.screening.screeningId).toBe(screeningId);
+    expect(found).toBeDefined();
+    expect(found!.user).toBeDefined();
+    expect(found!.user.username).toBe('janedoe');
+    expect(found!.screening).toBeDefined();
+    expect(found!.screening.screeningId).toBe(screeningId);
   });
 
-  it('should require seatsNumber to be at least 1', async () => {
+  it('requires seatsNumber to be at least 1', async () => {
     await expect(
       BookingModel.create(makeBooking({ seatsNumber: 0 }))
     ).rejects.toThrow();
   });
 
-  it('should require totalPrice to be non-negative', async () => {
+  it('requires totalPrice to be non-negative', async () => {
     await expect(
       BookingModel.create(makeBooking({ totalPrice: -10 }))
     ).rejects.toThrow();
   });
 
-  it('should not allow duplicate bookingId', async () => {
+  it('does not allow duplicate bookingId', async () => {
     const booking1 = await BookingModel.create(makeBooking());
     await expect(
       BookingModel.create({ ...makeBooking(), bookingId: booking1.bookingId })
     ).rejects.toThrow();
   });
 
-  it('should update booking status', async () => {
-    const booking = await BookingModel.create(makeBooking());
+  it('updates booking status and persists the change', async () => {
+    const booking = await BookingModel.create(
+      makeBooking({ status: 'pending' })
+    );
     booking.status = 'used';
     await booking.save();
     const updated = await BookingModel.findByPk(booking.bookingId);
     expect(updated!.status).toBe('used');
   });
 
-  it('should delete a booking', async () => {
+  it('deletes a booking', async () => {
     const booking = await BookingModel.create(makeBooking());
     await booking.destroy();
     const found = await BookingModel.findByPk(booking.bookingId);
     expect(found).toBeNull();
   });
 
-  it('should cascade delete when user is removed', async () => {
+  it('cascades delete when user is removed', async () => {
     const tempUserId = uuidv4();
     await UserModel.create({
       userId: tempUserId,
@@ -179,38 +175,73 @@ describe('BookingModel', () => {
     );
     await UserModel.destroy({ where: { userId: tempUserId } });
     const found = await BookingModel.findByPk(booking.bookingId);
-    // Adapt if your FK is set to SET NULL instead of CASCADE!
     expect(found).toBeNull();
   });
 
-  it('should not create booking for missing userId', async () => {
+  it('cascades delete when screening is removed', async () => {
+    const tempScreeningId = uuidv4();
+    await ScreeningModel.create({
+      screeningId: tempScreeningId,
+      movieId,
+      theaterId,
+      hallId,
+      startTime: new Date('2025-02-01T15:00:00Z'),
+      price: 8,
+    });
+    const booking = await BookingModel.create(
+      makeBooking({ screeningId: tempScreeningId })
+    );
+    await ScreeningModel.destroy({ where: { screeningId: tempScreeningId } });
+    const found = await BookingModel.findByPk(booking.bookingId);
+    expect(found).toBeNull();
+  });
+
+  it('rejects booking for missing userId', async () => {
     await expect(
       BookingModel.create(makeBooking({ userId: undefined }))
     ).rejects.toThrow();
   });
 
-  it('should not create booking for missing screeningId', async () => {
+  it('rejects booking for missing screeningId', async () => {
     await expect(
       BookingModel.create(makeBooking({ screeningId: undefined }))
     ).rejects.toThrow();
   });
 
-  it('should not create booking for missing seatsNumber', async () => {
+  it('rejects booking for missing seatsNumber', async () => {
     await expect(
       BookingModel.create(makeBooking({ seatsNumber: undefined }))
     ).rejects.toThrow();
   });
 
-  it('should default status to "pending" if not provided', async () => {
+  it('defaults status to "pending" if not provided', async () => {
     const booking = await BookingModel.create(
       makeBooking({ status: undefined })
     );
     expect(booking.status).toBe('pending');
   });
 
-  it('should not create booking for missing totalPrice', async () => {
+  it('rejects booking for missing totalPrice', async () => {
     await expect(
       BookingModel.create(makeBooking({ totalPrice: undefined }))
     ).rejects.toThrow();
+  });
+
+  it('does not allow invalid status', async () => {
+    await expect(
+      BookingModel.create(makeBooking({ status: 'foo' }))
+    ).rejects.toThrow();
+  });
+
+  it('allows status to be "canceled"', async () => {
+    const booking = await BookingModel.create(
+      makeBooking({ status: 'canceled' })
+    );
+    expect(booking.status).toBe('canceled');
+  });
+
+  it('allows status to be "used"', async () => {
+    const booking = await BookingModel.create(makeBooking({ status: 'used' }));
+    expect(booking.status).toBe('used');
   });
 });

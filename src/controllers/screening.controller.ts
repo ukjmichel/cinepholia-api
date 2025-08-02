@@ -28,7 +28,7 @@ export async function getScreeningById(
     const screening = await screeningService.getScreeningById(
       req.params.screeningId
     );
-    res.json(screening);
+    res.json({ data: screening });
   } catch (err) {
     next(err);
   }
@@ -49,7 +49,7 @@ export async function createScreening(
 ) {
   try {
     const screening = await screeningService.createScreening(req.body);
-    res.status(201).json(screening);
+    res.status(201).json({ data: screening });
   } catch (err) {
     next(err);
   }
@@ -77,7 +77,7 @@ export async function updateScreening(
       req.params.screeningId,
       req.body
     );
-    res.json(screening);
+    res.json({ data: screening });
   } catch (err) {
     next(err);
   }
@@ -118,7 +118,7 @@ export async function getAllScreenings(
 ) {
   try {
     const screenings = await screeningService.getAllScreenings();
-    res.json(screenings);
+    res.json({ data: screenings });
   } catch (err) {
     next(err);
   }
@@ -142,11 +142,11 @@ export async function searchScreenings(
       const results = await screeningService.searchScreenings(
         String(req.query.q)
       );
-      res.json({ message: 'ok', data: results });
+      res.json({ data: results });
     } else {
       // Recherche avancée par filtres
       const results = await screeningService.searchScreenings(req.query);
-      res.json({ message: 'ok', data: results });
+      res.json({ data: results });
     }
   } catch (err) {
     next(err);
@@ -169,7 +169,7 @@ export async function getScreeningsByMovieId(
     const screenings = await screeningService.getScreeningsByMovieId(
       req.params.movieId
     );
-    res.json(screenings);
+    res.json({ data: screenings });
   } catch (err) {
     next(err);
   }
@@ -191,7 +191,7 @@ export async function getScreeningsByTheaterId(
     const screenings = await screeningService.getScreeningsByTheaterId(
       req.params.theaterId
     );
-    res.json(screenings);
+    res.json({ data: screenings });
   } catch (err) {
     next(err);
   }
@@ -219,7 +219,7 @@ export async function getScreeningsByHallId(
       req.params.hallId,
       theaterId
     );
-    res.json(screenings);
+    res.json({ data: screenings });
   } catch (err) {
     next(err);
   }
@@ -244,7 +244,7 @@ export async function getScreeningsByDate(
       return res.status(400).json({ error: 'Invalid date format' });
     }
     const screenings = await screeningService.getScreeningsByDate(date);
-    res.json(screenings);
+    res.json({ data: screenings });
   } catch (err) {
     next(err);
   }

@@ -1,7 +1,12 @@
 import { body, param, query } from 'express-validator';
 
+/* ----------------------------------------------------------------------
+   Movie Hall Validators
+---------------------------------------------------------------------- */
+
 /**
- * Validate creation of a movie hall
+ * Validate creation of a movie hall.
+ * All fields required.
  */
 export const createMovieHallValidator = [
   body('theaterId')
@@ -48,13 +53,19 @@ export const createMovieHallValidator = [
       }
       return true;
     }),
+  body('quality')
+    .exists()
+    .withMessage('quality is required')
+    .isIn(['2D', '3D', 'IMAX', '4DX'])
+    .withMessage('quality must be one of: 2D, 3D, IMAX, 4DX'),
 ];
 
 /**
- * Validate updating a movie hall (at least one field must be present)
+ * Validate updating a movie hall.
+ * At least one updatable field must be present.
  */
 export const updateMovieHallValidator = [
-  body().custom((value, { req }) => {
+  body().custom((_, { req }) => {
     if (
       !req.body ||
       (!req.body.seatsLayout &&
@@ -117,8 +128,12 @@ export const updateMovieHallValidator = [
     .withMessage('quality must be one of: 2D, 3D, IMAX, 4DX'),
 ];
 
+/* ----------------------------------------------------------------------
+   Params and Query Validators for Movie Halls
+---------------------------------------------------------------------- */
+
 /**
- * Validate hall route params (theaterId & hallId)
+ * Validate both theaterId and hallId in params (e.g. /movie-halls/:theaterId/:hallId)
  */
 export const movieHallIdParamsValidator = [
   param('theaterId')
@@ -142,7 +157,37 @@ export const movieHallIdParamsValidator = [
 ];
 
 /**
- * Validate theaterId param only (for /theater/:theaterId)
+ * Validate hallId in params (e.g. /hall/:hallId)
+ */
+export const hallIdParamValidator = [
+  param('hallId')
+    .exists()
+    .withMessage('hallId param is required')
+    .isLength({ min: 1, max: 16 })
+    .withMessage('hallId must be between 1 and 16 characters')
+    .matches(/^[a-zA-Z0-9_-]+$/)
+    .withMessage(
+      'hallId must contain only letters, numbers, underscores, or hyphens'
+    ),
+];
+
+/**
+ * Validate theaterId in query (?theaterId=xxx)
+ */
+export const theaterIdQueryValidator = [
+  query('theaterId')
+    .exists()
+    .withMessage('theaterId query param is required')
+    .isLength({ min: 2, max: 36 })
+    .withMessage('theaterId must be between 2 and 36 characters')
+    .matches(/^[a-zA-Z0-9_-]+$/)
+    .withMessage(
+      'theaterId must contain only letters, numbers, underscores, or hyphens'
+    ),
+];
+
+/**
+ * Validate theaterId in params (e.g. /theater/:theaterId)
  */
 export const theaterIdParamValidator = [
   param('theaterId')
@@ -157,7 +202,7 @@ export const theaterIdParamValidator = [
 ];
 
 /**
- * Validate hall search query
+ * Validate movie hall search query (?theaterId=...&hallId=...)
  */
 export const searchMovieHallValidator = [
   query('theaterId')
@@ -176,4 +221,24 @@ export const searchMovieHallValidator = [
     .withMessage(
       'hallId must contain only letters, numbers, underscores, or hyphens'
     ),
+];
+
+/**
+ * Validate hallId in params and theaterId in query for hall screenings lookup (e.g. /screenings/hall/:hallId?theaterId=xxx)
+ */
+export const hallScreeningsValidator = [
+  param('hallId')
+    .exists()
+    .withMessage('hallId param is required')
+    .isLength({ min: 1, max: 16 })
+    .withMessage('hallId must be between 1 and 16 characters')
+    .matches(/^[a-zA-Z0-9_-]+$/)
+    .withMessage('hallId must contain only letters, numbers, underscores, or hyphens'),
+  query('theaterId')
+    .exists()
+    .withMessage('theaterId query param is required')
+    .isLength({ min: 2, max: 36 })
+    .withMessage('theaterId must be between 2 and 36 characters')
+    .matches(/^[a-zA-Z0-9_-]+$/)
+    .withMessage('theaterId must contain only letters, numbers, underscores, or hyphens'),
 ];

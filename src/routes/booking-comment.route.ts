@@ -13,6 +13,7 @@ import {
 } from '../validators/booking-comment.validator.js';
 import { decodeJwtToken } from '../middlewares/auth.middleware.js';
 import { validateUserIdParam } from '../validators/user.validator.js';
+import { handleValidationError } from '../middlewares/handleValidatonError.middleware.js';
 
 const router = Router();
 
@@ -36,7 +37,7 @@ const router = Router();
 router.get(
   '/movies/:movieId/comments',
   movieIdParamValidation,
-  validate,
+  handleValidationError,
   bookingCommentController.getCommentsByMovie
 );
 
@@ -64,9 +65,10 @@ router.use(decodeJwtToken);
  */
 router.get(
   '/bookings/:bookingId/comment',
-  bookingIdParamValidation,
-  validate,
+  decodeJwtToken,
   permission.canAccessBooking,
+  bookingIdParamValidation,
+  handleValidationError,
   bookingCommentController.getCommentByBookingId
 );
 
@@ -107,9 +109,10 @@ router.get(
  */
 router.post(
   '/bookings/:bookingId/add-comment',
-  createCommentValidation,
-  validate,
+  decodeJwtToken,
   permission.canAccessBooking,
+  createCommentValidation,
+  handleValidationError,
   bookingCommentController.createComment
 );
 
@@ -147,9 +150,10 @@ router.post(
  */
 router.put(
   '/bookings/:bookingId/comment',
-  updateCommentValidation,
-  validate,
+  decodeJwtToken,
   permission.canAccessBooking,
+  updateCommentValidation,
+  handleValidationError,
   bookingCommentController.updateComment
 );
 
@@ -173,9 +177,10 @@ router.put(
  */
 router.delete(
   '/bookings/:bookingId/comment',
-  bookingIdParamValidation,
-  validate,
+  decodeJwtToken,
   permission.canAccessBooking,
+  bookingIdParamValidation,
+  handleValidationError,
   bookingCommentController.deleteComment
 );
 
@@ -199,9 +204,10 @@ router.delete(
  */
 router.patch(
   '/bookings/:bookingId/comment/confirm',
-  bookingIdParamValidation,
-  validate,
+  decodeJwtToken,
   permission.isStaff,
+  bookingIdParamValidation,
+  handleValidationError,
   bookingCommentController.confirmComment
 );
 
@@ -219,6 +225,7 @@ router.patch(
  */
 router.get(
   '/bookings/comments',
+  decodeJwtToken,
   permission.isStaff,
   bookingCommentController.getAllComments
 );
@@ -244,9 +251,10 @@ router.get(
  */
 router.get(
   '/bookings/comments/status/:status',
-  statusParamValidation,
-  validate,
+  decodeJwtToken,
   permission.isStaff,
+  statusParamValidation,
+  handleValidationError,
   bookingCommentController.getCommentsByStatus
 );
 
@@ -298,9 +306,10 @@ router.get(
  */
 router.get(
   '/bookings/comments/search',
-  searchQueryValidation,
-  validate,
+  decodeJwtToken,
   permission.isStaff,
+  searchQueryValidation,
+  handleValidationError,
   bookingCommentController.searchComments
 );
 
@@ -334,7 +343,7 @@ router.get(
 router.get(
   '/movies/:movieId/comments/average',
   movieIdParamValidation,
-  validate,
+  handleValidationError,
   bookingCommentController.getAverageRatingForMovie
 );
 
@@ -357,8 +366,10 @@ router.get(
  */
 router.get(
   '/users/:userId/comments',
+  decodeJwtToken,
+  permission.isOwnerOrStaff,
   validateUserIdParam,
-  validate,
+  handleValidationError,
   bookingCommentController.getCommentsByUser
 );
 

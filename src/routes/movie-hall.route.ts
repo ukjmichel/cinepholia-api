@@ -1,4 +1,5 @@
 import express from 'express';
+// Controllers
 import {
   createMovieHall,
   getAllMovieHalls,
@@ -8,13 +9,15 @@ import {
   deleteMovieHall,
   searchMovieHalls,
 } from '../controllers/movie-hall.controller.js';
+// Validators
 import {
   createMovieHallValidator,
   updateMovieHallValidator,
   searchMovieHallValidator,
-  movieHallIdParamsValidator,
   theaterIdParamValidator,
+  movieHallIdParamsValidator,
 } from '../validators/movie-hall.validator.js';
+// Middleware
 import { handleValidationError } from '../middlewares/handleValidatonError.middleware.js';
 import { decodeJwtToken } from '../middlewares/auth.middleware.js';
 import { permission } from '../middlewares/permission.js';
@@ -27,6 +30,8 @@ const router = express.Router();
  *   post:
  *     summary: Create a new movie hall
  *     tags: [Movie Halls]
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -136,7 +141,6 @@ router.get(
  *       400:
  *         description: Validation error
  */
-
 router.get(
   '/search',
   searchMovieHallValidator,
@@ -184,6 +188,8 @@ router.get(
  *   patch:
  *     summary: Update a movie hall by composite PK
  *     tags: [Movie Halls]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: theaterId
@@ -227,6 +233,8 @@ router.patch(
  *   delete:
  *     summary: Delete a movie hall by composite PK
  *     tags: [Movie Halls]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: theaterId
@@ -258,73 +266,3 @@ router.delete(
 );
 
 export default router;
-
-/**
- * @swagger
- * components:
- *   schemas:
- *     MovieHall:
- *       type: object
- *       properties:
- *         theaterId:
- *           type: string
- *           example: "cinema-lyon-01"
- *         hallId:
- *           type: string
- *           example: "grande-salle"
- *         seatsLayout:
- *           type: array
- *           items:
- *             type: array
- *             items:
- *               oneOf:
- *                 - type: string
- *                 - type: number
- *           example: [["A1", "A2", "A3"], ["B1", "B2", "B3"]]
- *         createdAt:
- *           type: string
- *           format: date-time
- *         updatedAt:
- *           type: string
- *           format: date-time
- *     MovieHallCreate:
- *       type: object
- *       required:
- *         - theaterId
- *         - hallId
- *         - seatsLayout
- *       properties:
- *         theaterId:
- *           type: string
- *           example: "cinema-lyon-01"
- *         hallId:
- *           type: string
- *           example: "grande-salle"
- *         seatsLayout:
- *           type: array
- *           items:
- *             type: array
- *             items:
- *               oneOf:
- *                 - type: string
- *                 - type: number
- *           example: [["A1", "A2", "A3"], ["B1", "B2", "B3"]]
- *     MovieHallUpdate:
- *       type: object
- *       properties:
- *         seatsLayout:
- *           type: array
- *           items:
- *             type: array
- *             items:
- *               oneOf:
- *                 - type: string
- *                 - type: number
- *           example: [["A1", "A2"], ["B1", "B2"]]
- *         hallId:
- *           type: string
- *           example: "petite-salle"
- *         theaterId:
- *           type: string
- *           example: "cinema-lyon-01"
- */
