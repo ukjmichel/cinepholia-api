@@ -1,16 +1,20 @@
 /**
+ * BookingService
+ * --------------
  * Seat reservation management service.
  *
  * This service manages all operations related to reservations:
- * creation with verification of available seats, reading by various identifiers,
- * updating, deletion, and searching by user, session, or status.
+ * - Creation with verification of available seats.
+ * - Reading by various identifiers.
+ * - Updating and deletion.
+ * - Searching by user, session, or status.
  *
- * Main features:
- * - Secure creation of reservations (checks the number of remaining seats)
- * - Reading a reservation or list by user, session, or status
- * - Modification and deletion of a reservation
- * - Simple search with keywords (userId, screeningId, status)
- * - Integration with user, session, and room models
+ * Features:
+ * - Secure creation of reservations (checks the number of remaining seats).
+ * - Retrieval of a reservation or list by user, session, or status.
+ * - Modification and deletion of a reservation.
+ * - Simple search with keywords (userId, screeningId, status).
+ * - Integration with user, screening, and hall models.
  *
  */
 
@@ -31,8 +35,6 @@ import { MovieHallModel } from '../models/movie-hall.model.js';
  * Main service for CRUD operations and search on reservations.
  */
 export class BookingService {
-  // === CRUD Operations ===
-
   /**
    * Retrieves a reservation by its unique identifier.
    *
@@ -68,10 +70,18 @@ export class BookingService {
     payload: BookingCreationAttributes,
     transaction?: Transaction
   ): Promise<BookingModel> {
-    // Only booking creation, no seat logic
     return BookingModel.create(payload, { transaction });
   }
 
+  /**
+   * Updates an existing reservation.
+   *
+   * @param {string} bookingId - UUID of the reservation.
+   * @param {Partial<BookingAttributes>} update - Partial reservation data.
+   * @param {Transaction} [transaction] - Optional transaction.
+   * @returns {Promise<BookingModel>} Updated reservation.
+   * @throws {NotFoundError} If the reservation does not exist.
+   */
   async updateBooking(
     bookingId: string,
     update: Partial<BookingAttributes>,
@@ -128,10 +138,8 @@ export class BookingService {
     });
   }
 
-  // === Filters ===
-
   /**
-   * Retrieves the reservations of a user.
+   * Retrieves the reservations of a specific user.
    *
    * @param {string} userId - UUID of the user.
    * @param {Transaction} [transaction] - Optional transaction.
@@ -150,7 +158,7 @@ export class BookingService {
   }
 
   /**
-   * Retrieves the reservations associated with a screening.
+   * Retrieves the reservations associated with a specific screening.
    *
    * @param {string} screeningId - UUID of the screening.
    * @param {Transaction} [transaction] - Optional transaction.
@@ -187,10 +195,8 @@ export class BookingService {
     });
   }
 
-  // === Search ===
-
   /**
-   * Searches for reservations (with joins) on status, screeningId, or userId fields.
+   * Searches for reservations (with joins) by status, screeningId, or userId.
    *
    * @param {string} query - Search term.
    * @param {Transaction} [transaction] - Optional transaction.
@@ -218,7 +224,7 @@ export class BookingService {
   }
 
   /**
-   * Simplified search (without joins) on status, screeningId, or userId fields.
+   * Simplified search (without joins) by status, screeningId, or userId.
    *
    * @param {string} query - Search term.
    * @param {Transaction} [transaction] - Optional transaction.
@@ -241,6 +247,14 @@ export class BookingService {
     });
   }
 
+  /**
+   * Retrieves upcoming bookings for a user starting from a given date.
+   *
+   * @param {string} userId - UUID of the user.
+   * @param {Date} fromDate - Start date for filtering.
+   * @param {Transaction} [transaction] - Optional transaction.
+   * @returns {Promise<BookingModel[]>} Upcoming bookings.
+   */
   async getBookingsByUserUpcoming(
     userId: string,
     fromDate: Date,
@@ -251,7 +265,7 @@ export class BookingService {
       include: [
         {
           model: ScreeningModel,
-          as: 'screening', // Use the right alias for your association
+          as: 'screening',
           where: {
             startTime: { [Op.gte]: fromDate },
           },
@@ -262,7 +276,5 @@ export class BookingService {
     });
   }
 }
-
-
 
 export const bookingService = new BookingService();

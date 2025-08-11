@@ -37,7 +37,7 @@ describe('authController.login', () => {
       lastName: 'User',
       get: function () {
         return this;
-      }, // mock sequelize get
+      }, 
     };
 
     (authService.login as jest.Mock).mockResolvedValue(tokens);

@@ -1,10 +1,11 @@
 /**
  * @module controllers/booking.controller
- * @description
- *   Express controller for cinema bookings, ensuring business validation and
- *   transactional integrity.
  *
- * ## Features
+ * @description
+ * Express controller for cinema bookings, ensuring business validation and
+ * transactional integrity.
+ *
+ * @features
  * - Create, update, delete bookings.
  * - Prevent seat double-booking.
  * - Update booking-related statistics in MongoDB.
@@ -12,8 +13,20 @@
  * - Mark bookings as used or canceled.
  * - Get upcoming bookings for a user.
  *
- * ## Response Format
- * All routes in this controller return JSON in the following format:
+ * @security
+ * - Ensures that only authenticated users can create, update, or delete their bookings.
+ * - Role-based access control for administrative booking management.
+ * - Prevents seat double-booking via database-level locking and transactional checks.
+ *
+ * @dependencies
+ * - `bookingService`: Handles business logic for bookings.
+ * - `bookedSeatService`: Manages seat reservations in SQL.
+ * - `BookingModel` (SQL): Main bookings table.
+ * - `BookingStats` (MongoDB): Tracks aggregated booking statistics.
+ * - `sequelize.transaction`: Ensures atomic operations for seat reservations.
+ *
+ * @response
+ * All routes return JSON in the following format:
  * ```json
  * {
  *   "message": "Short description of the result",
@@ -23,10 +36,11 @@
  * - `message`: Human-readable summary of the result.
  * - `data`: Object, array, or `null` for deletions or validation failures.
  *
- * This structure is consistent for:
+ * This format is used for:
  * - Success (`2xx`) responses.
  * - Handled client errors returned here (`4xx`).
- * Unhandled errors are delegated to the global error middleware, which should also output this format.
+ * - Unhandled errors are delegated to the global error middleware (same structure).
+ *
  */
 
 import { Request, Response, NextFunction } from 'express';

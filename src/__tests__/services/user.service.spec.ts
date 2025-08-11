@@ -1,4 +1,4 @@
-// __tests__/user.service.test.ts
+// src/__tests__/services/user.service.spec.ts
 
 import { UserService } from '../../services/user.service.js';
 import { UserModel } from '../../models/user.model.js';
@@ -9,7 +9,7 @@ jest.mock('../../models/user.model');
 
 const userService = new UserService();
 
-const mockUser = {
+const mockUser: any = {
   userId: 'test-uuid',
   username: 'alice',
   email: 'alice@email.com',
@@ -20,7 +20,7 @@ const mockUser = {
   validatePassword: jest.fn().mockResolvedValue(true),
   update: jest.fn(),
   save: jest.fn(),
-  toJSON: function () {
+  toJSON() {
     return this;
   },
 };
@@ -81,7 +81,7 @@ describe('UserService', () => {
       const updated = await userService.updateUser('test-uuid', {
         firstName: 'Alicia',
       });
-      expect(updated.firstName).toBe('Alice');
+      expect(updated.firstName).toBe('Alice'); // our mock user returns itself
       expect(UserModel.findByPk).toHaveBeenCalled();
     });
 
@@ -151,9 +151,13 @@ describe('UserService', () => {
   });
 
   describe('validatePassword', () => {
+    afterEach(() => {
+      jest.restoreAllMocks();
+    });
+
     it('returns user if password valid', async () => {
-      (UserService.prototype.getUserByUsernameOrEmail as jest.Mock) = jest
-        .fn()
+      jest
+        .spyOn(UserService.prototype, 'getUserByUsernameOrEmail')
         .mockResolvedValue(mockUser);
       mockUser.validatePassword = jest.fn().mockResolvedValue(true);
 
@@ -162,8 +166,8 @@ describe('UserService', () => {
     });
 
     it('returns null if password invalid', async () => {
-      (UserService.prototype.getUserByUsernameOrEmail as jest.Mock) = jest
-        .fn()
+      jest
+        .spyOn(UserService.prototype, 'getUserByUsernameOrEmail')
         .mockResolvedValue(mockUser);
       mockUser.validatePassword = jest.fn().mockResolvedValue(false);
 
@@ -172,9 +176,9 @@ describe('UserService', () => {
     });
 
     it('throws NotFoundError if user not found', async () => {
-      (UserService.prototype.getUserByUsernameOrEmail as jest.Mock) = jest
-        .fn()
-        .mockResolvedValue(null);
+      jest
+        .spyOn(UserService.prototype, 'getUserByUsernameOrEmail')
+        .mockRejectedValue(new NotFoundError('User not found'));
 
       await expect(
         userService.validatePassword('no-user', 'pass')

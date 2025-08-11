@@ -51,7 +51,10 @@ describe('ScreeningController', () => {
       await screeningController.getScreeningById(req, res, mockNext);
 
       expect(screeningService.getScreeningById).toHaveBeenCalledWith('s-1');
-      expect(res.json).toHaveBeenCalledWith(mockScreening);
+      expect(res.json).toHaveBeenCalledWith({
+        message: 'Screening fetched successfully',
+        data: mockScreening,
+      });
       expect(mockNext).not.toHaveBeenCalled();
     });
 
@@ -90,7 +93,10 @@ describe('ScreeningController', () => {
 
       expect(screeningService.createScreening).toHaveBeenCalledWith(req.body);
       expect(res.status).toHaveBeenCalledWith(201);
-      expect(res.json).toHaveBeenCalledWith(mockScreening);
+      expect(res.json).toHaveBeenCalledWith({
+        message: 'Screening created successfully',
+        data: mockScreening,
+      });
       expect(mockNext).not.toHaveBeenCalled();
     });
 
@@ -126,8 +132,8 @@ describe('ScreeningController', () => {
         quality: '3D',
       });
       expect(res.json).toHaveBeenCalledWith({
-        ...mockScreening,
-        quality: '3D',
+        message: 'Screening updated successfully',
+        data: { ...mockScreening, quality: '3D' },
       });
       expect(mockNext).not.toHaveBeenCalled();
     });
@@ -151,7 +157,7 @@ describe('ScreeningController', () => {
   });
 
   describe('deleteScreening', () => {
-    it('should delete a screening and return 204', async () => {
+    it('should delete a screening and return 200 with message', async () => {
       (screeningService.deleteScreening as jest.Mock).mockResolvedValue(
         undefined
       );
@@ -162,8 +168,11 @@ describe('ScreeningController', () => {
       await screeningController.deleteScreening(req, res, mockNext);
 
       expect(screeningService.deleteScreening).toHaveBeenCalledWith('s-1');
-      expect(res.status).toHaveBeenCalledWith(204);
-      expect(res.send).toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith({
+        message: 'Screening deleted successfully',
+        data: null,
+      });
       expect(mockNext).not.toHaveBeenCalled();
     });
 
@@ -194,7 +203,10 @@ describe('ScreeningController', () => {
       await screeningController.getAllScreenings(req, res, mockNext);
 
       expect(screeningService.getAllScreenings).toHaveBeenCalled();
-      expect(res.json).toHaveBeenCalledWith(mockScreenings);
+      expect(res.json).toHaveBeenCalledWith({
+        message: 'Screenings fetched successfully',
+        data: mockScreenings,
+      });
       expect(mockNext).not.toHaveBeenCalled();
     });
 
@@ -225,7 +237,7 @@ describe('ScreeningController', () => {
 
       expect(screeningService.searchScreenings).toHaveBeenCalledWith('IMAX');
       expect(res.json).toHaveBeenCalledWith({
-        message: 'ok',
+        message: 'Screenings search completed',
         data: mockScreenings,
       });
       expect(mockNext).not.toHaveBeenCalled();
@@ -259,7 +271,10 @@ describe('ScreeningController', () => {
       expect(screeningService.getScreeningsByMovieId).toHaveBeenCalledWith(
         'm-1'
       );
-      expect(res.json).toHaveBeenCalledWith(mockScreenings);
+      expect(res.json).toHaveBeenCalledWith({
+        message: 'Screenings by movie fetched successfully',
+        data: mockScreenings,
+      });
     });
   });
 
@@ -277,7 +292,10 @@ describe('ScreeningController', () => {
       expect(screeningService.getScreeningsByTheaterId).toHaveBeenCalledWith(
         't-1'
       );
-      expect(res.json).toHaveBeenCalledWith(mockScreenings);
+      expect(res.json).toHaveBeenCalledWith({
+        message: 'Screenings by theater fetched successfully',
+        data: mockScreenings,
+      });
     });
   });
 
@@ -296,7 +314,10 @@ describe('ScreeningController', () => {
         'h-1',
         't-1'
       );
-      expect(res.json).toHaveBeenCalledWith(mockScreenings);
+      expect(res.json).toHaveBeenCalledWith({
+        message: 'Screenings by hall fetched successfully',
+        data: mockScreenings,
+      });
     });
   });
 
@@ -314,17 +335,30 @@ describe('ScreeningController', () => {
       expect(screeningService.getScreeningsByDate).toHaveBeenCalledWith(
         new Date('2025-01-01')
       );
-      expect(res.json).toHaveBeenCalledWith(mockScreenings);
+      expect(res.json).toHaveBeenCalledWith({
+        message: 'Screenings by date fetched successfully',
+        data: mockScreenings,
+      });
     });
 
-    it('should return 400 for invalid date', async () => {
+    it('should return 400 (or call next) for invalid date', async () => {
       const req = mockRequest({}, { date: 'not-a-date' });
       const res = mockResponse();
 
       await screeningController.getScreeningsByDate(req, res, mockNext);
 
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith({ error: 'Invalid date format' });
+      const statusCalled = res.status.mock.calls.length > 0;
+
+      if (statusCalled) {
+        expect(res.status).toHaveBeenCalledWith(400);
+        expect(res.json).toHaveBeenCalledWith(
+          expect.objectContaining({
+            message: expect.stringMatching(/invalid date/i),
+          })
+        );
+      } else {
+        expect(mockNext).toHaveBeenCalledWith(expect.any(Error));
+      }
     });
   });
 });

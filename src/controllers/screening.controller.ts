@@ -1,12 +1,37 @@
 /**
  * @module controllers/screening.controller
  *
+ * @description
  * Controller for managing movie screenings.
  *
- * Features:
- * - CRUD operations
- * - Search and filtering
- * - Specialized queries (by movie, theater, hall, or date)
+ * @features
+ * - Full CRUD operations (Create, Read, Update, Delete).
+ * - Search and filtering of screenings.
+ * - Specialized queries:
+ *   - By movie ID
+ *   - By theater ID
+ *   - By hall ID
+ *   - By screening date
+ *
+ * @response
+ * All endpoints return JSON in the format:
+ * ```json
+ * {
+ *   "message": "Short description of the result",
+ *   "data": { ... } | [ ... ] | null
+ * }
+ * ```
+ * - `message`: Human-readable description of the operation result.
+ * - `data`: An object, array, or `null` (for deletions or when no results are found).
+ *
+ * @dependencies
+ * - `screeningService`: Handles all database queries and business logic for screenings.
+ * - `NotFoundError`: Thrown when a requested screening does not exist.
+ * - `BadRequestError`: Thrown for invalid input parameters.
+ *
+ * @security
+ * - Validates IDs and date formats to prevent malformed queries.
+ * - Relies on parameterized queries through the ORM to prevent SQL injection.
  *
  * All methods forward errors to Express via `next()`.
  */
@@ -193,12 +218,10 @@ export async function getScreeningsByMovieId(
     const screenings = await screeningService.getScreeningsByMovieId(
       req.params.movieId
     );
-    res
-      .status(200)
-      .json({
-        message: 'Screenings by movie fetched successfully',
-        data: screenings,
-      });
+    res.status(200).json({
+      message: 'Screenings by movie fetched successfully',
+      data: screenings,
+    });
   } catch (err) {
     next(err);
   }
@@ -222,12 +245,10 @@ export async function getScreeningsByTheaterId(
     const screenings = await screeningService.getScreeningsByTheaterId(
       req.params.theaterId
     );
-    res
-      .status(200)
-      .json({
-        message: 'Screenings by theater fetched successfully',
-        data: screenings,
-      });
+    res.status(200).json({
+      message: 'Screenings by theater fetched successfully',
+      data: screenings,
+    });
   } catch (err) {
     next(err);
   }
@@ -257,12 +278,10 @@ export async function getScreeningsByHallId(
       req.params.hallId,
       theaterId
     );
-    res
-      .status(200)
-      .json({
-        message: 'Screenings by hall fetched successfully',
-        data: screenings,
-      });
+    res.status(200).json({
+      message: 'Screenings by hall fetched successfully',
+      data: screenings,
+    });
   } catch (err) {
     next(err);
   }
@@ -289,12 +308,10 @@ export async function getScreeningsByDate(
       return next(new BadRequestError('Invalid date format'));
     }
     const screenings = await screeningService.getScreeningsByDate(date);
-    res
-      .status(200)
-      .json({
-        message: 'Screenings by date fetched successfully',
-        data: screenings,
-      });
+    res.status(200).json({
+      message: 'Screenings by date fetched successfully',
+      data: screenings,
+    });
   } catch (err) {
     next(err);
   }

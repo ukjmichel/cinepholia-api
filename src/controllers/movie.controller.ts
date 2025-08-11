@@ -1,13 +1,23 @@
 /**
  * @module controllers/movies.controller
  *
+ * @description
  * Controller for managing movies.
  *
- * Features:
- * - Full CRUD (Create, Read, Update, Delete)
- * - Search and filtering
- * - Specialized listings (upcoming movies, movies by theater, etc.)
+ * @features
+ * - Full CRUD (Create, Read, Update, Delete) operations for movies.
+ * - Search and filtering by title, genre, release date, etc.
+ * - Specialized listings:
+ *   - Upcoming movies
+ *   - Movies by theater
+ *   - Movies currently showing
  * - Automatic enrichment of each movie with an average `rating` from booking comments.
+ *
+ * @dependencies
+ * - `movieService`: Handles database operations and business logic for movies.
+ * - `bookingCommentService`: Provides average ratings for movies from user comments.
+ * - `NotFoundError`: Thrown when a requested movie is not found.
+ * - `BadRequestError`: Thrown when invalid parameters or data are provided.
  */
 
 import { Request, Response, NextFunction } from 'express';
@@ -251,12 +261,10 @@ export async function getUpcomingMovies(
   try {
     const movies = await movieService.getUpcomingMovies();
     const enriched = await enrichMoviesWithRatings(movies);
-    res
-      .status(200)
-      .json({
-        message: 'Upcoming movies fetched successfully',
-        data: enriched,
-      });
+    res.status(200).json({
+      message: 'Upcoming movies fetched successfully',
+      data: enriched,
+    });
   } catch (error) {
     next(error);
   }

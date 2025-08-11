@@ -1,9 +1,10 @@
 import { Sequelize } from 'sequelize-typescript';
 import { AuthorizationModel, Role } from '../../models/authorization.model.js';
 import { UserModel } from '../../models/user.model.js';
-import { authorizationService } from '../../services/authorization.service.js';
+
 import { NotFoundError } from '../../errors/not-found-error.js';
 import { ConflictError } from '../../errors/conflict-error.js';
+import { authorizationService } from '../../controllers/auth.controller.js';
 
 // Setup a new in-memory DB for each test file
 let sequelize: Sequelize;

@@ -3,23 +3,31 @@
  *
  * @description
  * Express controller for managing cinema halls.
- * Provides handlers for:
- * - Creating a hall
- * - Listing all halls (with optional pagination)
- * - Getting halls by theater
- * - Retrieving a hall by its composite key (theaterId + hallId)
- * - Updating a hall
- * - Deleting a hall
- * - Searching halls by theaterId or hallId
  *
- * ## Response Structure
- * All endpoints return JSON with the format:
+ * @features
+ * - Create a new hall.
+ * - List all halls with optional pagination.
+ * - Get all halls for a specific theater.
+ * - Retrieve a hall by its composite key (theaterId + hallId).
+ * - Update hall details.
+ * - Delete a hall.
+ * - Search halls by `theaterId` or `hallId`.
+ *
+ * @response
+ * All endpoints return JSON in the following format:
  * ```json
  * {
  *   "message": "Short description of the result",
  *   "data": { ... } | [ ... ] | null
  * }
  * ```
+ * - `message`: Human-readable description of the operation result.
+ * - `data`: An object, array, or `null` (for deletions or no matches found).
+ *
+ * @dependencies
+ * - `movieHallService`: Business logic and database operations for halls.
+ * - `NotFoundError`: Thrown when the requested hall is not found.
+ * - `BadRequestError`: Thrown when provided input is invalid.
  */
 
 import { Request, Response, NextFunction } from 'express';
@@ -30,10 +38,10 @@ const service = new MovieHallService();
 /**
  * Create a new movie hall.
  *
- * @route POST /movie-halls
- * @param {Request} req - Express request (body: hall data)
- * @param {Response} res - Express response
- * @param {NextFunction} next - Express error handler
+ * @param {Request} req - Express request containing hall data in `body`.
+ * @param {Response} res - Express response used to send the created hall data.
+ * @param {NextFunction} next - Express error handler callback.
+ * @returns {Promise<void>} A promise resolving to a JSON response with the created hall.
  */
 export async function createMovieHall(
   req: Request,
@@ -49,9 +57,12 @@ export async function createMovieHall(
 }
 
 /**
- * Get all movie halls, optionally paginated using ?limit=&offset= query parameters.
+ * Get all movie halls, optionally paginated using `limit` and `offset` query parameters.
  *
- * @route GET /movie-halls
+ * @param {Request} req - Express request with optional `limit` and `offset` query parameters.
+ * @param {Response} res - Express response used to send the list of halls.
+ * @param {NextFunction} next - Express error handler callback.
+ * @returns {Promise<void>} A promise resolving to a JSON response with the list of halls.
  */
 export async function getAllMovieHalls(
   req: Request,
@@ -73,7 +84,10 @@ export async function getAllMovieHalls(
 /**
  * Get all movie halls for a given theater.
  *
- * @route GET /theaters/:theaterId/halls
+ * @param {Request} req - Express request containing `theaterId` in route parameters.
+ * @param {Response} res - Express response used to send the list of halls.
+ * @param {NextFunction} next - Express error handler callback.
+ * @returns {Promise<void>} A promise resolving to a JSON response with the halls for the theater.
  */
 export async function getMovieHallsByTheater(
   req: Request,
@@ -92,9 +106,12 @@ export async function getMovieHallsByTheater(
 }
 
 /**
- * Get a single hall by composite key (theaterId + hallId).
+ * Get a single hall by composite key (`theaterId` + `hallId`).
  *
- * @route GET /theaters/:theaterId/halls/:hallId
+ * @param {Request} req - Express request containing `theaterId` and `hallId` in route parameters.
+ * @param {Response} res - Express response used to send the hall data.
+ * @param {NextFunction} next - Express error handler callback.
+ * @returns {Promise<void>} A promise resolving to a JSON response with the hall data.
  */
 export async function getMovieHall(
   req: Request,
@@ -116,9 +133,12 @@ export async function getMovieHall(
 }
 
 /**
- * Update a hall by composite key (theaterId + hallId).
+ * Update a hall by composite key (`theaterId` + `hallId`).
  *
- * @route PUT /theaters/:theaterId/halls/:hallId
+ * @param {Request} req - Express request containing hall update data in `body` and `theaterId`, `hallId` in route parameters.
+ * @param {Response} res - Express response used to send the updated hall data.
+ * @param {NextFunction} next - Express error handler callback.
+ * @returns {Promise<void>} A promise resolving to a JSON response with the updated hall.
  */
 export async function updateMovieHall(
   req: Request,
@@ -138,9 +158,12 @@ export async function updateMovieHall(
 }
 
 /**
- * Delete a hall by composite key (theaterId + hallId).
+ * Delete a hall by composite key (`theaterId` + `hallId`).
  *
- * @route DELETE /theaters/:theaterId/halls/:hallId
+ * @param {Request} req - Express request containing `theaterId` and `hallId` in route parameters.
+ * @param {Response} res - Express response used to confirm deletion.
+ * @param {NextFunction} next - Express error handler callback.
+ * @returns {Promise<void>} A promise resolving to a JSON response confirming deletion.
  */
 export async function deleteMovieHall(
   req: Request,
@@ -159,13 +182,16 @@ export async function deleteMovieHall(
 }
 
 /**
- * Search movie halls by theaterId or hallId.
+ * Search movie halls by `theaterId` or `hallId`.
  *
- * @route GET /movie-halls/search
- * @query {string} theaterId - Filter by theater ID
- * @query {string} hallId - Filter by hall ID
- * @query {number} limit - Pagination limit
- * @query {number} offset - Pagination offset
+ * @param {Request} req - Express request containing optional query params:
+ *   - `theaterId` {string} - Filter by theater ID.
+ *   - `hallId` {string} - Filter by hall ID.
+ *   - `limit` {number} - Pagination limit.
+ *   - `offset` {number} - Pagination offset.
+ * @param {Response} res - Express response used to send the search results.
+ * @param {NextFunction} next - Express error handler callback.
+ * @returns {Promise<void>} A promise resolving to a JSON response with the search results.
  */
 export async function searchMovieHalls(
   req: Request,

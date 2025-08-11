@@ -93,7 +93,7 @@ describe('userController.createAccount', () => {
     expect(res.status).toHaveBeenCalledWith(201);
     expect(res.json).toHaveBeenCalledWith({
       message: 'User created successfully',
-      data: withRole(),
+      data: { user: withRole() },
     });
   });
 

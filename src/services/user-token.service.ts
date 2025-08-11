@@ -6,7 +6,7 @@
  * Supports enforcing single token per user, token expiration, and
  * type-checking for specialized tokens (refresh, email, etc).
  *
- * Main features:
+ * Features:
  * - Create or replace a token for a user (removes any old token).
  * - Find a token by string value, or by user.
  * - Update or delete a token for a user.
@@ -19,9 +19,6 @@
  * - UserModel for user existence validation.
  * - Uses custom application errors.
  *
- * @author Your development team
- * @version 1.0.0
- * @since 2024
  */
 
 import { Op } from 'sequelize';
@@ -43,8 +40,7 @@ export class UserTokenService {
 
   /**
    * Create a new token for a user, deleting any previous token for this user.
-   * Throws NotFoundError if user does not exist.
-   * Throws Error if the token was not created successfully.
+   *
    * @param {UserTokenAttributes} data - Token attributes for creation.
    * @returns {Promise<UserTokenModel>} The created user token instance.
    * @throws {NotFoundError} If the user does not exist.
@@ -53,29 +49,24 @@ export class UserTokenService {
   async createOrReplaceToken(
     data: UserTokenAttributes
   ): Promise<UserTokenModel> {
-    // 1. Check if user exists
     const user = await this.userModel.findByPk(data.userId);
     if (!user) {
       throw new NotFoundError('User not found');
     }
-
-    // 2. Remove any existing token for this user (no error if nothing deleted)
     await this.userTokenModel.destroy({ where: { userId: data.userId } });
-
-    // 3. Create the new token
     const token = await this.userTokenModel.create(data);
     if (!token) {
       throw new Error('Failed to create new user token');
     }
-
     return token;
   }
 
   /**
    * Find a token by its string value.
+   *
    * @param {string} token - Token string.
    * @returns {Promise<UserTokenModel>} The token instance.
-   * @throws {NotFoundError} If not found.
+   * @throws {NotFoundError} If the token is not found.
    */
   async findToken(token: string): Promise<UserTokenModel> {
     const userToken = await this.userTokenModel.findOne({ where: { token } });
@@ -85,6 +76,7 @@ export class UserTokenService {
 
   /**
    * Find the token for a specific user.
+   *
    * @param {string} userId - User ID.
    * @returns {Promise<UserTokenModel>} The user's token.
    * @throws {NotFoundError} If no token is found for the user.
@@ -97,6 +89,7 @@ export class UserTokenService {
 
   /**
    * Delete the token for a user, if it exists.
+   *
    * @param {string} userId - User ID.
    * @returns {Promise<void>}
    * @throws {NotFoundError} If no token is found to delete for this user.
@@ -109,6 +102,7 @@ export class UserTokenService {
 
   /**
    * Delete all expired tokens.
+   *
    * @returns {Promise<number>} Number of deleted tokens.
    */
   async deleteExpiredTokens(): Promise<number> {
@@ -123,6 +117,7 @@ export class UserTokenService {
 
   /**
    * Update the token for a user.
+   *
    * @param {string} userId - User ID.
    * @param {Partial<UserTokenAttributes>} update - Fields to update.
    * @returns {Promise<UserTokenModel>} The updated token instance.
@@ -143,9 +138,10 @@ export class UserTokenService {
 
   /**
    * Finds and validates a token, optionally checking the token type.
+   *
    * @param {string} token - The token string to validate.
-   * @param {UserTokenType | UserTokenType[]} [expectedType] - Optional: a UserTokenType or array of allowed types.
-   * @returns {Promise<UserTokenModel>} The valid UserTokenModel instance.
+   * @param {UserTokenType | UserTokenType[]} [expectedType] - Optional: allowed token type(s).
+   * @returns {Promise<UserTokenModel>} The valid token instance.
    * @throws {NotFoundError} If the token is not found.
    * @throws {UnauthorizedError} If the token is expired.
    * @throws {BadRequestError} If the token type does not match.
@@ -161,7 +157,6 @@ export class UserTokenService {
       throw new NotFoundError('Token not found');
     }
     if (tokenInstance.expiresAt < new Date()) {
-      // Delete expired token and throw UnauthorizedError to match test expectations
       await tokenInstance.destroy();
       throw new UnauthorizedError('Token expired');
     }

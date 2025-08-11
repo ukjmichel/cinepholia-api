@@ -1,16 +1,17 @@
 /**
- * Booking Ticket Controller
+ * @module controllers/generate-ticket.controller
  *
- * Gère la génération d’un ticket de réservation au format HTML, intégrant les détails de la réservation
- * et un QR code unique pour vérification. L’endpoint produit un ticket visuel destiné à l’impression
- * ou à la présentation sur mobile lors de l’entrée.
+ * @description
+ * Handles the generation of a booking ticket in HTML format, embedding booking details
+ * and a unique QR code for verification. The endpoint produces a visual ticket intended
+ * for printing or mobile display upon entry.
  *
- * Fonctionnalité principale :
- * - Génération d’un ticket personnalisé avec QR code à partir d’un bookingId.
+ * @features
+ * - Generate a personalized ticket with a QR code from a given `bookingId`.
  *
- * Dépendances :
- * - BookingService : récupération de la réservation et de l’utilisateur.
- * - qrcode : génération du QR code embarqué dans le ticket.
+ * @dependencies
+ * - `bookingService`: Retrieves booking and user details.
+ * - `qrcode`: Generates the embedded QR code within the ticket.
  *
  */
 

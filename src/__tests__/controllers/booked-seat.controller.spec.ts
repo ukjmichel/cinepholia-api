@@ -32,7 +32,7 @@ jest.mock('../../services/movie-stats.service.js', () => ({
 
 // ✅ Helpers
 const mockRequest = (body = {}, params = {}, query = {}) =>
-  ({ body, params, query }) as any;
+  ({ body, params, query } as any);
 const mockResponse = () => {
   const res: any = {};
   res.status = jest.fn().mockReturnValue(res);
@@ -226,7 +226,11 @@ describe('BookingController', () => {
 
     it('returns 400 JSON if q missing (controller does not call next)', async () => {
       const res = mockResponse();
-      await bookingController.searchBooking(mockRequest(), res, mockNext);
+      await bookingController.searchBooking(
+        mockRequest(),
+        res,
+        mockNext
+      );
       expect(res.status).toHaveBeenCalledWith(400);
       expect(res.json).toHaveBeenCalledWith({
         message: 'Query parameter q is required',

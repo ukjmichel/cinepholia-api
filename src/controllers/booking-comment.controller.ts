@@ -2,29 +2,36 @@
  * @module controllers/booking-comment.controller
  *
  * @description
- * Handles all booking comment endpoints with:
- * - **CRUD operations** (create, read, update, delete)
- * - **Search and filtering** by status, movie, or text query
- * - **Confirmation workflow** (approve pending comments)
- * - **Average movie rating** retrieval
- * - ✅ **Security:** Sanitizes user input to prevent XSS attacks (via DOMPurify + jsdom)
+ * Handles all operations related to user comments on bookings
+ * 
+ * @features
+ * - **CRUD Operations**: Create, read, update, and delete comments
+ * - **Filtering**: Retrieve comments by movie, user, status, or booking ID
+ * - **Search**: Text search with optional filters (status, rating, date, movie)
+ * - **Confirmation Workflow**: Approve pending comments
+ * - **Analytics**: Retrieve average ratings for a given movie
  *
- * ## Response Structure
- * All endpoints return JSON with the format:
+ * @security
+ * - **XSS Prevention**: All user-provided comments are sanitized server-side using DOMPurify and jsdom.
+ * - **Input Validation**: Status, IDs, and query parameters are validated before processing.
+ *
+ * @dependencies
+ * - `bookingCommentService`: Business logic and database operations for comments.
+ * - `BookingComment` (MongoDB): Stores the comment documents.
+ * - `UserModel` & `BookingModel` (SQL): Used to enrich comments with user details.
+ * - `DOMPurify` + `jsdom`: Sanitize HTML to prevent XSS attacks.
+ *
+ * @response
+ * All endpoints return JSON in this unified shape:
  * ```json
  * {
- *   "message": "Description of response",
+ *   "message": "Short description of result",
  *   "data": { ... } | [ ... ] | null
  * }
  * ```
- * - `message`: Always a short, human-readable description of the result.
- * - `data`: Object, array, or `null` (e.g., for deletions or validation errors).
- * - This format is **used for both success and error responses** that are sent here.
- *   Other errors are passed to the error middleware, which should also format as `{ message, data }`.
+ * - `message`: Human-readable summary of the result.
+ * - `data`: Returned resource(s) or `null` (e.g., deletions or validation failures).
  *
- * ## Security
- * - **XSS Prevention:** User comments are cleaned server-side with DOMPurify.
- * - **Input Validation:** Status, IDs, and query parameters are checked before use.
  */
 
 import { Request, Response, NextFunction } from 'express';

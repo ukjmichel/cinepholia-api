@@ -7,13 +7,14 @@
  * - Create, read, and delete booked seats for screenings.
  * - Validate that booked seats exist in the movie hall layout.
  * - Check that seats are available (not already booked).
- * - All methods support optional transaction parameter for consistency.
+ * - All methods support an optional transaction parameter for consistency.
  * - Throws NotFoundError, BadRequestError, or ConflictError for client-friendly error handling.
  *
- * @module services/BookedSeatService
- * @author  [Your Name]
- * @version 1.0
- * @since   2024-07
+ * Error handling:
+ * - NotFoundError: For missing screenings or halls.
+ * - BadRequestError: For invalid seat IDs.
+ * - ConflictError: For attempting to book already reserved seats.
+ *
  */
 
 import { Transaction } from 'sequelize';
@@ -22,7 +23,6 @@ import {
   BookedSeatAttributes,
   BookedSeatModel,
 } from '../models/booked-seat.model.js';
-
 import { NotFoundError } from '../errors/not-found-error.js';
 import { BadRequestError } from '../errors/bad-request-error.js';
 import { ConflictError } from '../errors/conflict-error.js';
@@ -38,9 +38,11 @@ const movieHallService = new MovieHallService();
 export class BookedSeatService {
   /**
    * Create a new seat booking.
-   * @param data - The seat booking attributes
-   * @param transaction - Optional transaction for atomic operations
-   * @returns Promise<BookedSeatModel> - The created seat booking
+   *
+   * @param data - The seat booking attributes.
+   * @param transaction - Optional transaction for atomic operations.
+   * @returns The created seat booking.
+   * @throws {Error} If creation fails.
    */
   async createSeatBooking(
     data: BookedSeatAttributes,
@@ -51,10 +53,12 @@ export class BookedSeatService {
 
   /**
    * Get a seat booking by screeningId and seatId.
-   * @param screeningId - Screening ID
-   * @param seatId - Seat ID
-   * @param transaction - Optional transaction for consistent reads
-   * @returns Promise<BookedSeatModel | null>
+   *
+   * @param screeningId - Screening ID.
+   * @param seatId - Seat ID.
+   * @param transaction - Optional transaction for consistent reads.
+   * @returns The seat booking if found, otherwise null.
+   * @throws {Error} If retrieval fails.
    */
   async getSeatBookingByScreeningIdAndSeatId(
     screeningId: string,
@@ -69,9 +73,11 @@ export class BookedSeatService {
 
   /**
    * Get all seat bookings by bookingId.
-   * @param bookingId - Booking ID
-   * @param transaction - Optional transaction for consistent reads
-   * @returns Promise<BookedSeatModel[]>
+   *
+   * @param bookingId - Booking ID.
+   * @param transaction - Optional transaction for consistent reads.
+   * @returns An array of seat bookings.
+   * @throws {Error} If retrieval fails.
    */
   async getSeatBookingsByBookingId(
     bookingId: string,
@@ -85,9 +91,11 @@ export class BookedSeatService {
 
   /**
    * Get all seat bookings by screeningId.
-   * @param screeningId - Screening ID
-   * @param transaction - Optional transaction for consistent reads
-   * @returns Promise<BookedSeatModel[]>
+   *
+   * @param screeningId - Screening ID.
+   * @param transaction - Optional transaction for consistent reads.
+   * @returns An array of seat bookings.
+   * @throws {Error} If retrieval fails.
    */
   async getSeatBookingsByScreeningId(
     screeningId: string,
@@ -101,10 +109,12 @@ export class BookedSeatService {
 
   /**
    * Delete a seat booking by screeningId and seatId.
-   * @param screeningId - Screening ID
-   * @param seatId - Seat ID
-   * @param transaction - Optional transaction for atomic operations
-   * @returns Promise<boolean> - True if deleted, false otherwise
+   *
+   * @param screeningId - Screening ID.
+   * @param seatId - Seat ID.
+   * @param transaction - Optional transaction for atomic operations.
+   * @returns True if deleted, false otherwise.
+   * @throws {Error} If deletion fails.
    */
   async deleteSeatBooking(
     screeningId: string,
@@ -120,9 +130,11 @@ export class BookedSeatService {
 
   /**
    * Delete all seat bookings for a specific booking ID.
-   * @param bookingId - The booking ID
-   * @param transaction - Optional transaction for atomic operations
-   * @returns Number of records deleted
+   *
+   * @param bookingId - The booking ID.
+   * @param transaction - Optional transaction for atomic operations.
+   * @returns Number of records deleted.
+   * @throws {Error} If deletion fails.
    */
   async deleteSeatBookingsByBookingId(
     bookingId: string,
@@ -136,13 +148,13 @@ export class BookedSeatService {
 
   /**
    * Check if all seat IDs exist in the movie hall's layout.
-   * Throws BadRequestError if an invalid seat ID is found.
    *
-   * @param {string} screeningId - The screening ID.
-   * @param {string[]} seatIds - Array of seat IDs to validate.
-   * @param {Transaction} transaction - Optional transaction for consistent reads.
+   * @param screeningId - The screening ID.
+   * @param seatIds - Array of seat IDs to validate.
+   * @param transaction - Optional transaction for consistent reads.
    * @throws {NotFoundError} If screening or movie hall not found.
    * @throws {BadRequestError} If a seat ID does not exist in the layout.
+   * @throws {Error} If validation process fails unexpectedly.
    */
   async checkSeatsExist(
     screeningId: string,
@@ -194,12 +206,12 @@ export class BookedSeatService {
 
   /**
    * Check if given seat IDs are available (not already booked for the screening).
-   * Throws ConflictError if any seat is already booked.
    *
-   * @param {string} screeningId - The screening ID.
-   * @param {string[]} seatIds - Array of seat IDs to check availability.
-   * @param {Transaction} transaction - Optional transaction for consistent reads.
+   * @param screeningId - The screening ID.
+   * @param seatIds - Array of seat IDs to check availability.
+   * @param transaction - Optional transaction for consistent reads.
    * @throws {ConflictError} If a seat is already booked.
+   * @throws {Error} If availability check fails unexpectedly.
    */
   async checkSeatsAvailable(
     screeningId: string,
@@ -213,7 +225,6 @@ export class BookedSeatService {
         where: {
           screeningId,
           seatId: seatIds,
-          // status: ['pending', 'confirmed']
         },
         transaction,
       });

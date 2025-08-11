@@ -5,7 +5,7 @@
  * authentication management, password handling, user verification,
  * and paginated listing functionality.
  *
- * Main features:
+ * Features:
  * - Create, retrieve, update, and delete users.
  * - Ensure uniqueness for usernames and emails.
  * - Secure password changes.
@@ -35,11 +35,8 @@ import { Op, Transaction, WhereOptions } from 'sequelize';
  * Filters for listing users
  */
 export interface ListUsersFilters {
-  /** Filter by username (partial match, case-insensitive) */
   username?: string;
-  /** Filter by email (partial match, case-insensitive) */
   email?: string;
-  /** Filter by verification status */
   verified?: boolean;
 }
 
@@ -47,11 +44,8 @@ export interface ListUsersFilters {
  * Options for listing users with pagination and filtering
  */
 export interface ListUsersOptions {
-  /** Page number (1-based, defaults to 1) */
   page?: number;
-  /** Number of items per page (max 100, defaults to 10) */
   pageSize?: number;
-  /** Filters to apply to the user list */
   filters?: ListUsersFilters;
 }
 
@@ -59,13 +53,9 @@ export interface ListUsersOptions {
  * Result object for paginated user listing
  */
 export interface ListUsersResult {
-  /** Array of user models matching the criteria */
   users: UserModel[];
-  /** Total number of users matching the filters */
   total: number;
-  /** Current page number */
   page: number;
-  /** Number of items per page */
   pageSize: number;
 }
 
@@ -73,21 +63,17 @@ export interface ListUsersResult {
  * Service options for database operations
  */
 interface ServiceOptions {
-  /** Database transaction to use for the operation */
   transaction?: Transaction;
 }
 
-/**
- * Service class for managing user-related operations
- * Provides CRUD operations and business logic for user management
- */
 export class UserService {
   /**
-   * Creates a new user in the database
-   * @param data - User creation data including email, username, and password
-   * @param options - Optional service options including database transaction
-   * @returns Promise resolving to the created user model
-   * @throws {ConflictError} When a user with the same email or username already exists
+   * Creates a new user in the database.
+   *
+   * @param data - User creation data including email, username, and password.
+   * @param options - Optional service options including database transaction.
+   * @returns Promise resolving to the created user model.
+   * @throws {ConflictError} If a user with the same email or username already exists.
    */
   async createUser(
     data: UserCreationAttributes,
@@ -109,18 +95,17 @@ export class UserService {
       );
     }
 
-    const user = await UserModel.create(data, {
+    return UserModel.create(data, {
       transaction: options?.transaction,
     });
-
-    return user;
   }
 
   /**
    * Retrieves a user by their unique ID.
+   *
    * @param userId - The unique identifier of the user.
    * @returns Promise resolving to the user model.
-   * @throws {NotFoundError} If user is not found.
+   * @throws {NotFoundError} If the user is not found.
    */
   async getUserById(userId: string): Promise<UserModel> {
     const user = await UserModel.findByPk(userId);
@@ -129,9 +114,11 @@ export class UserService {
   }
 
   /**
-   * Finds a user by their username or email address
-   * @param identifier - Username or email to search for (case-insensitive)
-   * @returns Promise resolving to the user model or null if not found
+   * Finds a user by their username or email address.
+   *
+   * @param identifier - Username or email to search for (case-insensitive).
+   * @returns Promise resolving to the user model.
+   * @throws {NotFoundError} If the user is not found.
    */
   async getUserByUsernameOrEmail(identifier: string): Promise<UserModel> {
     const user = await UserModel.findOne({
@@ -147,13 +134,14 @@ export class UserService {
   }
 
   /**
-   * Updates user information (excluding password)
-   * @param userId - The unique identifier of the user to update
-   * @param updates - Partial user attributes to update
-   * @param options - Optional service options including database transaction
-   * @returns Promise resolving to the updated user model
-   * @throws {NotFoundError} When the user is not found
-   * @throws {ConflictError} When updated email/username conflicts with existing user
+   * Updates user information (excluding password).
+   *
+   * @param userId - The unique identifier of the user to update.
+   * @param updates - Partial user attributes to update.
+   * @param options - Optional service options including database transaction.
+   * @returns Promise resolving to the updated user model.
+   * @throws {NotFoundError} If the user is not found.
+   * @throws {ConflictError} If updated email/username conflicts with an existing user.
    */
   async updateUser(
     userId: string,
@@ -166,10 +154,9 @@ export class UserService {
     if (!user) {
       throw new NotFoundError('User not found');
     }
-    // Do not allow password update via this method
+
     if (updates.password) delete updates.password;
 
-    // Check for uniqueness if updating email or username
     const orConditions: WhereOptions<UserAttributes>[] = [];
     if (updates.email)
       orConditions.push({ email: updates.email.toLowerCase() });
@@ -180,7 +167,7 @@ export class UserService {
       const conflictUser = await UserModel.findOne({
         where: {
           [Op.or]: orConditions,
-          userId: { [Op.ne]: userId }, // exclude self
+          userId: { [Op.ne]: userId },
         },
         transaction: options?.transaction,
       });
@@ -196,13 +183,13 @@ export class UserService {
   }
 
   /**
-   * Changes a user's password
-   * Password hashing is automatically handled by the model hook
-   * @param userId - The unique identifier of the user
-   * @param newPassword - The new password (will be hashed automatically)
-   * @param options - Optional service options including database transaction
-   * @returns Promise resolving to the updated user model
-   * @throws {NotFoundError} When the user is not found
+   * Changes a user's password.
+   *
+   * @param userId - The unique identifier of the user.
+   * @param newPassword - The new password (hashed by model hooks).
+   * @param options - Optional service options including database transaction.
+   * @returns Promise resolving to the updated user model.
+   * @throws {NotFoundError} If the user is not found.
    */
   async changePassword(
     userId: string,
@@ -221,11 +208,12 @@ export class UserService {
   }
 
   /**
-   * Marks a user as verified
-   * @param userId - The unique identifier of the user to verify
-   * @param options - Optional service options including database transaction
-   * @returns Promise resolving to the updated user model
-   * @throws {NotFoundError} When the user is not found
+   * Marks a user as verified.
+   *
+   * @param userId - The unique identifier of the user.
+   * @param options - Optional service options including database transaction.
+   * @returns Promise resolving to the updated user model.
+   * @throws {NotFoundError} If the user is not found.
    */
   async verifyUser(
     userId: string,
@@ -243,11 +231,12 @@ export class UserService {
   }
 
   /**
-   * Deletes a user from the database
-   * @param userId - The unique identifier of the user to delete
-   * @param options - Optional service options including database transaction
-   * @returns Promise resolving to true if user was deleted, false otherwise
-   * @throws {NotFoundError} When the user is not found
+   * Deletes a user from the database.
+   *
+   * @param userId - The unique identifier of the user to delete.
+   * @param options - Optional service options including database transaction.
+   * @returns Promise resolving to true if user was deleted.
+   * @throws {NotFoundError} If the user is not found.
    */
   async deleteUser(userId: string, options?: ServiceOptions): Promise<boolean> {
     const user = await UserModel.findByPk(userId, {
@@ -264,16 +253,16 @@ export class UserService {
   }
 
   /**
-   * Retrieves a paginated list of users with optional filtering
-   * @param options - Pagination and filtering options
-   * @returns Promise resolving to paginated user results
+   * Retrieves a paginated list of users with optional filtering.
+   *
+   * @param options - Pagination and filtering options.
+   * @returns Promise resolving to paginated user results.
    */
   async listUsers({
     page = 1,
     pageSize = 10,
     filters = {},
   }: ListUsersOptions = {}): Promise<ListUsersResult> {
-    // Always ensure positive integers for page and pageSize
     const MAX_PAGE_SIZE = 100;
     const _page = Number.isInteger(page) && page > 0 ? page : 1;
     const _pageSize =
@@ -311,28 +300,31 @@ export class UserService {
   }
 
   /**
-   * Validates a user's password for authentication
-   * @param emailOrUsername - Email address or username to authenticate
-   * @param password - Password to validate
-   * @returns Promise resolving to the user model if valid, null if invalid password
-   * @throws {NotFoundError} When the user is not found
+   * Validates a user's password for authentication.
+   *
+   * @param emailOrUsername - Email address or username to authenticate.
+   * @param password - Password to validate.
+   * @returns Promise resolving to the user model if valid, null otherwise.
+   * @throws {NotFoundError} If the user is not found.
    */
   async validatePassword(
     emailOrUsername: string,
     password: string
   ): Promise<UserModel | null> {
     const user = await this.getUserByUsernameOrEmail(emailOrUsername);
-    if (!user) {
-      throw new NotFoundError('User not found');
-    }
     const isValid = await user.validatePassword(password);
     return isValid ? user : null;
   }
 
+  /**
+   * Searches for users using flexible filtering.
+   *
+   * @param filters - String for global search or object with specific fields.
+   * @returns Promise resolving to an array of matching users.
+   */
   async searchUsers(filters: any): Promise<UserModel[]> {
     const where: any = {};
 
-    // Global search as string
     if (typeof filters === 'string' && filters.trim() !== '') {
       const value = `%${filters.trim().toLowerCase()}%`;
       where[Op.or] = [
@@ -342,12 +334,9 @@ export class UserService {
         { lastName: { [Op.like]: value } },
         { userId: { [Op.like]: value } },
       ];
-    }
-    // Object filter: support q/global and individual fields
-    else if (typeof filters === 'object' && filters !== null) {
+    } else if (typeof filters === 'object' && filters !== null) {
       const orArr: any[] = [];
 
-      // Global query
       if (
         filters.q &&
         typeof filters.q === 'string' &&
@@ -363,7 +352,6 @@ export class UserService {
         );
       }
 
-      // Field-specific string matches (partial)
       if (filters.username)
         orArr.push({
           username: { [Op.like]: `%${filters.username.toLowerCase()}%` },
@@ -383,10 +371,8 @@ export class UserService {
       if (filters.userId)
         orArr.push({ userId: { [Op.like]: `%${filters.userId}%` } });
 
-      // Combine with OR if needed
       if (orArr.length > 0) where[Op.or] = orArr;
 
-      // Exact match for boolean
       if (filters.verified !== undefined) {
         if (typeof filters.verified === 'string') {
           where.verified =
@@ -401,7 +387,4 @@ export class UserService {
   }
 }
 
-/**
- * Singleton instance of UserService for convenient access
- */
 export const userService = new UserService();

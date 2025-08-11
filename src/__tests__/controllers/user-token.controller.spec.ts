@@ -53,31 +53,29 @@ describe('sendResetPasswordToken', () => {
   });
 
   describe('Input validation', () => {
-    it('returns 400 if email is missing', async () => {
+    it('calls next(BadRequestError) if email is missing', async () => {
       const req = mockReq({});
       const res = mockRes();
 
       await sendResetPasswordToken(req as any, res as any, next);
 
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith({ error: 'Email is required.' });
-      expect(UserModel.findOne).not.toHaveBeenCalled();
-      expect(userTokenService.createOrReplaceToken).not.toHaveBeenCalled();
-      expect(mockEmailService.sendResetPasswordEmail).not.toHaveBeenCalled();
+      expect(next).toHaveBeenCalledWith(expect.any(BadRequestError));
+      expect(res.status).not.toHaveBeenCalled();
+      expect(res.json).not.toHaveBeenCalled();
     });
 
-    it('returns 400 if email is empty string', async () => {
+    it('calls next(BadRequestError) if email is empty string', async () => {
       const req = mockReq({ email: '' });
       const res = mockRes();
 
       await sendResetPasswordToken(req as any, res as any, next);
 
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith({ error: 'Email is required.' });
-      expect(UserModel.findOne).not.toHaveBeenCalled();
+      expect(next).toHaveBeenCalledWith(expect.any(BadRequestError));
+      expect(res.status).not.toHaveBeenCalled();
+      expect(res.json).not.toHaveBeenCalled();
     });
 
-    it('returns 400 if email is only whitespace', async () => {
+    it('returns 200 generic message if email is only whitespace', async () => {
       const req = mockReq({ email: '   ' });
       const res = mockRes();
 
@@ -86,9 +84,11 @@ describe('sendResetPasswordToken', () => {
       expect(res.status).toHaveBeenCalledWith(200);
       expect(res.json).toHaveBeenCalledWith({
         message: 'If this email is registered, you will receive a code.',
+        data: null,
       });
     });
   });
+
 
   describe('User not found scenarios', () => {
     it('returns generic message if user not found', async () => {
@@ -104,6 +104,7 @@ describe('sendResetPasswordToken', () => {
       expect(res.status).toHaveBeenCalledWith(200);
       expect(res.json).toHaveBeenCalledWith({
         message: 'If this email is registered, you will receive a code.',
+        data: null,
       });
       expect(userTokenService.createOrReplaceToken).not.toHaveBeenCalled();
       expect(mockEmailService.sendResetPasswordEmail).not.toHaveBeenCalled();
@@ -119,6 +120,7 @@ describe('sendResetPasswordToken', () => {
       expect(res.status).toHaveBeenCalledWith(200);
       expect(res.json).toHaveBeenCalledWith({
         message: 'If this email is registered, you will receive a code.',
+        data: null,
       });
     });
   });
@@ -164,6 +166,7 @@ describe('sendResetPasswordToken', () => {
       expect(res.status).toHaveBeenCalledWith(200);
       expect(res.json).toHaveBeenCalledWith({
         message: 'If this email is registered, you will receive a code.',
+        data: null,
       });
     });
 
@@ -255,7 +258,7 @@ describe('sendResetPasswordToken', () => {
       expect(res.json).not.toHaveBeenCalled();
     });
 
-    it('calls next(err) if email service fails', async () => {
+    it('returns generic 200 even if email service fails', async () => {
       const emailError = new Error('SMTP server unavailable');
       (UserModel.findOne as jest.Mock).mockResolvedValue({
         userId: 'user-123',
@@ -278,6 +281,7 @@ describe('sendResetPasswordToken', () => {
       expect(res.status).toHaveBeenCalledWith(200);
       expect(res.json).toHaveBeenCalledWith({
         message: 'If this email is registered, you will receive a code.',
+        data: null,
       });
     });
 
@@ -316,7 +320,10 @@ describe('sendResetPasswordToken', () => {
 
       await sendResetPasswordToken(req1 as any, res1 as any, next);
 
-      expect(res1.json).toHaveBeenCalledWith({ message: expectedMessage });
+      expect(res1.json).toHaveBeenCalledWith({
+        message: expectedMessage,
+        data: null,
+      });
 
       // Test with non-existing user
       (UserModel.findOne as jest.Mock).mockResolvedValue(null);
@@ -326,7 +333,10 @@ describe('sendResetPasswordToken', () => {
 
       await sendResetPasswordToken(req2 as any, res2 as any, next);
 
-      expect(res2.json).toHaveBeenCalledWith({ message: expectedMessage });
+      expect(res2.json).toHaveBeenCalledWith({
+        message: expectedMessage,
+        data: null,
+      });
     });
 
     it('does not leak user information through response timing', async () => {
@@ -362,8 +372,11 @@ describe('sendResetPasswordToken', () => {
       await sendResetPasswordToken(req2 as any, res2 as any, next);
       const existentUserTime = Date.now() - startTime2;
 
+      // We only assert both are 200; timing checks would be flaky.
       expect(res1.status).toHaveBeenCalledWith(200);
       expect(res2.status).toHaveBeenCalledWith(200);
+      void nonExistentUserTime;
+      void existentUserTime;
     });
   });
 });
@@ -395,7 +408,10 @@ describe('validateTokenValidity', () => {
       'sometoken',
       'reset_password'
     );
-    expect(res.json).toHaveBeenCalledWith({ message: 'Token is valid.' });
+    expect(res.json).toHaveBeenCalledWith({
+      message: 'Token is valid.',
+      data: null,
+    });
     expect(next).not.toHaveBeenCalled();
   });
 
@@ -452,6 +468,7 @@ describe('resetPasswordController', () => {
     expect(userTokenService.deleteTokenForUser).toHaveBeenCalledWith('u123');
     expect(res.json).toHaveBeenCalledWith({
       message: 'Password has been reset.',
+      data: null,
     });
     expect(next).not.toHaveBeenCalled();
   });

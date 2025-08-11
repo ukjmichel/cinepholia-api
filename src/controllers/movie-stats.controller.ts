@@ -1,13 +1,14 @@
-import { Request, Response } from 'express';
-import MovieStatsService from '../services/movie-stats.service.js';
-
 /**
+ * @module controllers/movie-stat.controller
+ *
+ * @description
+ *
  * Retrieve booking statistics for a specific movie.
  *
  * This endpoint returns aggregated booking data for a movie from MongoDB
  * (via `MovieStatsService`). It requires a `movieId` path parameter.
  *
- * ## Response Format
+ * @response
  * All responses follow the standard `{ message, data }` JSON structure:
  * ```json
  * {
@@ -15,25 +16,12 @@ import MovieStatsService from '../services/movie-stats.service.js';
  *   "data": { ... } | null
  * }
  * ```
- *
- * ## Possible Responses
- * - **200 OK** – Stats found:
- *   ```json
- *   { "message": "Movie stats", "data": { ...statsObject } }
- *   ```
- * - **400 Bad Request** – Missing `movieId`:
- *   ```json
- *   { "message": "movieId is required.", "data": null }
- *   ```
- * - **404 Not Found** – No stats exist for the movie:
- *   ```json
- *   { "message": "Stats not found.", "data": null }
- *   ```
- * - **500 Internal Server Error** – Unexpected error:
- *   ```json
- *   { "message": "Internal server error.", "data": null }
- *   ```
- *
+ */
+
+import { Request, Response } from 'express';
+import MovieStatsService from '../services/movie-stats.service.js';
+
+/**
  * @route GET /movies/:movieId/stats
  * @param {Request} req - Express request (params: movieId)
  * @param {Response} res - Express response

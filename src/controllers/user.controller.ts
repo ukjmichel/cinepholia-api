@@ -1,13 +1,32 @@
 /**
- * User Controller
+ * @module controllers/user.controller
  *
- * Handles user-related operations:
- * - Account creation (with role assignment, welcome email, and tokens)
- * - Retrieve, update, delete, and verify users (all with role)
- * - Password update
- * - Paginated/filtered listing and flexible search (with role)
+ * @description
+ * Express controller for managing users and their authentication/authorization data.
+ *
+ * @features
+ * - Account creation with:
+ *   - Automatic role assignment
+ *   - Welcome email dispatch
+ *   - Access/refresh token generation
+ * - Retrieve, update, delete, and verify users (including role information)
+ * - Password update with validation
+ * - Paginated and filtered listing of users
+ * - Flexible search by various criteria (includes role data)
  * - Credential validation for authentication
- * - Retrieve current authenticated user (with role)
+ * - Retrieve the current authenticated user's profile (with role)
+ *
+ * @security
+ * - Enforces authentication for protected routes
+ * - Restricts certain operations to admin or privileged roles
+ * - Sanitizes sensitive data before returning user objects
+ *
+ * @dependencies
+ * - `userService`: Business logic and persistence for users
+ * - `authorizationService`: Manages role assignments
+ * - `emailService`: Sends welcome or verification emails
+ * - `authService`: Handles password hashing, token generation, and validation
+ * - `BadRequestError` / `NotFoundError`: Custom error handling
  */
 
 import { Request, Response, NextFunction } from 'express';

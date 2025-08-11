@@ -1,15 +1,21 @@
 /**
- * Movie Theater Controller
- *
- * Provides Express route handlers for managing movie theaters.
- * Supports creating, listing, retrieving, updating, deleting,
- * and searching theaters.
- *
- * All business logic is delegated to `movieTheaterService`.
- * Errors are passed to the Express error-handling middleware.
- *
  * @module controllers/movie-theater.controller
- * @since 2024
+ *
+ * @description
+ * Provides Express route handlers for managing movie theaters.
+ * 
+ * @features
+ * - Creating new theaters.
+ * - Listing all theaters (with optional pagination).
+ * - Retrieving a single theater by ID.
+ * - Updating theater details.
+ * - Deleting a theater.
+ * - Searching theaters by name, location, or other criteria.
+ *
+ * @dependencies
+ * - `movieTheaterService`: Handles database operations and business logic for movie theaters.
+ * - `NotFoundError`: Thrown when the requested theater is not found.
+ * - `BadRequestError`: Thrown when provided input is invalid.
  */
 
 import { Request, Response, NextFunction } from 'express';
