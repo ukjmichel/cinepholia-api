@@ -8,6 +8,7 @@ import {
   searchMovie,
   getUpcomingMovies,
   getMoviesByTheater,
+  getMovieByScreeningId,
 } from '../controllers/movie.controller.js';
 import {
   createMovieValidator,
@@ -35,9 +36,6 @@ const router = Router();
  *     responses:
  *       200:
  *         description: Array of movies
- */
-/**
- * Get all movies (PUBLIC)
  */
 router.get('/', getAllMovies);
 
@@ -81,9 +79,6 @@ router.get('/', getAllMovies);
  *       400:
  *         description: Validation error
  */
-/**
- * Search for movies (PUBLIC)
- */
 router.get('/search', searchMovieValidator, handleValidationError, searchMovie);
 
 /**
@@ -109,10 +104,29 @@ router.get('/search', searchMovieValidator, handleValidationError, searchMovie);
  *                   items:
  *                     $ref: '#/components/schemas/Movie'
  */
-/**
- * Get all upcoming movies (PUBLIC)
- */
 router.get('/upcoming', getUpcomingMovies);
+
+/**
+ * @swagger
+ * /movies/by-screening/{screeningId}:
+ *   get:
+ *     tags:
+ *       - Movies
+ *     summary: Get movie by screeningId
+ *     description: Returns the movie associated with the given screeningId.
+ *     parameters:
+ *       - in: path
+ *         name: screeningId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Movie data
+ *       404:
+ *         description: Screening or Movie not found
+ */
+router.get('/by-screening/:screeningId', getMovieByScreeningId);
 
 /**
  * @swagger
@@ -135,9 +149,6 @@ router.get('/upcoming', getUpcomingMovies);
  *         description: Validation error
  *       404:
  *         description: Movie not found
- */
-/**
- * Get a movie by its ID (PUBLIC)
  */
 router.get(
   '/:movieId',
@@ -180,9 +191,6 @@ router.get(
  *       404:
  *         description: Theater not found
  */
-/**
- * Get all movies displayed in a theater (PUBLIC)
- */
 router.get(
   '/theater/:theaterId',
   theaterIdParamValidator,
@@ -190,7 +198,7 @@ router.get(
   getMoviesByTheater
 );
 
-// --------------- STAFF/PROTECTED ROUTES BELOW --------------- //
+// --------------- STAFF/PROTECTED ROUTES BELOW ---------------
 
 /**
  * @swagger
@@ -231,9 +239,6 @@ router.get(
  *         description: Forbidden
  *       409:
  *         description: Conflict (movie already exists)
- */
-/**
- * Create a new movie (STAFF only)
  */
 router.post(
   '/',
@@ -292,9 +297,6 @@ router.post(
  *       404:
  *         description: Movie not found
  */
-/**
- * Update a movie (STAFF only)
- */
 router.put(
   '/:movieId',
   decodeJwtToken,
@@ -334,9 +336,6 @@ router.put(
  *       404:
  *         description: Movie not found
  */
-/**
- * Delete a movie (STAFF only)
- */
 router.delete(
   '/:movieId',
   decodeJwtToken,
@@ -367,9 +366,6 @@ router.delete(
  *         description: Validation error
  *       404:
  *         description: Stats not found
- */
-/**
- * Get stats for a movie by ID (PUBLIC)
  */
 router.get(
   '/:movieId/stats',

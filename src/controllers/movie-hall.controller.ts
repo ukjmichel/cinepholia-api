@@ -1,12 +1,25 @@
 /**
- * Contrôleur des salles de cinéma (Movie Hall Controller)
+ * @module controllers/movie-hall.controller
  *
- * Fournit les handlers Express pour la gestion des salles de cinéma, incluant la création,
- * la liste (avec pagination), la récupération par clé composite, la mise à jour, la suppression,
- * et la recherche. Utilise MovieHallService pour toute la logique métier et l’accès aux données.
+ * @description
+ * Express controller for managing cinema halls.
+ * Provides handlers for:
+ * - Creating a hall
+ * - Listing all halls (with optional pagination)
+ * - Getting halls by theater
+ * - Retrieving a hall by its composite key (theaterId + hallId)
+ * - Updating a hall
+ * - Deleting a hall
+ * - Searching halls by theaterId or hallId
  *
- * Tous les handlers délèguent la gestion des erreurs au middleware Express.
- *
+ * ## Response Structure
+ * All endpoints return JSON with the format:
+ * ```json
+ * {
+ *   "message": "Short description of the result",
+ *   "data": { ... } | [ ... ] | null
+ * }
+ * ```
  */
 
 import { Request, Response, NextFunction } from 'express';
@@ -15,11 +28,12 @@ import { MovieHallService } from '../services/movie-hall.service.js';
 const service = new MovieHallService();
 
 /**
- * Creates a new movie hall.
- * @param {Request} req - Express request (body: MovieHall info)
+ * Create a new movie hall.
+ *
+ * @route POST /movie-halls
+ * @param {Request} req - Express request (body: hall data)
  * @param {Response} res - Express response
- * @param {NextFunction} next - Express next middleware
- * @returns {Promise<void>}
+ * @param {NextFunction} next - Express error handler
  */
 export async function createMovieHall(
   req: Request,
@@ -28,18 +42,16 @@ export async function createMovieHall(
 ) {
   try {
     const hall = await service.create(req.body);
-    res.status(201).json(hall);
+    res.status(201).json({ message: 'Movie hall created', data: hall });
   } catch (err) {
     next(err);
   }
 }
 
 /**
- * Returns all movie halls, optionally paginated with ?limit= and ?offset=.
- * @param {Request} req - Express request (query: limit, offset)
- * @param {Response} res - Express response
- * @param {NextFunction} next - Express next middleware
- * @returns {Promise<void>}
+ * Get all movie halls, optionally paginated using ?limit=&offset= query parameters.
+ *
+ * @route GET /movie-halls
  */
 export async function getAllMovieHalls(
   req: Request,
@@ -52,18 +64,16 @@ export async function getAllMovieHalls(
       limit: limit ? Number(limit) : undefined,
       offset: offset ? Number(offset) : undefined,
     });
-    res.json(halls);
+    res.json({ message: 'All movie halls', data: halls });
   } catch (err) {
     next(err);
   }
 }
 
 /**
- * Returns all movie halls for a specific theater.
- * @param {Request} req - Express request (params: theaterId)
- * @param {Response} res - Express response
- * @param {NextFunction} next - Express next middleware
- * @returns {Promise<void>}
+ * Get all movie halls for a given theater.
+ *
+ * @route GET /theaters/:theaterId/halls
  */
 export async function getMovieHallsByTheater(
   req: Request,
@@ -72,18 +82,19 @@ export async function getMovieHallsByTheater(
 ) {
   try {
     const halls = await service.findAllByTheaterId(req.params.theaterId);
-    res.json(halls);
+    res.json({
+      message: `Movie halls for theater ${req.params.theaterId}`,
+      data: halls,
+    });
   } catch (err) {
     next(err);
   }
 }
 
 /**
- * Returns a single hall by theaterId and hallId.
- * @param {Request} req - Express request (params: theaterId, hallId)
- * @param {Response} res - Express response
- * @param {NextFunction} next - Express next middleware
- * @returns {Promise<void>}
+ * Get a single hall by composite key (theaterId + hallId).
+ *
+ * @route GET /theaters/:theaterId/halls/:hallId
  */
 export async function getMovieHall(
   req: Request,
@@ -95,18 +106,19 @@ export async function getMovieHall(
       req.params.theaterId,
       req.params.hallId
     );
-    res.json(hall);
+    res.json({
+      message: 'Movie hall found',
+      data: hall,
+    });
   } catch (err) {
     next(err);
   }
 }
 
 /**
- * Updates a hall by theaterId and hallId.
- * @param {Request} req - Express request (params: theaterId, hallId; body: fields to update)
- * @param {Response} res - Express response
- * @param {NextFunction} next - Express next middleware
- * @returns {Promise<void>}
+ * Update a hall by composite key (theaterId + hallId).
+ *
+ * @route PUT /theaters/:theaterId/halls/:hallId
  */
 export async function updateMovieHall(
   req: Request,
@@ -119,18 +131,16 @@ export async function updateMovieHall(
       req.params.hallId,
       req.body
     );
-    res.json(hall);
+    res.json({ message: 'Movie hall updated', data: hall });
   } catch (err) {
     next(err);
   }
 }
 
 /**
- * Deletes a hall by theaterId and hallId.
- * @param {Request} req - Express request (params: theaterId, hallId)
- * @param {Response} res - Express response
- * @param {NextFunction} next - Express next middleware
- * @returns {Promise<void>}
+ * Delete a hall by composite key (theaterId + hallId).
+ *
+ * @route DELETE /theaters/:theaterId/halls/:hallId
  */
 export async function deleteMovieHall(
   req: Request,
@@ -138,22 +148,24 @@ export async function deleteMovieHall(
   next: NextFunction
 ) {
   try {
-    const result = await service.deleteByTheaterIdAndHallId(
+    await service.deleteByTheaterIdAndHallId(
       req.params.theaterId,
       req.params.hallId
     );
-    res.json(result);
+    res.json({ message: 'Movie hall deleted', data: null });
   } catch (err) {
     next(err);
   }
 }
 
 /**
- * Searches movie halls by theaterId or hallId (?theaterId=...&hallId=...).
- * @param {Request} req - Express request (query: theaterId, hallId)
- * @param {Response} res - Express response
- * @param {NextFunction} next - Express next middleware
- * @returns {Promise<void>}
+ * Search movie halls by theaterId or hallId.
+ *
+ * @route GET /movie-halls/search
+ * @query {string} theaterId - Filter by theater ID
+ * @query {string} hallId - Filter by hall ID
+ * @query {number} limit - Pagination limit
+ * @query {number} offset - Pagination offset
  */
 export async function searchMovieHalls(
   req: Request,
@@ -168,7 +180,7 @@ export async function searchMovieHalls(
       limit: limit ? Number(limit) : undefined,
       offset: offset ? Number(offset) : undefined,
     });
-    res.json(halls);
+    res.json({ message: 'Search results', data: halls });
   } catch (err) {
     next(err);
   }

@@ -240,6 +240,29 @@ export class BookingService {
       transaction,
     });
   }
+
+  async getBookingsByUserUpcoming(
+    userId: string,
+    fromDate: Date,
+    transaction?: Transaction
+  ): Promise<BookingModel[]> {
+    return BookingModel.findAll({
+      where: { userId },
+      include: [
+        {
+          model: ScreeningModel,
+          as: 'screening', // Use the right alias for your association
+          where: {
+            startTime: { [Op.gte]: fromDate },
+          },
+        },
+      ],
+      order: [[{ model: ScreeningModel, as: 'screening' }, 'startTime', 'ASC']],
+      transaction,
+    });
+  }
 }
+
+
 
 export const bookingService = new BookingService();

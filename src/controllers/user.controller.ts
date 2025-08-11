@@ -44,10 +44,10 @@ async function toPublicUserWithRole(
 ): Promise<PublicUserWithRole | null> {
   if (!user) return null;
   const data =
-    typeof user.get === 'function' ? user.get({ plain: true }) : user;
-  const { password, ...publicFields } = data;
+    typeof user.get === 'function' ? user.get({ plain: true }) : (user as any);
+  const { password, ...publicFields } = data as UserAttributes;
   const authorization = await authorizationService.getAuthorizationByUserId(
-    user.userId
+    (user as any).userId
   );
   return {
     ...(publicFields as Omit<UserAttributes, 'password'>),
@@ -73,7 +73,7 @@ export const createAccount =
       const userData = req.body;
       const user = await userService.createUser(userData, { transaction });
       await authorizationService.createAuthorization(
-        { userId: user.userId, role },
+        { userId: (user as any).userId, role },
         { transaction }
       );
       if (config.sendWelcomeEmail) {
@@ -100,13 +100,13 @@ export const createAccount =
       const publicUser = await toPublicUserWithRole(user);
       res.status(201).json({
         message: 'User created successfully',
-        data: publicUser,
+        data: { user: publicUser },
       });
     } catch (error) {
       try {
         await transaction.rollback();
-      } catch (rollbackErr) {
-        // Optionally log rollback errors here
+      } catch {
+        // optionally log rollback error
       }
       next(error);
     }
@@ -118,10 +118,6 @@ export const createAccount =
  *
  * @example
  * // GET /users?page=1&pageSize=20&verified=true&username=john
- *
- * @param req - Express Request (query params for filters)
- * @param res - Express Response
- * @param next - Express NextFunction
  */
 export const listUsers = async (
   req: Request,
@@ -152,7 +148,12 @@ export const listUsers = async (
     );
     res.status(200).json({
       message: 'Users found successfully',
-      data: { ...result, users: usersWithRoles },
+      data: {
+        users: usersWithRoles,
+        total: result.total,
+        page: result.page,
+        pageSize: result.pageSize,
+      },
     });
   } catch (err) {
     next(err);
@@ -163,10 +164,6 @@ export const listUsers = async (
  * Flexible search: find users by global or field filters, including role.
  * @example
  * // GET /users/search?q=ana&verified=true
- *
- * @param req - Express Request (query params for filters)
- * @param res - Express Response
- * @param next - Express NextFunction
  */
 export const searchUsers = async (
   req: Request,
@@ -194,7 +191,7 @@ export const searchUsers = async (
     );
     res.status(200).json({
       message: 'Users found successfully',
-      data: usersWithRoles,
+      data: { users: usersWithRoles },
     });
   } catch (err) {
     next(err);
@@ -203,10 +200,6 @@ export const searchUsers = async (
 
 /**
  * Retrieves a user by their unique ID (self or staff), including role.
- *
- * @param req - Express Request (params.userId)
- * @param res - Express Response
- * @param next - Express NextFunction
  *
  * @throws NotFoundError if user does not exist
  */
@@ -221,7 +214,7 @@ export const getUserById = async (
     const publicUser = await toPublicUserWithRole(user);
     res.status(200).json({
       message: 'User found successfully',
-      data: publicUser,
+      data: { user: publicUser },
     });
   } catch (err) {
     next(err);
@@ -229,14 +222,9 @@ export const getUserById = async (
 };
 
 /**
- * Returns the current authenticated user, including role.
+ * Retrieves the currently authenticated user's public information, including their authorization role.
  *
- * @param req - Express Request (must contain req.user.userId)
- * @param res - Express Response
- * @param next - Express NextFunction
- *
- * @throws 401 if no user in request
- * @throws 404 if user not found
+ * Requires authentication middleware to populate `req.user.userId` (decoded from JWT).
  */
 export const getCurrentUser = async (
   req: Request,
@@ -245,18 +233,18 @@ export const getCurrentUser = async (
 ): Promise<void> => {
   try {
     if (!req.user || !req.user.userId) {
-      res.status(401).json({ message: 'Not authenticated' });
+      res.status(401).json({ message: 'Not authenticated', data: null });
       return;
     }
     const user = await userService.getUserById(req.user.userId);
     if (!user) {
-      res.status(404).json({ message: 'User not found' });
+      res.status(404).json({ message: 'User not found', data: null });
       return;
     }
     const publicUser = await toPublicUserWithRole(user);
     res.status(200).json({
       message: 'Current user found',
-      data: publicUser,
+      data: { user: publicUser },
     });
   } catch (err) {
     next(err);
@@ -265,10 +253,6 @@ export const getCurrentUser = async (
 
 /**
  * Updates user information (self or staff), returns updated user including role.
- *
- * @param req - Express Request (params.userId, body)
- * @param res - Express Response
- * @param next - Express NextFunction
  *
  * @throws NotFoundError if user not found
  */
@@ -285,7 +269,7 @@ export const updateUser = async (
     const publicUser = await toPublicUserWithRole(user);
     res.status(200).json({
       message: 'User updated successfully',
-      data: publicUser,
+      data: { user: publicUser },
     });
   } catch (err) {
     next(err);
@@ -294,10 +278,6 @@ export const updateUser = async (
 
 /**
  * Changes a user's password.
- *
- * @param req - Express Request (params.userId, body.newPassword)
- * @param res - Express Response
- * @param next - Express NextFunction
  *
  * @throws BadRequestError if newPassword is missing
  */
@@ -316,7 +296,7 @@ export const changePassword = async (
     const publicUser = await toPublicUserWithRole(user);
     res.status(200).json({
       message: 'Password changed successfully',
-      data: publicUser,
+      data: { user: publicUser },
     });
   } catch (err) {
     next(err);
@@ -325,10 +305,6 @@ export const changePassword = async (
 
 /**
  * Deletes a user from the system.
- *
- * @param req - Express Request (params.userId)
- * @param res - Express Response
- * @param next - Express NextFunction
  *
  * @throws NotFoundError if user not found
  */
@@ -341,9 +317,9 @@ export const deleteUser = async (
     const deleted = await userService.deleteUser(req.params.userId);
     if (deleted) {
       res.status(200).json({ message: 'User deleted', data: null });
-    } else {
-      throw new NotFoundError('User not found');
+      return;
     }
+    throw new NotFoundError('User not found');
   } catch (err) {
     next(err);
   }
@@ -351,10 +327,6 @@ export const deleteUser = async (
 
 /**
  * Verifies a user (sets 'verified' flag to true).
- *
- * @param req - Express Request (params.userId)
- * @param res - Express Response
- * @param next - Express NextFunction
  */
 export const verifyUser = async (
   req: Request,
@@ -366,7 +338,7 @@ export const verifyUser = async (
     const publicUser = await toPublicUserWithRole(user);
     res.status(200).json({
       message: 'User verified',
-      data: publicUser,
+      data: { user: publicUser },
     });
   } catch (err) {
     next(err);
@@ -375,10 +347,6 @@ export const verifyUser = async (
 
 /**
  * Validates user credentials (username/email + password).
- *
- * @param req - Express Request (body.emailOrUsername, body.password)
- * @param res - Express Response
- * @param next - Express NextFunction
  *
  * @throws BadRequestError if missing fields
  * @throws UnauthorizedError if invalid credentials
@@ -400,7 +368,7 @@ export const validatePassword = async (
     const publicUser = await toPublicUserWithRole(user);
     res.status(200).json({
       message: 'User validated successfully',
-      data: publicUser,
+      data: { user: publicUser },
     });
   } catch (err) {
     next(err);

@@ -1,21 +1,13 @@
 /**
  * @module controllers/movies.controller
  *
- * @description
  * Controller for managing movies.
  *
- * This controller provides Express handlers for:
- * - Creating, updating, deleting, and retrieving movies.
- * - Listing all movies, upcoming movies, and movies by theater.
- * - Searching for movies using filters.
- *
- * Each response is enriched with the average `rating` field
- * retrieved from booking comments.
- *
- * Business logic is delegated to `movieService`, and ratings
- * are fetched from `bookingCommentService`.
- *
- * @since 2025
+ * Features:
+ * - Full CRUD (Create, Read, Update, Delete)
+ * - Search and filtering
+ * - Specialized listings (upcoming movies, movies by theater, etc.)
+ * - Automatic enrichment of each movie with an average `rating` from booking comments.
  */
 
 import { Request, Response, NextFunction } from 'express';
@@ -24,10 +16,12 @@ import { bookingCommentService } from '../services/booking-comment.service.js';
 
 /**
  * Converts a Sequelize movie instance to a plain object and adds its average rating.
- * @param {any} movie - Sequelize movie instance or plain object.
- * @returns {Promise<any>} Movie object with the `rating` field.
+ *
+ * @private
+ * @param {any} movie - Sequelize movie instance or plain object
+ * @returns {Promise<any>} A plain object representing the movie with a `rating` field
  */
-async function enrichMovieWithRating(movie: any) {
+async function enrichMovieWithRating(movie: any): Promise<any> {
   if (!movie) return null;
   const plain = movie.get ? movie.get({ plain: true }) : movie;
   const avgRating = await bookingCommentService.getAverageRatingForMovie(
@@ -37,45 +31,32 @@ async function enrichMovieWithRating(movie: any) {
 }
 
 /**
- * Converts an array of Sequelize movies to plain objects and adds ratings.
- * @param {any[]} movies - Array of Sequelize movies.
- * @returns {Promise<any[]>} Array of movie objects with `rating`.
+ * Converts an array of Sequelize movie instances to plain objects and adds ratings.
+ *
+ * @private
+ * @param {any[]} movies - Array of Sequelize movie instances
+ * @returns {Promise<any[]>} An array of movie objects with `rating` fields
  */
-async function enrichMoviesWithRatings(movies: any[]) {
+async function enrichMoviesWithRatings(movies: any[]): Promise<any[]> {
   return Promise.all(movies.map((m) => enrichMovieWithRating(m)));
 }
 
-/**
- * Updates an existing movie and returns it with the `rating` field.
- * @route PUT /movies/:movieId
- */
-export async function updateMovie(
-  req: Request,
-  res: Response,
-  next: NextFunction
-) {
-  try {
-    const movie = await movieService.updateMovie(
-      req.params.movieId,
-      req.body,
-      req.file
-    );
-    const enriched = await enrichMovieWithRating(movie);
-    res.json({ message: 'Movie updated successfully', data: enriched });
-  } catch (error) {
-    next(error);
-  }
-}
+// ------------------ CRUD CONTROLLERS ----------------------
 
 /**
- * Creates a new movie (with optional poster) and returns it with the `rating` field.
+ * Create a new movie (with optional poster) and return it with the `rating` field.
+ *
  * @route POST /movies
+ * @param {Request} req - Express request containing movie data in `req.body` and optional poster file in `req.file`
+ * @param {Response} res - Express response
+ * @param {NextFunction} next - Express error-handling middleware
+ * @returns {201 Created} `{ message: string, data: object }` - The created movie with its rating
  */
 export async function createMovie(
   req: Request,
   res: Response,
   next: NextFunction
-) {
+): Promise<void> {
   try {
     const movie = await movieService.createMovie(req.body, req.file);
     const enriched = await enrichMovieWithRating(movie);
@@ -88,111 +69,217 @@ export async function createMovie(
 }
 
 /**
- * Retrieves a movie by its ID and includes the `rating` field.
- * @route GET /movies/:movieId
+ * Update an existing movie and return it with the `rating` field.
+ *
+ * @route PUT /movies/:movieId
+ * @param {Request} req - Express request containing movie ID in `req.params.movieId`, updated data in `req.body`, and optional poster file in `req.file`
+ * @param {Response} res - Express response
+ * @param {NextFunction} next - Express error-handling middleware
+ * @returns {200 OK} `{ message: string, data: object }` - The updated movie with its rating
  */
-export async function getMovieById(
+export async function updateMovie(
   req: Request,
   res: Response,
   next: NextFunction
-) {
+): Promise<void> {
   try {
-    const movie = await movieService.getMovieById(req.params.movieId);
+    const movie = await movieService.updateMovie(
+      req.params.movieId,
+      req.body,
+      req.file
+    );
     const enriched = await enrichMovieWithRating(movie);
-    res.json({ message: 'Movie fetched successfully', data: enriched });
+    res
+      .status(200)
+      .json({ message: 'Movie updated successfully', data: enriched });
   } catch (error) {
     next(error);
   }
 }
 
 /**
- * Deletes a movie by its ID.
+ * Delete a movie by its ID.
+ *
  * @route DELETE /movies/:movieId
+ * @param {Request} req - Express request containing movie ID in `req.params.movieId`
+ * @param {Response} res - Express response
+ * @param {NextFunction} next - Express error-handling middleware
+ * @returns {200 OK} `{ message: string, data: null }` - Confirmation of deletion
  */
 export async function deleteMovie(
   req: Request,
   res: Response,
   next: NextFunction
-) {
+): Promise<void> {
   try {
     await movieService.deleteMovie(req.params.movieId);
-    res.status(204).json({ message: 'Movie deleted successfully', data: null });
+    res.status(200).json({ message: 'Movie deleted successfully', data: null });
   } catch (error) {
     next(error);
   }
 }
 
 /**
- * Retrieves all movies with their ratings.
+ * Retrieve a movie by its ID and include the `rating` field.
+ *
+ * @route GET /movies/:movieId
+ * @param {Request} req - Express request containing movie ID in `req.params.movieId`
+ * @param {Response} res - Express response
+ * @param {NextFunction} next - Express error-handling middleware
+ * @returns {200 OK | 404 Not Found} `{ message: string, data: object|null }`
+ */
+export async function getMovieById(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const movie = await movieService.getMovieById(req.params.movieId);
+    if (!movie) {
+      res.status(404).json({ message: 'Movie not found', data: null });
+      return;
+    }
+    const enriched = await enrichMovieWithRating(movie);
+    res
+      .status(200)
+      .json({ message: 'Movie fetched successfully', data: enriched });
+  } catch (error) {
+    next(error);
+  }
+}
+
+// ------------------ SPECIAL READS / LISTINGS ----------------------
+
+/**
+ * Retrieve a movie by its screening ID (via the associated screening) and include the `rating` field.
+ *
+ * @route GET /movies/by-screening/:screeningId
+ * @param {Request} req - Express request containing screening ID in `req.params.screeningId`
+ * @param {Response} res - Express response
+ * @param {NextFunction} next - Express error-handling middleware
+ * @returns {200 OK | 404 Not Found} `{ message: string, data: object|null }`
+ */
+export async function getMovieByScreeningId(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const movie = await movieService.getMovieByScreeningId(
+      req.params.screeningId
+    );
+    if (!movie) {
+      res
+        .status(404)
+        .json({ message: 'Movie not found for screening', data: null });
+      return;
+    }
+    const enriched = await enrichMovieWithRating(movie);
+    res
+      .status(200)
+      .json({ message: 'Movie fetched by screeningId', data: enriched });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * Retrieve all movies with their ratings.
+ *
  * @route GET /movies
+ * @param {Request} req - Express request
+ * @param {Response} res - Express response
+ * @param {NextFunction} next - Express error-handling middleware
+ * @returns {200 OK} `{ message: string, data: object[] }` - List of movies with ratings
  */
 export async function getAllMovies(
   req: Request,
   res: Response,
   next: NextFunction
-) {
+): Promise<void> {
   try {
     const movies = await movieService.getAllMovies();
     const enriched = await enrichMoviesWithRatings(movies);
-    res.json({ message: 'Movies fetched successfully', data: enriched });
+    res
+      .status(200)
+      .json({ message: 'Movies fetched successfully', data: enriched });
   } catch (error) {
     next(error);
   }
 }
 
 /**
- * Searches for movies using query filters and includes ratings.
+ * Search for movies using query filters and include ratings.
+ *
  * @route GET /movies/search
+ * @param {Request} req - Express request containing filters in `req.query`
+ * @param {Response} res - Express response
+ * @param {NextFunction} next - Express error-handling middleware
+ * @returns {200 OK} `{ message: string, data: object[] }` - List of matching movies with ratings
  */
 export async function searchMovie(
   req: Request,
   res: Response,
   next: NextFunction
-) {
+): Promise<void> {
   try {
     const filters = req.query;
     const movies = await movieService.searchMovie(filters);
     const enriched = await enrichMoviesWithRatings(movies);
-    res.json({ message: 'Movies search completed', data: enriched });
+    res
+      .status(200)
+      .json({ message: 'Movies search completed', data: enriched });
   } catch (error) {
     next(error);
   }
 }
 
 /**
- * Retrieves all upcoming movies (future release dates) with ratings.
+ * Retrieve all upcoming movies (future release dates) with ratings.
+ *
  * @route GET /movies/upcoming
+ * @param {Request} req - Express request
+ * @param {Response} res - Express response
+ * @param {NextFunction} next - Express error-handling middleware
+ * @returns {200 OK} `{ message: string, data: object[] }` - List of upcoming movies with ratings
  */
 export async function getUpcomingMovies(
   req: Request,
   res: Response,
   next: NextFunction
-) {
+): Promise<void> {
   try {
     const movies = await movieService.getUpcomingMovies();
     const enriched = await enrichMoviesWithRatings(movies);
-    res.json({
-      message: 'Upcoming movies fetched successfully',
-      data: enriched,
-    });
+    res
+      .status(200)
+      .json({
+        message: 'Upcoming movies fetched successfully',
+        data: enriched,
+      });
   } catch (error) {
     next(error);
   }
 }
 
 /**
- * Retrieves all movies shown in a specific theater with ratings.
+ * Retrieve all movies shown in a specific theater with ratings.
+ *
  * @route GET /theaters/:theaterId/movies
+ * @param {Request} req - Express request containing theater ID in `req.params.theaterId`
+ * @param {Response} res - Express response
+ * @param {NextFunction} next - Express error-handling middleware
+ * @returns {200 OK} `{ message: string, data: object[] }` - List of movies shown in the theater with ratings
  */
 export async function getMoviesByTheater(
   req: Request,
   res: Response,
   next: NextFunction
-) {
+): Promise<void> {
   try {
     const movies = await movieService.getMoviesByTheater(req.params.theaterId);
     const enriched = await enrichMoviesWithRatings(movies);
-    res.json({
+    res.status(200).json({
       message: 'Movies by theater fetched successfully',
       data: enriched,
     });

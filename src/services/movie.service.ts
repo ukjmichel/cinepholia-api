@@ -282,6 +282,25 @@ export class MovieService {
       where: { movieId: movieIds },
     });
   }
+  /**
+   * Get the movie associated with a given screeningId.
+   * @param {string} screeningId - The unique screening identifier.
+   * @returns {Promise<MovieModel>} The associated movie.
+   * @throws {NotFoundError} If screening or movie does not exist.
+   */
+  async getMovieByScreeningId(screeningId: string): Promise<MovieModel> {
+    // 1. Get the screening
+    const screening = await ScreeningModel.findByPk(screeningId);
+    if (!screening) {
+      throw new NotFoundError(`Screening with id ${screeningId} not found`);
+    }
+    // 2. Get the movie using movieId from screening
+    const movie = await MovieModel.findByPk(screening.movieId);
+    if (!movie) {
+      throw new NotFoundError(`Movie with id ${screening.movieId} not found`);
+    }
+    return movie;
+  }
 }
 
 export const movieService = new MovieService();

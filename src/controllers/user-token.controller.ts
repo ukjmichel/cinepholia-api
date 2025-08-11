@@ -1,26 +1,20 @@
 /**
- * Controller for password reset tokens management.
+ * @module controllers/password-reset.controller
  *
- * Provides the following Express endpoints:
- * - Send a password reset code to the user's email (user enumeration safe).
- * - Middleware to validate a reset token.
- * - Reset password using a valid token.
+ * Controller for managing password reset tokens and password reset flow.
  *
- * Main features:
- * - Secure generation and storage of 'reset_password' tokens.
- * - Sending one-time codes by email, with expiration.
- * - Verifying user-provided code/token.
- * - Atomic password reset and token invalidation after use.
- *
- * Error handling:
- * - Throws BadRequestError for missing or invalid input.
- * - Delegates other errors to Express error middleware.
+ * Features:
+ * - Secure generation and storage of `reset_password` tokens.
+ * - Sending one-time 6-digit codes by email with expiration.
+ * - Token validation middleware.
+ * - Atomic password reset with token invalidation after use.
  *
  * Security:
- * - Never reveals if an email exists in the database (prevents enumeration).
+ * - Prevents user enumeration by returning a generic success message whether or not the email exists.
  *
- * Dependencies:
- * - UserModel, UserTokenService, EmailService, UserService.
+ * Error Handling:
+ * - Throws `BadRequestError` for missing or invalid input.
+ * - Forwards other errors to Express error middleware.
  */
 
 import { Request, Response, NextFunction } from 'express';
@@ -36,14 +30,15 @@ const userTokenService = new UserTokenService();
 const userService = new UserService();
 
 /**
- * Controller for sending a reset password code to user's email.
- * If the email exists, a code is generated, stored, and sent.
- * Always responds with the same message to prevent user enumeration.
+ * Send a password reset code to the provided email.
+ * If the email exists, a token is generated, stored, and emailed.
+ * Always returns the same response to avoid revealing if the email is registered.
  *
- * @param {Request} req - Express request object (body: { email })
- * @param {Response} res - Express response object
- * @param {NextFunction} next - Express middleware
- * @returns {Promise<any>} Message indicating code delivery if the email exists
+ * @route POST /auth/password-reset/send
+ * @param {Request} req - Express request (body: `{ email }`)
+ * @param {Response} res - Express response
+ * @param {NextFunction} next - Express error handler
+ * @returns {200 OK} `{ message, data: null }` Generic success message
  */
 export const sendResetPasswordToken = async (
   req: Request,
@@ -53,7 +48,7 @@ export const sendResetPasswordToken = async (
   try {
     const { email } = req.body;
     if (!email) {
-      return res.status(400).json({ error: 'Email is required.' });
+      return next(new BadRequestError('Email is required.'));
     }
 
     // Look up user (case-insensitive)
@@ -61,20 +56,19 @@ export const sendResetPasswordToken = async (
       where: { email: email.trim().toLowerCase() },
     });
 
-    // Always return same response to prevent user enumeration
+    // Generic message to prevent user enumeration
     const genericMessage =
       'If this email is registered, you will receive a code.';
+
     if (!user) {
-      return res.status(200).json({
-        message: genericMessage,
-      });
+      return res.status(200).json({ message: genericMessage, data: null });
     }
 
-    // Generate code and expiration
-    const code = Math.floor(100000 + Math.random() * 900000).toString(); // 6 digits
-    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+    // Generate 6-digit code and set expiration (1 hour)
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
 
-    // Store code as a token
+    // Store code as token
     await userTokenService.createOrReplaceToken({
       userId: user.userId,
       token: code,
@@ -82,73 +76,77 @@ export const sendResetPasswordToken = async (
       expiresAt,
     });
 
-    // Send email
+    // Send email with the code
     await emailService.sendResetPasswordEmail(user.email, user.username, code);
 
-    return res.status(200).json({
-      message: genericMessage,
-    });
+    return res.status(200).json({ message: genericMessage, data: null });
   } catch (err) {
     next(err);
   }
 };
 
 /**
- * Middleware to validate the provided token (configurable type).
- * Checks if the token in the request body is valid for the expected type.
+ * Middleware to validate if a provided token is valid for a given type.
  *
- * @param {UserTokenType} tokenType - The type of token to validate ('reset_password', etc.)
- * @returns {(req, res, next) => Promise<void>} Express middleware
+ * @param {UserTokenType} tokenType - Token type to validate (e.g. `reset_password`)
+ * @returns {Function} Express middleware function
+ *
+ * @example
+ * router.post('/auth/password-reset/validate', validateTokenValidity('reset_password'));
  */
 export const validateTokenValidity =
   (tokenType: UserTokenType) =>
-  async (req: Request, res: Response, next: NextFunction) => {
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { token } = req.body;
       if (!token) {
         return next(new BadRequestError('Token is required.'));
       }
+
       await userTokenService.validateToken(token, tokenType);
 
-      res.json({ message: 'Token is valid.' });
+      res.status(200).json({ message: 'Token is valid.', data: null });
     } catch (error) {
       next(error);
     }
   };
 
 /**
- * Resets the user's password using a valid reset token.
- * Validates the token, updates the password, and invalidates the token.
+ * Reset the user's password using a valid reset token.
+ * - Validates the token
+ * - Updates the user's password
+ * - Deletes the token after use
  *
- * @param {Request} req - Express request object (body: { token, password })
- * @param {Response} res - Express response object
- * @param {NextFunction} next - Express middleware
- * @returns {Promise<void>} Success message or error
+ * @route POST /auth/password-reset/confirm
+ * @param {Request} req - Express request (body: `{ token, password }`)
+ * @param {Response} res - Express response
+ * @param {NextFunction} next - Express error handler
+ * @returns {200 OK} `{ message, data: null }`
  */
 export const resetPasswordController = async (
   req: Request,
   res: Response,
   next: NextFunction
-) => {
+): Promise<void> => {
   try {
     const { token, password } = req.body;
     if (!token || !password) {
       return next(new BadRequestError('Token and new password are required.'));
     }
 
-    // Validate token (must be 'reset_password' type)
+    // Validate token (must be reset_password type)
     const tokenInstance = await userTokenService.validateToken(
       token,
       'reset_password'
     );
 
-    // Update user password
+    // Update password
     await userService.changePassword(tokenInstance.userId, password);
 
-    // Invalidate/delete token after use
+    // Delete token after successful password change
     await userTokenService.deleteTokenForUser(tokenInstance.userId);
 
-    res.json({ message: 'Password has been reset.' });
+    res.status(200).json({ message: 'Password has been reset.', data: null });
   } catch (err) {
     next(err);
   }

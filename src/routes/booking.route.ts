@@ -11,6 +11,7 @@ import {
   markBookingAsUsed,
   cancelBooking,
   getBookingById,
+  getUpcomingBookingsByUser,
 } from '../controllers/booking.controller.js';
 import {
   createBookingValidator,
@@ -410,6 +411,49 @@ router.get(
  *                     $ref: '#/components/schemas/Booking'
  */
 router.get('/status/:status', handleValidationError, getBookingsByStatus);
+
+/**
+ * @swagger
+ * /bookings/user/{userId}/upcoming:
+ *   get:
+ *     summary: Get all upcoming bookings for a user (screening is today or in the future)
+ *     tags: [Bookings]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: UUID of the user
+ *     responses:
+ *       200:
+ *         description: Upcoming bookings for the user
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Booking'
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden (if not self or staff)
+ */
+router.get(
+  '/user/:userId/upcoming',
+  decodeJwtToken,
+  permission.isSelfOrStaff,
+  userIdParamValidator,
+  handleValidationError,
+  getUpcomingBookingsByUser
+);
 
 router.get(
   '/:bookingId/ticket',
