@@ -8,6 +8,13 @@ import { UserModel } from '../../models/user.model.js';
 import { AuthorizationModel } from '../../models/authorization.model.js';
 import { AuthService } from '../../services/auth.service.js';
 
+// ---------- helpers ----------
+const extractHalls = (res: request.Response) =>
+  res.body?.data?.movieHalls ??
+  res.body?.data?.halls ??
+  res.body?.data ??
+  res.body;
+
 // Example staff user data
 const staffUserData = {
   username: 'staffuser',
@@ -97,8 +104,8 @@ describe('MovieHall E2E Routes', () => {
         .send(testHall)
         .expect(201);
 
-      expect(res.body.hallId).toBe(testHall.hallId);
-      expect(res.body.theaterId).toBe(testHall.theaterId);
+      expect(res.body.data.hallId).toBe(testHall.hallId);
+      expect(res.body.data.theaterId).toBe(testHall.theaterId);
     });
 
     it('should return 404 if theater does not exist', async () => {
@@ -129,8 +136,9 @@ describe('MovieHall E2E Routes', () => {
 
       const res = await request(app).get('/movie-halls').expect(200);
 
-      expect(Array.isArray(res.body)).toBe(true);
-      expect(res.body.length).toBeGreaterThan(0);
+      const halls = extractHalls(res);
+      expect(Array.isArray(halls)).toBe(true);
+      expect(halls.length).toBeGreaterThan(0);
     });
   });
 
@@ -143,8 +151,8 @@ describe('MovieHall E2E Routes', () => {
         .get(`/movie-halls/${testTheater.theaterId}/${testHall.hallId}`)
         .expect(200);
 
-      expect(res.body.theaterId).toBe(testTheater.theaterId);
-      expect(res.body.hallId).toBe(testHall.hallId);
+      expect(res.body.data.theaterId).toBe(testTheater.theaterId);
+      expect(res.body.data.hallId).toBe(testHall.hallId);
     });
 
     it('should return 404 for non-existent hall', async () => {
@@ -165,7 +173,7 @@ describe('MovieHall E2E Routes', () => {
         .send({ seatsLayout: [['A1', 'A2', 'A3']] })
         .expect(200);
 
-      expect(res.body.seatsLayout[0]).toContain('A3');
+      expect(res.body.data.seatsLayout[0]).toContain('A3');
     });
 
     it('should return 404 for non-existent hall', async () => {
@@ -238,8 +246,9 @@ describe('MovieHall E2E Routes', () => {
         .get('/movie-halls/search?hallId=petite-salle')
         .expect(200);
 
-      expect(Array.isArray(res.body)).toBe(true);
-      expect(res.body[0].hallId).toBe('petite-salle');
+      const halls = extractHalls(res);
+      expect(Array.isArray(halls)).toBe(true);
+      expect(halls[0].hallId).toBe('petite-salle');
     });
 
     it('should search by theaterId', async () => {
@@ -247,8 +256,9 @@ describe('MovieHall E2E Routes', () => {
         .get(`/movie-halls/search?theaterId=${testTheater.theaterId}`)
         .expect(200);
 
-      expect(Array.isArray(res.body)).toBe(true);
-      expect(res.body[0].theaterId).toBe(testTheater.theaterId);
+      const halls = extractHalls(res);
+      expect(Array.isArray(halls)).toBe(true);
+      expect(halls[0].theaterId).toBe(testTheater.theaterId);
     });
 
     it('should return 404 if no results', async () => {

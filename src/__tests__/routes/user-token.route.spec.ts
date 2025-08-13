@@ -3,7 +3,7 @@ import app from '../../app';
 import { loadModels, sequelize, syncDB } from '../../config/db';
 import { UserModel } from '../../models/user.model';
 import { UserTokenModel } from '../../models/user-token.model';
-import { AuthorizationModel } from '../../models/authorization.model'; 
+import { AuthorizationModel } from '../../models/authorization.model';
 
 const userData = {
   username: 'johndoe',
@@ -18,7 +18,7 @@ const userData = {
  */
 const cleanDatabase = async (): Promise<void> => {
   try {
-    await loadModels(); 
+    await loadModels();
     if (sequelize.getDialect() === 'mysql') {
       await sequelize.query('SET FOREIGN_KEY_CHECKS = 0');
     }
@@ -61,16 +61,20 @@ describe('Reset Password E2E Routes - Final Working Version', () => {
     // Clean database
     await cleanDatabase();
 
-    // Create user via API (tu as un vrai /auth/register)
+    // Create user via API
     const userRes = await request(app).post('/auth/register').send(userData);
-    if (userRes.status === 201 && userRes.body.data?.userId) {
-      testUserId = userRes.body.data.userId;
+
+    // Accept both shapes: { data: { user: {...} } }  or { data: {...} }
+    const createdUser = userRes.body?.data?.user ?? userRes.body?.data;
+    const newUserId = createdUser?.userId;
+
+    if (userRes.status === 201 && newUserId) {
+      testUserId = newUserId;
     } else {
       throw new Error(
         `Failed to create test user: ${userRes.status} - ${JSON.stringify(userRes.body)}`
       );
     }
-    console.log('🧹 Test environment prepared');
   });
 
   afterAll(async () => {

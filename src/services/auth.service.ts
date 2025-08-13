@@ -1,21 +1,22 @@
 /**
- * Authentication Service Module
+ * @module services/auth.service
  *
+ * @description
  * Provides user authentication and authorization token management using JWT.
  *
- * Features:
+ * @features
  * - User login with brute-force attempt tracking and lockout
  * - Generation of short-lived access tokens and long-lived refresh tokens
  * - Refresh token verification and issuance of new token pairs
  * - Token blacklisting to handle logout
  * - Utility methods for clearing blacklists and login attempts
  *
- * Security considerations:
+ * @security
  * - Limits login attempts to prevent brute-force attacks
  * - Blacklisted tokens are denied access even if they are not expired
  * - Uses separate secrets and expirations for access and refresh tokens
  *
- * Dependencies:
+ * @dependencies
  * - jsonwebtoken: for token signing and verification
  * - ms: for parsing expiration times
  * - userService: for user retrieval and password validation

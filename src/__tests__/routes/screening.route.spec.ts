@@ -313,7 +313,7 @@ describe('Booking E2E Routes', () => {
       await request(app)
         .delete(`/bookings/${bookingId}`)
         .set('Authorization', `Bearer ${staffToken}`)
-        .expect(204);
+        .expect(200);
 
       const booking = await BookingModel.findByPk(bookingId);
       expect(booking).toBeNull();
@@ -323,7 +323,7 @@ describe('Booking E2E Routes', () => {
       await request(app)
         .delete(`/bookings/${bookingId}`)
         .set('Authorization', `Bearer ${regularToken}`)
-        .expect(204);
+        .expect(200);
     });
 
     it("should 403 when user tries to delete another user's booking", async () => {

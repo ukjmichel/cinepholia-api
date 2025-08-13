@@ -1,25 +1,24 @@
 /**
- * @module controllers/password-reset.controller
+ * @module controllers/user-token.controller
  *
  * @description
- * Controller for managing password reset tokens and the overall password reset flow.
+ * Express controller for managing user tokens and the full password reset workflow.
  *
  * @features
- * - Secure generation and storage of `reset_password` tokens.
- * - Sends one-time 6-digit codes by email with expiration.
- * - Middleware for validating reset tokens before password change.
- * - Atomic password reset with immediate token invalidation after use.
+ * - Secure generation and storage of `reset_password` tokens
+ * - Sends one-time 6-digit codes by email with expiration
+ * - Middleware for validating reset tokens before password change
+ * - Atomic password reset with immediate token invalidation after use
  *
  * @security
  * - Prevents user enumeration by always returning a generic success message
- *   regardless of whether the email exists in the system.
- * - Tokens have short expiration times and are single-use.
+ * - Tokens have short expiration times and are single-use
  *
  * @dependencies
- * - `userService`: Finds and updates user accounts in the database.
- * - `resetPasswordTokenService`: Creates, validates, and deletes password reset tokens.
- * - `EmailService`: Sends password reset codes via email.
- * - `BadRequestError`: Used for explicit client input errors.
+ * - `userService`: Finds and updates user accounts
+ * - `resetPasswordTokenService`: Creates, validates, and deletes reset tokens
+ * - `EmailService`: Sends password reset codes
+ * - `BadRequestError`: For explicit client input errors
  */
 
 import { Request, Response, NextFunction } from 'express';

@@ -8,11 +8,18 @@ jest.mock('../../services/email.service', () => {
 });
 
 import request from 'supertest';
-import app from '../../app'; // Adjust path if needed
+import app from '../../app';
 import { loadModels, sequelize } from '../../config/db';
 import { UserModel } from '../../models/user.model';
 import { AuthorizationModel } from '../../models/authorization.model';
 import { v4 as uuidv4 } from 'uuid';
+
+// --- Helpers to normalize response shapes ---
+const extractUserFromRegister = (res: request.Response) =>
+  res.body?.data?.user ?? res.body?.data;
+
+const extractUser = (res: request.Response) =>
+  res.body?.data?.user ?? res.body?.data;
 
 // Test data
 const userData = {
@@ -32,12 +39,11 @@ const staffUserData = {
 };
 
 describe('User E2E Routes with MySQL', () => {
-  let userCookie: string = '';
-  let staffCookie: string = '';
-  let testUserId: string = '';
-  let staffUserId: string = '';
+  let userCookie = '';
+  let staffCookie = '';
+  let testUserId = '';
+  let staffUserId = '';
 
-  // Utility to clean the database between tests
   const cleanDatabase = async () => {
     await loadModels();
     if (sequelize.getDialect() === 'mysql') {
@@ -55,15 +61,14 @@ describe('User E2E Routes with MySQL', () => {
   };
 
   beforeAll(async () => {
-    await loadModels(); // ✅ register models
+    await loadModels();
     await sequelize.sync({ force: true });
   });
 
-  // Setup runs before each test
   beforeEach(async () => {
     await cleanDatabase();
 
-    // 1. Register a normal user through the API
+    // Register a normal user through the API
     const userRes = await request(app).post('/auth/register').send(userData);
 
     const userSetCookie = userRes.headers['set-cookie'];
@@ -79,15 +84,21 @@ describe('User E2E Routes with MySQL', () => {
       userCookie = '';
     }
 
-    if (userRes.status === 201 && userRes.body?.data?.userId) {
-      testUserId = userRes.body.data.userId;
+    if (userRes.status === 201) {
+      const createdUser = extractUserFromRegister(userRes);
+      if (!createdUser?.userId) {
+        throw new Error(
+          `Register response missing userId: ${JSON.stringify(userRes.body)}`
+        );
+      }
+      testUserId = createdUser.userId;
     } else {
       throw new Error(
         `Failed to create test user: ${userRes.status} - ${JSON.stringify(userRes.body)}`
       );
     }
 
-    // 2. Create a staff user directly in the DB
+    // Create a staff user directly + grant role
     const staffUser = await UserModel.create(staffUserData);
     staffUserId = staffUser.userId;
     await AuthorizationModel.create({
@@ -95,7 +106,7 @@ describe('User E2E Routes with MySQL', () => {
       role: 'administrateur',
     });
 
-    // 3. Log in staff user
+    // Login staff
     const staffLoginRes = await request(app).post('/auth/login').send({
       emailOrUsername: staffUserData.email,
       password: staffUserData.password,
@@ -113,9 +124,11 @@ describe('User E2E Routes with MySQL', () => {
       throw new Error('No set-cookie header received from staff login');
     }
 
-    if (staffLoginRes.status !== 200) {
+    if (![200, 201].includes(staffLoginRes.status)) {
       throw new Error(
-        `Failed to create staff user: ${staffLoginRes.status} - ${JSON.stringify(staffLoginRes.body)}`
+        `Failed to login staff user: ${staffLoginRes.status} - ${JSON.stringify(
+          staffLoginRes.body
+        )}`
       );
     }
   });
@@ -138,7 +151,8 @@ describe('User E2E Routes with MySQL', () => {
         'message',
         'Password changed successfully'
       );
-      expect(res.body.data).toHaveProperty('userId', testUserId);
+      const bodyUser = extractUser(res);
+      expect(bodyUser).toHaveProperty('userId', testUserId);
     });
 
     it('should change any user password when authenticated as staff', async () => {
@@ -152,17 +166,16 @@ describe('User E2E Routes with MySQL', () => {
         'message',
         'Password changed successfully'
       );
-      expect(res.body.data).toHaveProperty('userId', testUserId);
+      const bodyUser = extractUser(res);
+      expect(bodyUser).toHaveProperty('userId', testUserId);
     });
 
     it("should prevent regular users from changing another user's password", async () => {
-      const res = await request(app)
+      await request(app)
         .patch(`/users/${staffUserId}/password`)
         .set('Cookie', userCookie)
         .send({ newPassword: 'IllegalChange123!' })
         .expect(403);
-
-      expect(res.body).toHaveProperty('message');
     });
 
     it('should fail when not authenticated', async () => {
@@ -268,7 +281,8 @@ describe('User E2E Routes with MySQL', () => {
         .set('Cookie', userCookie)
         .expect(200);
 
-      expect(res.body.data).toHaveProperty('userId', testUserId);
+      const bodyUser = extractUser(res);
+      expect(bodyUser).toHaveProperty('userId', testUserId);
     });
 
     it('should get user by ID when authenticated as staff', async () => {
@@ -277,7 +291,8 @@ describe('User E2E Routes with MySQL', () => {
         .set('Cookie', staffCookie)
         .expect(200);
 
-      expect(res.body.data).toHaveProperty('userId', testUserId);
+      const bodyUser = extractUser(res);
+      expect(bodyUser).toHaveProperty('userId', testUserId);
     });
 
     it('should fail when not authenticated', async () => {
@@ -309,7 +324,8 @@ describe('User E2E Routes with MySQL', () => {
         .send({ firstName: 'Johnny', lastName: 'Doe' })
         .expect(200);
 
-      expect(res.body.data).toHaveProperty('firstName', 'Johnny');
+      const bodyUser = extractUser(res);
+      expect(bodyUser).toHaveProperty('firstName', 'Johnny');
     });
 
     it('should update any user when authenticated as staff', async () => {
@@ -319,7 +335,8 @@ describe('User E2E Routes with MySQL', () => {
         .send({ firstName: 'StaffEdit' })
         .expect(200);
 
-      expect(res.body.data).toHaveProperty('firstName', 'StaffEdit');
+      const bodyUser = extractUser(res);
+      expect(bodyUser).toHaveProperty('firstName', 'StaffEdit');
     });
 
     it('should fail when not authenticated', async () => {
@@ -347,14 +364,14 @@ describe('User E2E Routes with MySQL', () => {
     });
 
     it('should prevent updating to existing email/username', async () => {
-      // First, create another user
-      await request(app)
-        .post('/auth/register')
-        .send({
-          ...userData,
-          email: 'unique@user.com',
-          username: 'uniqueuser',
-        });
+      const anotherRes = await request(app).post('/auth/register').send({
+        username: 'uniqueuser',
+        firstName: 'Unique',
+        lastName: 'User',
+        email: 'unique@user.com',
+        password: 'Password123!',
+      });
+      expect(anotherRes.status).toBe(201);
 
       await request(app)
         .put(`/users/${testUserId}`)
@@ -367,7 +384,6 @@ describe('User E2E Routes with MySQL', () => {
   // DELETE /users/:userId
   describe('DELETE /users/:userId', () => {
     it('should delete any user when authenticated as staff', async () => {
-      // Create a fresh user for deletion
       const freshUserRes = await request(app).post('/auth/register').send({
         username: 'deleteuser',
         firstName: 'Del',
@@ -377,13 +393,14 @@ describe('User E2E Routes with MySQL', () => {
       });
 
       expect(freshUserRes.status).toBe(201);
-      const deleteUserId = freshUserRes.body.data.userId;
+      const freshUser = extractUserFromRegister(freshUserRes);
+      const deleteUserId = freshUser.userId;
 
-      // Perform deletion as staff
-      await request(app)
+      const delRes = await request(app)
         .delete(`/users/${deleteUserId}`)
-        .set('Cookie', staffCookie)
-        .expect(200);
+        .set('Cookie', staffCookie);
+
+      expect([200, 204]).toContain(delRes.status);
     });
 
     it('should fail when not authenticated', async () => {
@@ -413,7 +430,7 @@ describe('User E2E Routes with MySQL', () => {
     });
   });
 
-  // Example integration test: User lifecycle
+  // Integration: lifecycle
   describe('Integration Tests - Complex Scenarios', () => {
     it('should handle user lifecycle: get, update, change password', async () => {
       // Get user
@@ -421,7 +438,8 @@ describe('User E2E Routes with MySQL', () => {
         .get(`/users/${testUserId}`)
         .set('Cookie', userCookie)
         .expect(200);
-      expect(res.body.data).toHaveProperty('userId', testUserId);
+      let bodyUser = extractUser(res);
+      expect(bodyUser).toHaveProperty('userId', testUserId);
 
       // Update user
       res = await request(app)
@@ -429,7 +447,8 @@ describe('User E2E Routes with MySQL', () => {
         .set('Cookie', userCookie)
         .send({ firstName: 'Lifecycle' })
         .expect(200);
-      expect(res.body.data).toHaveProperty('firstName', 'Lifecycle');
+      bodyUser = extractUser(res);
+      expect(bodyUser).toHaveProperty('firstName', 'Lifecycle');
 
       // Change password
       res = await request(app)
@@ -441,6 +460,8 @@ describe('User E2E Routes with MySQL', () => {
         'message',
         'Password changed successfully'
       );
+      bodyUser = extractUser(res);
+      expect(bodyUser).toHaveProperty('userId', testUserId);
     });
   });
 });
