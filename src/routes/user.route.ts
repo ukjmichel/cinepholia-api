@@ -15,6 +15,18 @@ import { permission } from '../middlewares/permission.js';
 const router = express.Router();
 
 /**
+ * User API Routes
+ *
+ * All successful API responses follow this structure:
+ * - Single user:   { message: string, data: { user: { ...user } } }
+ * - User list:     { message: string, data: { users: [ ...user ], total, page, pageSize } }
+ * - User search:   { message: string, data: { users: [ ...user ] } }
+ * - Delete:        { message: string, data: null }
+ *
+ * All routes require authentication unless otherwise specified.
+ */
+
+/**
  * @swagger
  * /users:
  *   get:
@@ -45,9 +57,33 @@ const router = express.Router();
  *         description: Filter by exact email
  *     responses:
  *       200:
- *         description: A list of users
+ *         description: A paginated list of users
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     users:
+ *                       type: array
+ *                       items:
+ *                         $ref: '#/components/schemas/PublicUserWithRole'
+ *                     total:
+ *                       type: integer
+ *                     page:
+ *                       type: integer
+ *                     pageSize:
+ *                       type: integer
  *       401:
  *         description: Unauthorized (invalid or missing token)
+ */
+/**
+ * GET /users
+ * Returns a paginated list of users, only accessible by staff.
  */
 router.get(
   '/',
@@ -69,8 +105,24 @@ router.get(
  *     responses:
  *       200:
  *         description: Current user object
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     user:
+ *                       $ref: '#/components/schemas/PublicUserWithRole'
  *       401:
  *         description: Unauthorized (invalid or missing token)
+ */
+/**
+ * GET /users/me
+ * Returns the current authenticated user's information.
  */
 router.get('/me', decodeJwtToken, userController.getCurrentUser);
 
@@ -121,8 +173,26 @@ router.get('/me', decodeJwtToken, userController.getCurrentUser);
  *     responses:
  *       200:
  *         description: List of matching users
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     users:
+ *                       type: array
+ *                       items:
+ *                         $ref: '#/components/schemas/PublicUserWithRole'
  *       401:
  *         description: Unauthorized
+ */
+/**
+ * GET /users/search
+ * Searches for users by global or field filters, only accessible by staff.
  */
 router.get(
   '/search',
@@ -151,10 +221,26 @@ router.get(
  *     responses:
  *       200:
  *         description: User object
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     user:
+ *                       $ref: '#/components/schemas/PublicUserWithRole'
  *       401:
  *         description: Unauthorized
  *       404:
  *         description: User not found
+ */
+/**
+ * GET /users/:userId
+ * Gets a user by ID (self or staff only).
  */
 router.get(
   '/:userId',
@@ -189,10 +275,26 @@ router.get(
  *     responses:
  *       200:
  *         description: User updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     user:
+ *                       $ref: '#/components/schemas/PublicUserWithRole'
  *       401:
  *         description: Unauthorized
  *       404:
  *         description: User not found
+ */
+/**
+ * PUT /users/:userId
+ * Updates a user (self or staff only).
  */
 router.put(
   '/:userId',
@@ -221,10 +323,23 @@ router.put(
  *     responses:
  *       200:
  *         description: User deleted successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 data:
+ *                   type: 'null'
  *       401:
  *         description: Unauthorized
  *       404:
  *         description: User not found
+ */
+/**
+ * DELETE /users/:userId
+ * Deletes a user (self or staff only).
  */
 router.delete(
   '/:userId',
@@ -263,10 +378,26 @@ router.delete(
  *     responses:
  *       200:
  *         description: Password updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     user:
+ *                       $ref: '#/components/schemas/PublicUserWithRole'
  *       401:
  *         description: Unauthorized
  *       404:
  *         description: User not found
+ */
+/**
+ * PATCH /users/:userId/password
+ * Changes a user's password (self or admin).
  */
 router.patch(
   '/:userId/password',
@@ -283,6 +414,30 @@ export default router;
  * @swagger
  * components:
  *   schemas:
+ *     PublicUserWithRole:
+ *       type: object
+ *       properties:
+ *         userId:
+ *           type: string
+ *         username:
+ *           type: string
+ *         email:
+ *           type: string
+ *         firstName:
+ *           type: string
+ *         lastName:
+ *           type: string
+ *         verified:
+ *           type: boolean
+ *         createdAt:
+ *           type: string
+ *           format: date-time
+ *         updatedAt:
+ *           type: string
+ *           format: date-time
+ *         role:
+ *           type: string
+ *           enum: [utilisateur, employé, admin, ...]
  *     UserUpdate:
  *       type: object
  *       properties:

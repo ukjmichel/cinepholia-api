@@ -1,43 +1,39 @@
 /**
- * Movie management service.
  *
- * This service provides CRUD operations for movies,
- * management of posters (image uploads), filtered search,
- * and ensures transactional consistency via Sequelize.
+ * Provides CRUD operations, poster image management, filtered searches,
+ * and ensures transactional consistency using Sequelize.
  *
- * Main features:
- * - Creation of movies with or without a poster image.
- * - Reading a movie by identifier (with NotFound error handling).
- * - Updating a movie and its poster.
- * - Transactional deletion of a movie.
- * - Multi-criteria search (title, director, genre, classification, etc.).
- * - Retrieval of all movies.
- *
- * Explicitly managed errors:
- * - NotFoundError: if the movie does not exist during reading, modification, or deletion.
- *
- * Dependencies:
- * - MovieImageService for image upload management.
- * - Sequelize for transactional management.
+ * Features:
+ * - Create movies with or without a poster image
+ * - Read a movie by ID (throws NotFoundError if not found)
+ * - Update a movie and optionally its poster image
+ * - Delete a movie with poster cleanup
+ * - Multi-criteria search (title, director, genre, classification, etc.)
+ * - Retrieve all movies
+ * - Retrieve upcoming releases
+ * - Retrieve movies by theater
+ * - Retrieve a movie by screening ID
  *
  */
+
 import {
   MovieModel,
   MovieAttributes,
   MovieCreationAttributes,
 } from '../models/movie.model.js';
 import { NotFoundError } from '../errors/not-found-error.js';
+import { ConflictError } from '../errors/conflict-error.js';
 import { sequelize } from '../config/db.js';
 import { Transaction, Op } from 'sequelize';
-import { movieImageService, MovieImageService } from './movie-image.service.js'; // Must exist!
-import { ConflictError } from '../errors/conflict-error.js';
+import { movieImageService } from './movie-image.service.js';
 import { ScreeningModel } from '../models/screening.model.js';
 
 export class MovieService {
   /**
-   * Get a movie by its ID.
+   * Retrieves a movie by its ID.
+   *
    * @param {string} movieId - The unique identifier of the movie.
-   * @returns {Promise<MovieModel>} The movie instance.
+   * @returns {Promise<MovieModel>} The found movie instance.
    * @throws {NotFoundError} If the movie does not exist.
    */
   async getMovieById(movieId: string): Promise<MovieModel> {
@@ -49,49 +45,44 @@ export class MovieService {
   }
 
   /**
-   * Create a new movie.
-   * @param {MovieCreationAttributes} payload - The data for creating the movie.
+   * Creates a new movie.
+   *
+   * @param {MovieCreationAttributes} payload - The data for the new movie.
    * @param {Express.Multer.File} [file] - Optional poster image file.
-   * @returns {Promise<MovieModel>} The created movie.
+   * @returns {Promise<MovieModel>} The created movie instance.
+   * @throws {ConflictError} If a movie with the same title and director already exists.
    */
   async createMovie(
     payload: MovieCreationAttributes,
     file?: Express.Multer.File
   ): Promise<MovieModel> {
-    // Check for existing movie by title and director
     const existingMovie = await MovieModel.findOne({
-      where: {
-        title: payload.title,
-        director: payload.director,
-      },
+      where: { title: payload.title, director: payload.director },
     });
 
     if (existingMovie) {
       throw new ConflictError('Movie already exists');
     }
 
-    // Transaction for creation (including poster image)
     return await sequelize.transaction(async (t: Transaction) => {
       let posterUrl: string | undefined = undefined;
-
       if (file) {
         posterUrl = await movieImageService.saveMovieImage(file);
       }
-
-      const movie = await MovieModel.create(
+      return await MovieModel.create(
         { ...payload, posterUrl },
         { transaction: t }
       );
-      return movie;
     });
   }
 
   /**
-   * Update an existing movie and optionally its poster image.
-   * @param {string} movieId - The unique identifier of the movie.
+   * Updates an existing movie and optionally its poster image.
+   *
+   * @param {string} movieId - The ID of the movie to update.
    * @param {Partial<MovieAttributes>} update - The fields to update.
    * @param {Express.Multer.File} [file] - Optional new poster image file.
-   * @returns {Promise<MovieModel>} The updated movie.
+   * @returns {Promise<MovieModel>} The updated movie instance.
    * @throws {NotFoundError} If the movie does not exist.
    */
   async updateMovie(
@@ -116,8 +107,9 @@ export class MovieService {
   }
 
   /**
-   * Transactionally delete a movie by its ID.
-   * @param {string} movieId - The unique identifier of the movie.
+   * Deletes a movie by its ID, including optional poster file cleanup.
+   *
+   * @param {string} movieId - The ID of the movie to delete.
    * @returns {Promise<void>}
    * @throws {NotFoundError} If the movie does not exist.
    */
@@ -127,16 +119,16 @@ export class MovieService {
       if (!movie) {
         throw new NotFoundError(`Movie with id ${movieId} not found`);
       }
-      // Delete poster file if exists
       if (movie.posterUrl) {
-        await movieImageService.deleteMovieImage(movie.posterUrl); // Optional cleanup
+        await movieImageService.deleteMovieImage(movie.posterUrl);
       }
       await movie.destroy({ transaction: t });
     });
   }
 
   /**
-   * Get all movies.
+   * Retrieves all movies.
+   *
    * @returns {Promise<MovieModel[]>} Array of all movies.
    */
   async getAllMovies(): Promise<MovieModel[]> {
@@ -144,51 +136,18 @@ export class MovieService {
   }
 
   /**
-   * Search movies using either a global search string or an advanced multi-field filter object.
+   * Searches for movies using a global search string or advanced filters.
    *
-   * - If a string is provided, it will search for the value in the movie's title, director, or genre (case-insensitive, partial match, OR logic).
-   * - If an object is provided, it supports:
-   *    - Global search with the `q` property (searches title, director, genre, OR logic)
-   *    - Field-specific partial searches for `title`, `director`, or `genre` (each will be included as an OR condition)
-   *    - Exact filtering by `ageRating`, `releaseDate`, `movieId`
-   *    - Filtering by recommendation status with `recommended`
-   *
-   * All string matches for title, director, or genre use a SQL `LIKE` query for partial matching.
-   * Additional filters are applied with SQL equality unless otherwise noted.
-   *
-   * @param {string|Object} filters - Either a search string, or a filter object with specific fields.
-   * @param {string} [filters.q] - Global search text (applies to title, director, and genre).
-   * @param {string} [filters.title] - Filter by movie title (partial match).
-   * @param {string} [filters.director] - Filter by director name (partial match).
-   * @param {string} [filters.genre] - Filter by genre (partial match).
-   * @param {string} [filters.ageRating] - Filter by age rating (exact match).
-   * @param {string} [filters.releaseDate] - Filter by release date (exact match).
-   * @param {boolean|string} [filters.recommended] - Filter by recommended status (true/false, or 'true'/'false').
-   * @param {string} [filters.movieId] - Filter by specific movie ID (exact match).
-   *
-   * @returns {Promise<MovieModel[]>} Array of movie instances matching the search criteria.
+   * @param {string|Object} filters - Search string or filter object.
+   * @returns {Promise<MovieModel[]>} Array of matching movies.
    *
    * @example
-   * // Global search by string
-   * await MovieService.searchMovie('Inception');
-   *
-   * @example
-   * // Advanced search by fields
-   * await MovieService.searchMovie({
-   *   title: 'Inception',
-   *   director: 'Nolan',
-   *   ageRating: 'PG-13',
-   *   recommended: true
-   * });
-   *
-   * @example
-   * // Global search using the 'q' property
-   * await MovieService.searchMovie({ q: 'action' });
+   * await movieService.searchMovie('Inception');
+   * await movieService.searchMovie({ title: 'Inception', recommended: true });
    */
   async searchMovie(filters: any): Promise<MovieModel[]> {
     const where: any = {};
 
-    // If filters is a string, treat it as global search text
     if (typeof filters === 'string' && filters.trim() !== '') {
       const value = `%${filters.trim()}%`;
       where[Op.or] = [
@@ -197,14 +156,8 @@ export class MovieService {
         { genre: { [Op.like]: value } },
       ];
     } else if (typeof filters === 'object' && filters !== null) {
-      // If filters is an object, build OR for title/director/genre, or use q
       const orArr: any[] = [];
-
-      if (
-        filters.q &&
-        typeof filters.q === 'string' &&
-        filters.q.trim() !== ''
-      ) {
+      if (filters.q?.trim()) {
         const q = `%${filters.q.trim()}%`;
         orArr.push(
           { title: { [Op.like]: q } },
@@ -222,9 +175,10 @@ export class MovieService {
 
       if (filters.ageRating) where.ageRating = filters.ageRating;
       if (filters.releaseDate) where.releaseDate = filters.releaseDate;
-      if (filters.recommended !== undefined)
+      if (filters.recommended !== undefined) {
         where.recommended =
           filters.recommended === 'true' || filters.recommended === '1';
+      }
       if (filters.movieId) where.movieId = filters.movieId;
     }
 
@@ -232,42 +186,25 @@ export class MovieService {
   }
 
   /**
-   * Retrieve all upcoming movies with a release date in the future (strictly greater than today).
+   * Retrieves all upcoming movies with release dates in the future.
    *
-   * This method fetches movies whose `releaseDate` is after the current date.
-   * The results are ordered in ascending order of release date, so the soonest releases come first.
-   *
-   * @returns {Promise<MovieModel[]>} Array of movie instances with future release dates.
-   *
-   * @example
-   * // Get all upcoming movies
-   * const upcoming = await movieService.getUpcomingMovies();
+   * @returns {Promise<MovieModel[]>} Array of future-release movies.
    */
   async getUpcomingMovies(): Promise<MovieModel[]> {
-    const today = new Date().toISOString().split('T')[0]; // Format: YYYY-MM-DD
+    const today = new Date().toISOString().split('T')[0];
     return MovieModel.findAll({
-      where: {
-        releaseDate: {
-          [Op.gt]: today,
-        },
-      },
-      order: [['releaseDate', 'ASC']], // Optional: soonest first
+      where: { releaseDate: { [Op.gt]: today } },
+      order: [['releaseDate', 'ASC']],
     });
   }
+
   /**
-   * Get all unique movies that are being screened in a given theater.
+   * Retrieves all unique movies screened in a given theater.
    *
-   * A movie is considered "displayed" in a theater if there is at least one screening of it in that theater.
-   *
-   * @param {string} theaterId - The unique identifier of the theater.
-   * @returns {Promise<MovieModel[]>} Array of movie instances displayed in the theater.
-   *
-   * @example
-   * // Get all movies displayed in theater 'T123'
-   * const movies = await movieService.getMoviesByTheater('T123');
+   * @param {string} theaterId - Theater ID to search for.
+   * @returns {Promise<MovieModel[]>} Array of movies in the theater.
    */
   async getMoviesByTheater(theaterId: string): Promise<MovieModel[]> {
-    // Step 1: Get all unique movieIds from screenings in the theater
     const screenings = await ScreeningModel.findAll({
       where: { theaterId },
       attributes: ['movieId'],
@@ -276,11 +213,26 @@ export class MovieService {
     });
     const movieIds = screenings.map((s) => s.movieId);
     if (!movieIds.length) return [];
+    return MovieModel.findAll({ where: { movieId: movieIds } });
+  }
 
-    // Step 2: Fetch movies with those IDs
-    return MovieModel.findAll({
-      where: { movieId: movieIds },
-    });
+  /**
+   * Retrieves the movie for a given screening ID.
+   *
+   * @param {string} screeningId - The screening ID.
+   * @returns {Promise<MovieModel>} The associated movie.
+   * @throws {NotFoundError} If the screening or movie does not exist.
+   */
+  async getMovieByScreeningId(screeningId: string): Promise<MovieModel> {
+    const screening = await ScreeningModel.findByPk(screeningId);
+    if (!screening) {
+      throw new NotFoundError(`Screening with id ${screeningId} not found`);
+    }
+    const movie = await MovieModel.findByPk(screening.movieId);
+    if (!movie) {
+      throw new NotFoundError(`Movie with id ${screening.movieId} not found`);
+    }
+    return movie;
   }
 }
 

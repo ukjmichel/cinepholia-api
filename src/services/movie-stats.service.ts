@@ -1,10 +1,29 @@
+/**
+ *
+ * This service handles:
+ * - Incrementing and decrementing daily booking counts for a given movie.
+ * - Automatically creating a stats document if it doesn't exist.
+ * - Removing a date entry when bookings drop to zero or below.
+ * - Retrieving booking statistics by movieId.
+ *
+ * Uses MongoDB via Mongoose for persistence.
+ *
+ */
+
 import MovieStats, {
   MovieStatsDocument,
 } from '../models/movie-stats.schema.js';
-
 class MovieStatsService {
   /**
-   * Increment the booking count for a movie on a given date (default: today).
+   * Increment the booking count for a movie on a given date.
+   * Creates a new stats record if none exists.
+   * If no date is provided, defaults to today's date (UTC).
+   *
+   * @param {string} movieId - The unique identifier of the movie.
+   * @param {number} [count=1] - The number of bookings to add.
+   * @param {string} [date] - The date in `YYYY-MM-DD` format. Defaults to today.
+   * @returns {Promise<MovieStatsDocument>} The updated MovieStats document.
+   * @throws {Error} If saving to the database fails.
    */
   async addBooking(
     movieId: string,
@@ -13,6 +32,7 @@ class MovieStatsService {
   ): Promise<MovieStatsDocument> {
     const day = date || new Date().toISOString().slice(0, 10); // "YYYY-MM-DD"
     let stats = await MovieStats.findOne({ movieId });
+
     if (!stats) {
       stats = new MovieStats({
         movieId,
@@ -26,13 +46,21 @@ class MovieStatsService {
         stats.bookingNumbers.unshift({ date: day, number: count });
       }
     }
+
     await stats.save();
     return stats;
   }
 
   /**
-   * Decrement the booking count for a movie on a given date (default: today).
-   * If count falls to 0 or below, removes the entry for that date.
+   * Decrement the booking count for a movie on a given date.
+   * If the resulting count is zero or less, removes that date entry.
+   * If no date is provided, defaults to today's date (UTC).
+   *
+   * @param {string} movieId - The unique identifier of the movie.
+   * @param {number} [count=1] - The number of bookings to remove.
+   * @param {string} [date] - The date in `YYYY-MM-DD` format. Defaults to today.
+   * @returns {Promise<MovieStatsDocument|null>} The updated MovieStats document, or null if no stats exist for the movie.
+   * @throws {Error} If saving to the database fails.
    */
   async removeBooking(
     movieId: string,
@@ -48,14 +76,19 @@ class MovieStatsService {
 
     entry.number -= count;
     if (entry.number <= 0) {
-      // Remove this day from array if no bookings left
       stats.bookingNumbers = stats.bookingNumbers.filter((b) => b.date !== day);
     }
+
     await stats.save();
     return stats;
   }
+
   /**
-   * Get the booking stats for a movie by its movieId.
+   * Retrieve the booking statistics for a given movieId.
+   *
+   * @param {string} movieId - The unique identifier of the movie.
+   * @returns {Promise<MovieStatsDocument|null>} The MovieStats document, or null if not found.
+   * @throws {Error} If database retrieval fails.
    */
   async getStatsByMovieId(movieId: string): Promise<MovieStatsDocument | null> {
     return await MovieStats.findOne({ movieId });

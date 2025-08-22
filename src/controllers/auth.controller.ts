@@ -1,3 +1,26 @@
+/**
+ * @module controllers/auth.controller
+ *
+ * @description
+ * Handles user authentication flows
+ * 
+ * @features
+ * - Logs in users and sets secure cookies for access/refresh tokens.
+ * - Refreshes tokens using a valid refresh token from cookies.
+ *
+ * @security
+ * - Access and refresh tokens are stored as `httpOnly` cookies to prevent XSS attacks.
+ * - A default role of `"utilisateur"` is assigned if the user has no existing authorization.
+ * - The `secure` cookie flag is enabled in production to enforce HTTPS-only cookies.
+ *
+ * @dependencies
+ * - authService: Handles credential verification and token generation.
+ * - userService: Retrieves user records from the database.
+ * - authorizationService: Retrieves or creates user role assignments.
+ * - jsonwebtoken: Signs and verifies JWT tokens.
+ *
+ */
+
 import { Request, Response, NextFunction } from 'express';
 import { authService } from '../services/auth.service.js';
 import { userService } from '../services/user.service.js';
@@ -12,8 +35,13 @@ import { NotFoundError } from '../errors/not-found-error.js';
 export const authorizationService = new AuthorizationService();
 
 /**
- * Authenticates a user and returns JWT tokens as secure cookies,
- * along with the public user information.
+ * Logs in a user by validating their credentials and issuing secure JWT cookies.
+ *
+ * @param req - Express request object containing `emailOrUsername` and `password` in the body
+ * @param res - Express response object used to set cookies and send user data
+ * @param next - Express next function for error handling
+ * @throws {BadRequestError} If required credentials are missing or user not found
+ * @throws {UnauthorizedError} If credentials are invalid or login attempt limit is reached
  */
 export const login = async (
   req: Request,
@@ -21,30 +49,24 @@ export const login = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    // Get credentials from request body
     const { emailOrUsername, password } = req.body;
     if (!emailOrUsername || !password) {
       throw new BadRequestError('Email or username and password are required');
     }
 
-    // Attempt to authenticate and generate tokens
     const tokens = await authService.login(emailOrUsername, password);
-    // Retrieve user info by username or email
     const user = await userService.getUserByUsernameOrEmail(emailOrUsername);
 
     if (!user) {
       throw new BadRequestError('User not found');
     }
 
-    // Default role
     let role = 'utilisateur';
     if (user.userId) {
-      // Try to fetch authorization (role) for the user
       let authorization = await authorizationService.getAuthorizationByUserId(
         user.userId
       );
 
-      // Create default authorization if it doesn't exist
       if (!authorization) {
         authorization = await authorizationService.createAuthorization({
           userId: user.userId,
@@ -57,17 +79,15 @@ export const login = async (
       }
     }
 
-    // Convert Sequelize user instance to plain object if needed
     const plainUser =
       typeof user.get === 'function' ? user.get({ plain: true }) : user;
     const { userId, username, firstName, lastName, email } = plainUser;
 
-    // Set the accessToken cookie (for API, httpOnly & sameSite are good defaults)
     const isSecure = process.env.NODE_ENV === 'production';
 
     res.cookie('accessToken', tokens.accessToken, {
       httpOnly: true,
-      secure: isSecure, // ✅ test env uses false
+      secure: isSecure,
       sameSite: 'lax',
       maxAge: 1000 * 60 * 60,
     });
@@ -79,7 +99,6 @@ export const login = async (
       maxAge: 1000 * 60 * 60 * 24 * 7,
     });
 
-    // Send user info (never include sensitive info)
     res.status(200).json({
       message: 'Login successful',
       data: {
@@ -99,7 +118,13 @@ export const login = async (
 };
 
 /**
- * Refreshes JWT tokens using the refresh token cookie.
+ * Refreshes the access and refresh JWT cookies using a valid refresh token.
+ *
+ * @param req - Express request object containing the refresh token cookie
+ * @param res - Express response object used to set new cookies
+ * @param next - Express next function for error handling
+ * @throws {UnauthorizedError} If refresh token is missing, invalid, or expired
+ * @throws {NotFoundError} If the user from the token payload does not exist
  */
 export async function refreshToken(
   req: Request,
@@ -107,27 +132,21 @@ export async function refreshToken(
   next: NextFunction
 ) {
   try {
-    // Get the refreshToken from cookies
     const token = req.cookies?.refreshToken;
-    console.log('Server: got refreshToken:', token);
     if (!token) {
       return next(new UnauthorizedError('Missing refresh token'));
     }
 
-    // Verify the refresh token
     const payload = jwt.verify(token, config.jwtRefreshSecret) as any;
 
-    // Get the user from DB
     const user = await userService.getUserById(payload.userId);
     if (!user) throw new NotFoundError('User not found');
 
-    // Retrieve role
     const auth = await authorizationService.getAuthorizationByUserId(
       user.userId
     );
     const role = auth?.role || 'utilisateur';
 
-    // Generate new tokens
     const newAccessToken = jwt.sign(
       { userId: user.userId, role },
       config.jwtSecret,
@@ -140,7 +159,6 @@ export async function refreshToken(
       { expiresIn: '7d' }
     );
 
-    // ✅ use the same secure flag logic as in login
     const isSecure = process.env.NODE_ENV === 'production';
 
     res.cookie('accessToken', newAccessToken, {

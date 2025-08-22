@@ -5,23 +5,29 @@ import { BadRequestError } from '../../errors/bad-request-error.js';
 jest.mock('../../services/email.service.js');
 
 describe('handleSendTheaterContactMessage', () => {
-  const req: any = {};
-  const res: any = {
-    status: jest.fn().mockReturnThis(),
-    json: jest.fn(),
+  const makeRes = () => {
+    const res: any = {};
+    res.status = jest.fn().mockReturnValue(res);
+    res.json = jest.fn().mockReturnValue(res);
+    return res;
   };
-  const next = jest.fn();
+
+  const makeNext = () => jest.fn();
 
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
-  it('should return 200 if email is sent successfully', async () => {
-    req.body = {
-      theaterId: 'CINEMA01',
-      email: 'user@example.com',
-      message: 'Hello!',
+  it('returns 200 if email is sent successfully', async () => {
+    const req: any = {
+      body: {
+        theaterId: 'CINEMA01',
+        email: 'user@example.com',
+        message: 'Hello!',
+      },
     };
+    const res = makeRes();
+    const next = makeNext();
 
     (emailService.sendTheaterContactMessage as jest.Mock).mockResolvedValueOnce(
       undefined
@@ -38,22 +44,34 @@ describe('handleSendTheaterContactMessage', () => {
     expect(res.json).toHaveBeenCalledWith({
       message: 'Email sent successfully',
     });
+    expect(next).not.toHaveBeenCalled();
   });
 
-  it('should call next with BadRequestError if any field is missing', async () => {
-    req.body = { email: 'user@example.com', message: 'Missing theaterId' };
+  it('calls next with BadRequestError if any required field is missing', async () => {
+    const req: any = {
+      body: { email: 'user@example.com', message: 'Missing theaterId' },
+    };
+    const res = makeRes();
+    const next = makeNext();
 
     await handleSendTheaterContactMessage(req, res, next);
 
     expect(next).toHaveBeenCalledWith(expect.any(BadRequestError));
+    expect(res.status).not.toHaveBeenCalled();
+    expect(res.json).not.toHaveBeenCalled();
+    expect(emailService.sendTheaterContactMessage).not.toHaveBeenCalled();
   });
 
-  it('should call next with BadRequestError if email sending fails', async () => {
-    req.body = {
-      theaterId: 'CINEMA02',
-      email: 'user@example.com',
-      message: 'A problem occurred',
+  it('calls next with BadRequestError if email sending fails', async () => {
+    const req: any = {
+      body: {
+        theaterId: 'CINEMA02',
+        email: 'user@example.com',
+        message: 'A problem occurred',
+      },
     };
+    const res = makeRes();
+    const next = makeNext();
 
     (emailService.sendTheaterContactMessage as jest.Mock).mockRejectedValueOnce(
       new Error('Email error')
@@ -63,9 +81,12 @@ describe('handleSendTheaterContactMessage', () => {
 
     expect(next).toHaveBeenCalledWith(
       expect.objectContaining({
+        name: 'BadRequestError',
         message: 'Failed to send email',
         cause: expect.any(Error),
       })
     );
+    expect(res.status).not.toHaveBeenCalled();
+    expect(res.json).not.toHaveBeenCalled();
   });
 });

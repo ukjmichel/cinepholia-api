@@ -1,11 +1,23 @@
-import * as incidentReportController from '../../controllers/incident-report.controller.js';
-import { IncidentReportService } from '../../services/incident-report.service.js';
+/**
+ * @module tests/controllers/incident-report.controller.spec
+ *
+ * @description
+ * Unit tests for Incident Report Express controllers.
+ * - Pure controller tests: the IncidentReportService methods are spied & mocked.
+ * - Validates UUID/id/status parsing, XSS sanitization, and response codes.
+ * - Asserts the service is called with the right arguments.
+ */
+
+import * as controller from '../../controllers/incident-report.controller.js';
+import { incidentReportService } from '../../services/incident-report.service.js';
+import type { IncidentReport } from '../../models/incident-report.schema.js';
 import { NotFoundError } from '../../errors/not-found-error.js';
-import { BadRequestError } from '../../errors/bad-request-error.js';
 
-jest.mock('../../services/incident-report.service.js');
+/* -------------------------------------------------------------------------- */
+/*                       Minimal Express req/res/next mocks                   */
+/* -------------------------------------------------------------------------- */
 
-const mockRequest = (body = {}, params = {}, query = {}) =>
+const mockRequest = (body: any = {}, params: any = {}, query: any = {}) =>
   ({ body, params, query }) as any;
 
 const mockResponse = () => {
@@ -18,633 +30,625 @@ const mockResponse = () => {
 
 const mockNext = jest.fn();
 
-const mockIncidentReport = {
-  incidentId: 'incident-1',
-  theaterId: 'theater-1',
-  hallId: 'hall-1',
-  title: 'Broken seat in row A',
-  description: 'Seat A2 is completely broken and cannot be used by customers.',
-  status: 'pending',
-  date: '2025-01-15T10:00:00Z',
-  userId: 'user-1',
-  createdAt: '2025-01-15T10:00:00Z',
-  updatedAt: '2025-01-15T10:00:00Z',
-};
+/* -------------------------------------------------------------------------- */
+/*                                   Fixtures                                 */
+/* -------------------------------------------------------------------------- */
 
-const mockIncidentReports = [mockIncidentReport];
-
-const mockStatistics = {
-  total: 10,
-  pending: 5,
-  inProgress: 3,
-  fulfilled: 2,
-  byTheater: {
-    'theater-1': 5,
-    'theater-2': 5,
-  },
-};
-
-// Mock the service constructor and methods
-const mockServiceInstance = {
-  findById: jest.fn(),
-  create: jest.fn(),
-  updateById: jest.fn(),
-  deleteById: jest.fn(),
-  findAll: jest.fn(),
-  findAllByTheaterId: jest.fn(),
-  findAllByHall: jest.fn(),
-  findAllByUserId: jest.fn(),
-  findAllByStatus: jest.fn(),
-  updateStatus: jest.fn(),
-  search: jest.fn(),
-  getStatistics: jest.fn(),
+const SAMPLE_INCIDENT: IncidentReport = {
+  incidentId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1',
+  theaterId: 'UGC_Lyon',
+  hallId: 'H1',
+  description: 'Projector flicker',
+  status: 'open',
+  createdBy: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+  createdAt: new Date(),
+  updatedAt: new Date(),
 };
 
 beforeEach(() => {
   jest.clearAllMocks();
-  (IncidentReportService as jest.Mock).mockImplementation(
-    () => mockServiceInstance
-  );
+  jest.restoreAllMocks();
 });
 
-describe('IncidentReportController', () => {
-  describe('getIncidentReportById', () => {
-    it('should return an incident report by id', async () => {
-      mockServiceInstance.findById.mockResolvedValue(mockIncidentReport);
-      const req = mockRequest({}, { incidentId: 'incident-1' });
-      const res = mockResponse();
+/* -------------------------------------------------------------------------- */
+/*                                  GET all                                   */
+/* -------------------------------------------------------------------------- */
 
-      await incidentReportController.getIncidentReportById(req, res, mockNext);
+describe('getAllIncidents', () => {
+  it('returns 200 with all incidents', async () => {
+    const res = mockResponse();
+    const req = mockRequest();
 
-      expect(mockServiceInstance.findById).toHaveBeenCalledWith('incident-1');
-      expect(res.json).toHaveBeenCalledWith({
-        message: 'Incident report found',
-        data: mockIncidentReport,
-      });
-      expect(mockNext).not.toHaveBeenCalled();
+    jest
+      .spyOn(incidentReportService, 'getAllIncidents')
+      .mockResolvedValue([SAMPLE_INCIDENT]);
+
+    await controller.getAllIncidents(req, res, mockNext);
+
+    expect(incidentReportService.getAllIncidents).toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({
+      message: 'All incidents',
+      data: [SAMPLE_INCIDENT],
     });
+    expect(mockNext).not.toHaveBeenCalled();
+  });
 
-    it('should call next with NotFoundError if not found', async () => {
-      mockServiceInstance.findById.mockRejectedValue(
-        new NotFoundError('Incident report not found')
-      );
-      const req = mockRequest({}, { incidentId: '404' });
-      const res = mockResponse();
+  it('forwards errors to next', async () => {
+    const res = mockResponse();
+    const req = mockRequest();
+    const err = new Error('boom');
 
-      await incidentReportController.getIncidentReportById(req, res, mockNext);
+    jest.spyOn(incidentReportService, 'getAllIncidents').mockRejectedValue(err);
 
-      expect(mockNext).toHaveBeenCalledWith(expect.any(NotFoundError));
-      expect(res.json).not.toHaveBeenCalled();
+    await controller.getAllIncidents(req, res, mockNext);
+    expect(mockNext).toHaveBeenCalledWith(err);
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/*                               GET by incidentId                            */
+/* -------------------------------------------------------------------------- */
+
+describe('getIncident', () => {
+  it('400 for invalid incidentId', async () => {
+    const res = mockResponse();
+    const req = mockRequest({}, { incidentId: 'not-a-uuid' });
+
+    await controller.getIncident(req, res, mockNext);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({
+      message: 'Invalid incidentId (UUID)',
+      data: null,
+    });
+    expect(mockNext).not.toHaveBeenCalled();
+  });
+
+  it('200 with incident for valid id', async () => {
+    const res = mockResponse();
+    const req = mockRequest({}, { incidentId: SAMPLE_INCIDENT.incidentId });
+
+    jest
+      .spyOn(incidentReportService, 'getIncident')
+      .mockResolvedValue(SAMPLE_INCIDENT);
+
+    await controller.getIncident(req, res, mockNext);
+
+    expect(incidentReportService.getIncident).toHaveBeenCalledWith(
+      SAMPLE_INCIDENT.incidentId
+    );
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({
+      message: 'Incident found',
+      data: SAMPLE_INCIDENT,
     });
   });
 
-  describe('createIncidentReport', () => {
-    it('should create an incident report and return 201', async () => {
-      mockServiceInstance.create.mockResolvedValue(mockIncidentReport);
-      const req = mockRequest({
-        theaterId: 'theater-1',
-        hallId: 'hall-1',
-        title: 'Audio system malfunction',
-        description: 'The audio system is not working properly.',
-        userId: 'user-1',
-      });
-      const res = mockResponse();
+  it('forwards NotFoundError', async () => {
+    const res = mockResponse();
+    const req = mockRequest({}, { incidentId: SAMPLE_INCIDENT.incidentId });
 
-      await incidentReportController.createIncidentReport(req, res, mockNext);
+    jest
+      .spyOn(incidentReportService, 'getIncident')
+      .mockRejectedValue(new NotFoundError('nope'));
 
-      expect(mockServiceInstance.create).toHaveBeenCalledWith(req.body);
-      expect(res.status).toHaveBeenCalledWith(201);
-      expect(res.json).toHaveBeenCalledWith({
-        message: 'Incident report created',
-        data: mockIncidentReport,
-      });
-      expect(mockNext).not.toHaveBeenCalled();
-    });
+    await controller.getIncident(req, res, mockNext);
+    expect(mockNext).toHaveBeenCalledWith(expect.any(NotFoundError));
+  });
+});
 
-    it('should call next with error if creation fails', async () => {
-      mockServiceInstance.create.mockRejectedValue(
-        new Error('Creation failed')
-      );
-      const req = mockRequest({ theaterId: 'invalid' });
-      const res = mockResponse();
+/* -------------------------------------------------------------------------- */
+/*                                GET by status                               */
+/* -------------------------------------------------------------------------- */
 
-      await incidentReportController.createIncidentReport(req, res, mockNext);
+describe('getIncidentsByStatus', () => {
+  it('400 for invalid status', async () => {
+    const res = mockResponse();
+    const req = mockRequest({}, { status: 'bad' });
 
-      expect(mockNext).toHaveBeenCalledWith(expect.any(Error));
-      expect(res.status).not.toHaveBeenCalledWith(201);
-      expect(res.json).not.toHaveBeenCalled();
+    await controller.getIncidentsByStatus(req, res, mockNext);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({
+      message: 'Invalid status',
+      data: null,
     });
   });
 
-  describe('updateIncidentReport', () => {
-    it('should update and return an incident report', async () => {
-      const updatedIncident = { ...mockIncidentReport, title: 'Updated title' };
-      mockServiceInstance.updateById.mockResolvedValue(updatedIncident);
-      const req = mockRequest(
-        { title: 'Updated title' },
-        { incidentId: 'incident-1' }
-      );
-      const res = mockResponse();
+  it('200 with incidents for valid status', async () => {
+    const res = mockResponse();
+    const req = mockRequest({}, { status: 'open' });
 
-      await incidentReportController.updateIncidentReport(req, res, mockNext);
+    jest
+      .spyOn(incidentReportService, 'getIncidentsByStatus')
+      .mockResolvedValue([SAMPLE_INCIDENT]);
 
-      expect(mockServiceInstance.updateById).toHaveBeenCalledWith(
-        'incident-1',
-        {
-          title: 'Updated title',
-        }
-      );
-      expect(res.json).toHaveBeenCalledWith({
-        message: 'Incident report updated',
-        data: updatedIncident,
-      });
-      expect(mockNext).not.toHaveBeenCalled();
-    });
+    await controller.getIncidentsByStatus(req, res, mockNext);
 
-    it('should call next with NotFoundError if not found', async () => {
-      mockServiceInstance.updateById.mockRejectedValue(
-        new NotFoundError('Incident report not found')
-      );
-      const req = mockRequest({ title: 'Updated' }, { incidentId: 'bad' });
-      const res = mockResponse();
+    expect(incidentReportService.getIncidentsByStatus).toHaveBeenCalledWith(
+      'open'
+    );
+    expect(res.status).toHaveBeenCalledWith(200);
+  });
+});
 
-      await incidentReportController.updateIncidentReport(req, res, mockNext);
+/* -------------------------------------------------------------------------- */
+/*                         GET by theater / hall (location)                   */
+/* -------------------------------------------------------------------------- */
 
-      expect(mockNext).toHaveBeenCalledWith(expect.any(NotFoundError));
-      expect(res.json).not.toHaveBeenCalled();
+describe('getIncidentsByLocation', () => {
+  it('400 for invalid theaterId', async () => {
+    const res = mockResponse();
+    const req = mockRequest({}, { theaterId: 'A' }); // too short
+
+    await controller.getIncidentsByLocation(req, res, mockNext);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({
+      message: 'Invalid theaterId',
+      data: null,
     });
   });
 
-  describe('deleteIncidentReport', () => {
-    it('should delete an incident report and return 204', async () => {
-      mockServiceInstance.deleteById.mockResolvedValue({
-        message: 'Incident report deleted',
-      });
-      const req = mockRequest({}, { incidentId: 'incident-1' });
-      const res = mockResponse();
+  it('400 for invalid hallId', async () => {
+    const res = mockResponse();
+    // invalid character "!" makes it fail the idRegex, and it's truthy
+    const req = mockRequest({}, { theaterId: 'Valid_Theater', hallId: '!' });
 
-      await incidentReportController.deleteIncidentReport(req, res, mockNext);
+    await controller.getIncidentsByLocation(req, res, mockNext);
 
-      expect(mockServiceInstance.deleteById).toHaveBeenCalledWith('incident-1');
-      expect(res.status).toHaveBeenCalledWith(204);
-      expect(res.send).toHaveBeenCalledWith();
-      expect(mockNext).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({
+      message: 'Invalid hallId',
+      data: null,
     });
+  });
+  it('200 with theater-only', async () => {
+    const res = mockResponse();
+    const req = mockRequest({}, { theaterId: 'Valid_Theater' });
 
-    it('should call next with NotFoundError if not found', async () => {
-      mockServiceInstance.deleteById.mockRejectedValue(
-        new NotFoundError('Incident report not found')
-      );
-      const req = mockRequest({}, { incidentId: 'fail' });
-      const res = mockResponse();
+    jest
+      .spyOn(incidentReportService, 'getIncidentsByLocation')
+      .mockResolvedValue([SAMPLE_INCIDENT]);
 
-      await incidentReportController.deleteIncidentReport(req, res, mockNext);
+    await controller.getIncidentsByLocation(req, res, mockNext);
 
-      expect(mockNext).toHaveBeenCalledWith(expect.any(NotFoundError));
-      expect(res.status).not.toHaveBeenCalledWith(204);
+    expect(incidentReportService.getIncidentsByLocation).toHaveBeenCalledWith(
+      'Valid_Theater',
+      undefined
+    );
+    expect(res.status).toHaveBeenCalledWith(200);
+  });
+
+  it('200 with theater + hall', async () => {
+    const res = mockResponse();
+    const req = mockRequest({}, { theaterId: 'Valid_Theater', hallId: 'H1' });
+
+    jest
+      .spyOn(incidentReportService, 'getIncidentsByLocation')
+      .mockResolvedValue([SAMPLE_INCIDENT]);
+
+    await controller.getIncidentsByLocation(req, res, mockNext);
+
+    expect(incidentReportService.getIncidentsByLocation).toHaveBeenCalledWith(
+      'Valid_Theater',
+      'H1'
+    );
+    expect(res.status).toHaveBeenCalledWith(200);
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/*                                GET by user                                 */
+/* -------------------------------------------------------------------------- */
+
+describe('getIncidentsByUser', () => {
+  it('400 for invalid createdBy', async () => {
+    const res = mockResponse();
+    const req = mockRequest({}, { createdBy: 'nope' });
+
+    await controller.getIncidentsByUser(req, res, mockNext);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({
+      message: 'Invalid createdBy UUID',
+      data: null,
     });
   });
 
-  describe('getAllIncidentReports', () => {
-    it('should return all incident reports', async () => {
-      mockServiceInstance.findAll.mockResolvedValue(mockIncidentReports);
-      const req = mockRequest();
-      const res = mockResponse();
+  it('200 for valid createdBy', async () => {
+    const res = mockResponse();
+    const req = mockRequest({}, { createdBy: SAMPLE_INCIDENT.createdBy });
 
-      await incidentReportController.getAllIncidentReports(req, res, mockNext);
+    jest
+      .spyOn(incidentReportService, 'getIncidentsByUser')
+      .mockResolvedValue([SAMPLE_INCIDENT]);
 
-      expect(mockServiceInstance.findAll).toHaveBeenCalledWith({
-        limit: undefined,
-        offset: undefined,
-      });
-      expect(res.json).toHaveBeenCalledWith({
-        message: 'All incident reports',
-        data: mockIncidentReports,
-      });
-      expect(mockNext).not.toHaveBeenCalled();
-    });
+    await controller.getIncidentsByUser(req, res, mockNext);
 
-    it('should return incident reports with pagination', async () => {
-      mockServiceInstance.findAll.mockResolvedValue(mockIncidentReports);
-      const req = mockRequest({}, {}, { limit: '10', offset: '5' });
-      const res = mockResponse();
+    expect(incidentReportService.getIncidentsByUser).toHaveBeenCalledWith(
+      SAMPLE_INCIDENT.createdBy
+    );
+    expect(res.status).toHaveBeenCalledWith(200);
+  });
+});
 
-      await incidentReportController.getAllIncidentReports(req, res, mockNext);
+/* -------------------------------------------------------------------------- */
+/*                            GET by (business) incidentId                    */
+/* -------------------------------------------------------------------------- */
 
-      expect(mockServiceInstance.findAll).toHaveBeenCalledWith({
-        limit: 10,
-        offset: 5,
-      });
-      expect(res.json).toHaveBeenCalledWith({
-        message: 'All incident reports',
-        data: mockIncidentReports,
-      });
-    });
+describe('getIncidentsByIncidentId', () => {
+  it('400 for invalid incidentId', async () => {
+    const res = mockResponse();
+    const req = mockRequest({}, { incidentId: 'bad' });
 
-    it('should call next if error thrown', async () => {
-      mockServiceInstance.findAll.mockRejectedValue(
-        new Error('Database error')
-      );
-      const req = mockRequest();
-      const res = mockResponse();
+    await controller.getIncidentsByIncidentId(req, res, mockNext);
 
-      await incidentReportController.getAllIncidentReports(req, res, mockNext);
-
-      expect(mockNext).toHaveBeenCalledWith(expect.any(Error));
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({
+      message: 'Invalid incidentId',
+      data: null,
     });
   });
 
-  describe('getIncidentReportsByTheater', () => {
-    it('should return incident reports for a theater', async () => {
-      mockServiceInstance.findAllByTheaterId.mockResolvedValue(
-        mockIncidentReports
-      );
-      const req = mockRequest({}, { theaterId: 'theater-1' });
-      const res = mockResponse();
+  it('200 for valid incidentId', async () => {
+    const res = mockResponse();
+    const req = mockRequest({}, { incidentId: SAMPLE_INCIDENT.incidentId });
 
-      await incidentReportController.getIncidentReportsByTheater(
-        req,
-        res,
-        mockNext
-      );
+    jest
+      .spyOn(incidentReportService, 'getIncidentsByIncidentId')
+      .mockResolvedValue([SAMPLE_INCIDENT]);
 
-      expect(mockServiceInstance.findAllByTheaterId).toHaveBeenCalledWith(
-        'theater-1'
-      );
-      expect(res.json).toHaveBeenCalledWith({
-        message: 'Incident reports for theater',
-        data: mockIncidentReports,
-      });
+    await controller.getIncidentsByIncidentId(req, res, mockNext);
+
+    expect(incidentReportService.getIncidentsByIncidentId).toHaveBeenCalledWith(
+      SAMPLE_INCIDENT.incidentId
+    );
+    expect(res.status).toHaveBeenCalledWith(200);
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/*                                   CREATE                                   */
+/* -------------------------------------------------------------------------- */
+
+describe('createIncident', () => {
+  it('400 when optional incidentId is invalid', async () => {
+    const res = mockResponse();
+    const req = mockRequest({
+      incidentId: 'not-a-uuid',
+      theaterId: 'Valid_Theater',
+      hallId: 'H1',
+      description: 'x',
+      createdBy: SAMPLE_INCIDENT.createdBy,
+      status: 'open',
     });
 
-    it('should call next with NotFoundError if theater not found', async () => {
-      mockServiceInstance.findAllByTheaterId.mockRejectedValue(
-        new NotFoundError('Theater not found')
-      );
-      const req = mockRequest({}, { theaterId: 'invalid' });
-      const res = mockResponse();
+    await controller.createIncident(req, res, mockNext);
 
-      await incidentReportController.getIncidentReportsByTheater(
-        req,
-        res,
-        mockNext
-      );
-
-      expect(mockNext).toHaveBeenCalledWith(expect.any(NotFoundError));
-      expect(res.json).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({
+      message: 'Invalid incidentId (UUID)',
+      data: null,
     });
   });
 
-  describe('getIncidentReportsByHall', () => {
-    it('should return incident reports for a hall', async () => {
-      mockServiceInstance.findAllByHall.mockResolvedValue(mockIncidentReports);
-      const req = mockRequest({}, { theaterId: 'theater-1', hallId: 'hall-1' });
-      const res = mockResponse();
-
-      await incidentReportController.getIncidentReportsByHall(
-        req,
-        res,
-        mockNext
-      );
-
-      expect(mockServiceInstance.findAllByHall).toHaveBeenCalledWith(
-        'theater-1',
-        'hall-1'
-      );
-      expect(res.json).toHaveBeenCalledWith({
-        message: 'Incident reports for hall',
-        data: mockIncidentReports,
-      });
+  it('400 when required fields invalid', async () => {
+    const res = mockResponse();
+    const req = mockRequest({
+      theaterId: 'A', // invalid
+      hallId: 'H1',
+      description: 'x',
+      createdBy: SAMPLE_INCIDENT.createdBy,
     });
 
-    it('should call next with NotFoundError if hall not found', async () => {
-      mockServiceInstance.findAllByHall.mockRejectedValue(
-        new NotFoundError('Hall not found')
-      );
-      const req = mockRequest(
-        {},
-        { theaterId: 'theater-1', hallId: 'invalid' }
-      );
-      const res = mockResponse();
+    await controller.createIncident(req, res, mockNext);
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
 
-      await incidentReportController.getIncidentReportsByHall(
-        req,
-        res,
-        mockNext
-      );
+  it('201 on valid payload and sanitization applied', async () => {
+    const res = mockResponse();
+    const dirty = `<img src=x onerror=alert(1)> Hey <b>there</b>`;
+    const req = mockRequest({
+      theaterId: 'Valid_Theater',
+      hallId: 'H1',
+      description: dirty,
+      createdBy: SAMPLE_INCIDENT.createdBy,
+      status: 'open',
+    });
 
-      expect(mockNext).toHaveBeenCalledWith(expect.any(NotFoundError));
-      expect(res.json).not.toHaveBeenCalled();
+    // Return created doc
+    jest
+      .spyOn(incidentReportService, 'createIncident')
+      .mockImplementation(async (payload: any) => {
+        // Expect sanitized description: no angle brackets remain
+        expect(typeof payload.description).toBe('string');
+        expect(payload.description).not.toMatch(/[<>]/);
+        return { ...SAMPLE_INCIDENT, ...payload } as IncidentReport;
+      });
+
+    await controller.createIncident(req, res, mockNext);
+
+    expect(incidentReportService.createIncident).toHaveBeenCalledWith(
+      expect.objectContaining({
+        theaterId: 'Valid_Theater',
+        hallId: 'H1',
+        createdBy: SAMPLE_INCIDENT.createdBy,
+        status: 'open',
+        // sanitized description already asserted inside mock
+      })
+    );
+    expect(res.status).toHaveBeenCalledWith(201);
+    expect(res.json).toHaveBeenCalledWith({
+      message: 'Incident created',
+      data: expect.objectContaining({
+        theaterId: 'Valid_Theater',
+        hallId: 'H1',
+      }),
+    });
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/*                                    UPDATE                                  */
+/* -------------------------------------------------------------------------- */
+
+describe('updateIncident', () => {
+  it('400 for invalid incidentId param', async () => {
+    const res = mockResponse();
+    const req = mockRequest({ status: 'resolved' }, { incidentId: 'bad' });
+
+    await controller.updateIncident(req, res, mockNext);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({
+      message: 'Invalid incidentId (UUID)',
+      data: null,
     });
   });
 
-  describe('getIncidentReportsByUser', () => {
-    it('should return incident reports for a user', async () => {
-      mockServiceInstance.findAllByUserId.mockResolvedValue(
-        mockIncidentReports
-      );
-      const req = mockRequest({}, { userId: 'user-1' });
-      const res = mockResponse();
+  it('400 for invalid status value', async () => {
+    const res = mockResponse();
+    const req = mockRequest(
+      { status: 'nope' },
+      { incidentId: SAMPLE_INCIDENT.incidentId }
+    );
 
-      await incidentReportController.getIncidentReportsByUser(
-        req,
-        res,
-        mockNext
-      );
-
-      expect(mockServiceInstance.findAllByUserId).toHaveBeenCalledWith(
-        'user-1'
-      );
-      expect(res.json).toHaveBeenCalledWith({
-        message: 'Incident reports for user',
-        data: mockIncidentReports,
-      });
-    });
-
-    it('should call next with NotFoundError if user not found', async () => {
-      mockServiceInstance.findAllByUserId.mockRejectedValue(
-        new NotFoundError('User not found')
-      );
-      const req = mockRequest({}, { userId: 'invalid' });
-      const res = mockResponse();
-
-      await incidentReportController.getIncidentReportsByUser(
-        req,
-        res,
-        mockNext
-      );
-
-      expect(mockNext).toHaveBeenCalledWith(expect.any(NotFoundError));
-      expect(res.json).not.toHaveBeenCalled();
+    await controller.updateIncident(req, res, mockNext);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({
+      message: 'Invalid status value',
+      data: null,
     });
   });
 
-  describe('getIncidentReportsByStatus', () => {
-    it('should return incident reports by status', async () => {
-      mockServiceInstance.findAllByStatus.mockResolvedValue(
-        mockIncidentReports
-      );
-      const req = mockRequest({}, { status: 'pending' });
-      const res = mockResponse();
+  it('removes incidentId from payload (immutable) and sanitizes description', async () => {
+    const res = mockResponse();
+    const dirty = `<script>alert(1)</script> clean`;
+    const req = mockRequest(
+      {
+        incidentId: 'should-be-ignored',
+        description: dirty,
+        status: 'acknowledged',
+      },
+      { incidentId: SAMPLE_INCIDENT.incidentId }
+    );
 
-      await incidentReportController.getIncidentReportsByStatus(
-        req,
-        res,
-        mockNext
-      );
-
-      expect(mockServiceInstance.findAllByStatus).toHaveBeenCalledWith(
-        'pending'
-      );
-      expect(res.json).toHaveBeenCalledWith({
-        message: 'Incident reports with status pending',
-        data: mockIncidentReports,
+    jest
+      .spyOn(incidentReportService, 'updateIncident')
+      .mockImplementation(async (_id, payload: any) => {
+        expect(_id).toBe(SAMPLE_INCIDENT.incidentId);
+        // 'incidentId' must be removed from payload
+        expect(payload.incidentId).toBeUndefined();
+        // sanitized
+        expect(typeof payload.description).toBe('string');
+        expect(payload.description).not.toMatch(/[<>]/);
+        return { ...SAMPLE_INCIDENT, ...payload } as IncidentReport;
       });
-    });
 
-    it('should call next with NotFoundError if no incidents found', async () => {
-      mockServiceInstance.findAllByStatus.mockRejectedValue(
-        new NotFoundError('No incidents found with this status')
-      );
-      const req = mockRequest({}, { status: 'fulfilled' });
-      const res = mockResponse();
+    await controller.updateIncident(req, res, mockNext);
 
-      await incidentReportController.getIncidentReportsByStatus(
-        req,
-        res,
-        mockNext
-      );
+    expect(incidentReportService.updateIncident).toHaveBeenCalledWith(
+      SAMPLE_INCIDENT.incidentId,
+      expect.any(Object)
+    );
+    expect(res.status).toHaveBeenCalledWith(200);
+  });
+});
 
-      expect(mockNext).toHaveBeenCalledWith(expect.any(NotFoundError));
-      expect(res.json).not.toHaveBeenCalled();
+/* -------------------------------------------------------------------------- */
+/*                                    DELETE                                  */
+/* -------------------------------------------------------------------------- */
+
+describe('deleteIncident', () => {
+  it('400 for invalid incidentId', async () => {
+    const res = mockResponse();
+    const req = mockRequest({}, { incidentId: 'nope' });
+
+    await controller.deleteIncident(req, res, mockNext);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({
+      message: 'Invalid incidentId (UUID)',
+      data: null,
     });
   });
 
-  describe('updateIncidentReportStatus', () => {
-    it('should update incident report status', async () => {
-      const updatedIncident = { ...mockIncidentReport, status: 'in_progress' };
-      mockServiceInstance.updateStatus.mockResolvedValue(updatedIncident);
-      const req = mockRequest(
-        { status: 'in_progress' },
-        { incidentId: 'incident-1' }
-      );
-      const res = mockResponse();
+  it('200 for valid id', async () => {
+    const res = mockResponse();
+    const req = mockRequest({}, { incidentId: SAMPLE_INCIDENT.incidentId });
 
-      await incidentReportController.updateIncidentReportStatus(
-        req,
-        res,
-        mockNext
-      );
+    jest.spyOn(incidentReportService, 'deleteIncident').mockResolvedValue();
 
-      expect(mockServiceInstance.updateStatus).toHaveBeenCalledWith(
-        'incident-1',
-        'in_progress'
-      );
-      expect(res.json).toHaveBeenCalledWith({
-        message: 'Incident report status updated',
-        data: updatedIncident,
-      });
-      expect(mockNext).not.toHaveBeenCalled();
+    await controller.deleteIncident(req, res, mockNext);
+
+    expect(incidentReportService.deleteIncident).toHaveBeenCalledWith(
+      SAMPLE_INCIDENT.incidentId
+    );
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({
+      message: 'Incident deleted',
+      data: null,
     });
+  });
+});
 
-    it('should call next with BadRequestError if status is missing', async () => {
-      const req = mockRequest({}, { incidentId: 'incident-1' });
-      const res = mockResponse();
+/* -------------------------------------------------------------------------- */
+/*                             STATUS TRANSITIONS                              */
+/* -------------------------------------------------------------------------- */
 
-      await incidentReportController.updateIncidentReportStatus(
-        req,
-        res,
-        mockNext
-      );
+describe('status transition handlers', () => {
+  const validId = SAMPLE_INCIDENT.incidentId;
 
-      expect(mockNext).toHaveBeenCalledTimes(1);
-      const errorArg = mockNext.mock.calls[0][0];
-      expect(errorArg).toBeInstanceOf(BadRequestError);
-      expect(errorArg.message).toBe('Status is required in request body');
-      expect(res.json).not.toHaveBeenCalled();
+  it('acknowledgeIncident → 400 for invalid UUID', async () => {
+    const res = mockResponse();
+    const req = mockRequest({}, { incidentId: 'bad' });
+
+    await controller.acknowledgeIncident(req, res, mockNext);
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  it('acknowledgeIncident → calls service with acknowledged', async () => {
+    const res = mockResponse();
+    const req = mockRequest({}, { incidentId: validId });
+
+    jest
+      .spyOn(incidentReportService, 'updateIncident')
+      .mockResolvedValue({ ...SAMPLE_INCIDENT, status: 'acknowledged' });
+
+    await controller.acknowledgeIncident(req, res, mockNext);
+    expect(incidentReportService.updateIncident).toHaveBeenCalledWith(validId, {
+      status: 'acknowledged',
     });
+    expect(res.status).toHaveBeenCalledWith(200);
+  });
 
-    it('should call next with BadRequestError if status is invalid', async () => {
-      const req = mockRequest(
-        { status: 'invalid_status' },
-        { incidentId: 'incident-1' }
-      );
-      const res = mockResponse();
+  it('startProgress → calls service with in_progress', async () => {
+    const res = mockResponse();
+    const req = mockRequest({}, { incidentId: validId });
 
-      await incidentReportController.updateIncidentReportStatus(
-        req,
-        res,
-        mockNext
-      );
+    jest
+      .spyOn(incidentReportService, 'updateIncident')
+      .mockResolvedValue({ ...SAMPLE_INCIDENT, status: 'in_progress' });
 
-      expect(mockNext).toHaveBeenCalledTimes(1);
-      const errorArg = mockNext.mock.calls[0][0];
-      expect(errorArg).toBeInstanceOf(BadRequestError);
-      expect(errorArg.message).toBe(
-        'Status must be one of: pending, in_progress, fulfilled'
-      );
-      expect(res.json).not.toHaveBeenCalled();
-    });
-
-    it('should call next with NotFoundError if incident not found', async () => {
-      mockServiceInstance.updateStatus.mockRejectedValue(
-        new NotFoundError('Incident report not found')
-      );
-      const req = mockRequest(
-        { status: 'fulfilled' },
-        { incidentId: 'invalid' }
-      );
-      const res = mockResponse();
-
-      await incidentReportController.updateIncidentReportStatus(
-        req,
-        res,
-        mockNext
-      );
-
-      expect(mockNext).toHaveBeenCalledWith(expect.any(NotFoundError));
-      expect(res.json).not.toHaveBeenCalled();
+    await controller.startProgress(req, res, mockNext);
+    expect(incidentReportService.updateIncident).toHaveBeenCalledWith(validId, {
+      status: 'in_progress',
     });
   });
 
-  describe('searchIncidentReports', () => {
-    it('should return incident reports matching the search criteria', async () => {
-      mockServiceInstance.search.mockResolvedValue(mockIncidentReports);
-      const req = mockRequest(
-        {},
-        {},
-        {
-          title: 'broken',
-          status: 'pending',
-          limit: '10',
-        }
-      );
-      const res = mockResponse();
+  it('resolveIncident → calls service with resolved', async () => {
+    const res = mockResponse();
+    const req = mockRequest({}, { incidentId: validId });
 
-      await incidentReportController.searchIncidentReports(req, res, mockNext);
+    jest
+      .spyOn(incidentReportService, 'updateIncident')
+      .mockResolvedValue({ ...SAMPLE_INCIDENT, status: 'resolved' });
 
-      expect(mockServiceInstance.search).toHaveBeenCalledWith(
-        { title: 'broken', status: 'pending' },
-        { limit: 10 }
-      );
-      expect(res.json).toHaveBeenCalledWith({
-        message: 'Incident reports search results',
-        data: mockIncidentReports,
-      });
-      expect(mockNext).not.toHaveBeenCalled();
-    });
-
-    it('should search with date range parameters', async () => {
-      mockServiceInstance.search.mockResolvedValue(mockIncidentReports);
-      const req = mockRequest(
-        {},
-        {},
-        {
-          dateFrom: '2025-01-01',
-          dateTo: '2025-01-31',
-          theaterId: 'theater-1',
-        }
-      );
-      const res = mockResponse();
-
-      await incidentReportController.searchIncidentReports(req, res, mockNext);
-
-      expect(mockServiceInstance.search).toHaveBeenCalledWith(
-        {
-          dateFrom: new Date('2025-01-01'),
-          dateTo: new Date('2025-01-31'),
-          theaterId: 'theater-1',
-        },
-        {}
-      );
-    });
-
-    it('should call next with BadRequestError if no search parameters provided', async () => {
-      const req = mockRequest({}, {}, {});
-      const res = mockResponse();
-
-      await incidentReportController.searchIncidentReports(req, res, mockNext);
-
-      expect(mockNext).toHaveBeenCalledTimes(1);
-      const errorArg = mockNext.mock.calls[0][0];
-      expect(errorArg).toBeInstanceOf(BadRequestError);
-      expect(errorArg.message).toBe(
-        'At least one search parameter is required'
-      );
-      expect(res.json).not.toHaveBeenCalled();
-    });
-
-    it('should call next if search fails', async () => {
-      mockServiceInstance.search.mockRejectedValue(new Error('Search failed'));
-      const req = mockRequest({}, {}, { title: 'broken' });
-      const res = mockResponse();
-
-      await incidentReportController.searchIncidentReports(req, res, mockNext);
-
-      expect(mockNext).toHaveBeenCalledWith(expect.any(Error));
+    await controller.resolveIncident(req, res, mockNext);
+    expect(incidentReportService.updateIncident).toHaveBeenCalledWith(validId, {
+      status: 'resolved',
     });
   });
 
-  describe('getIncidentReportStatistics', () => {
-    it('should return incident report statistics', async () => {
-      mockServiceInstance.getStatistics.mockResolvedValue(mockStatistics);
-      const req = mockRequest();
-      const res = mockResponse();
+  it('closeIncident → calls service with closed', async () => {
+    const res = mockResponse();
+    const req = mockRequest({}, { incidentId: validId });
 
-      await incidentReportController.getIncidentReportStatistics(
-        req,
-        res,
-        mockNext
-      );
+    jest
+      .spyOn(incidentReportService, 'updateIncident')
+      .mockResolvedValue({ ...SAMPLE_INCIDENT, status: 'closed' });
 
-      expect(mockServiceInstance.getStatistics).toHaveBeenCalledWith(undefined);
-      expect(res.json).toHaveBeenCalledWith({
-        message: 'Incident report statistics',
-        data: mockStatistics,
-      });
-      expect(mockNext).not.toHaveBeenCalled();
+    await controller.closeIncident(req, res, mockNext);
+    expect(incidentReportService.updateIncident).toHaveBeenCalledWith(validId, {
+      status: 'closed',
     });
+  });
+});
 
-    it('should return statistics filtered by theater', async () => {
-      const theaterStats = {
-        total: 5,
-        pending: 2,
-        inProgress: 2,
-        fulfilled: 1,
-      };
-      mockServiceInstance.getStatistics.mockResolvedValue(theaterStats);
-      const req = mockRequest({}, {}, { theaterId: 'theater-1' });
-      const res = mockResponse();
+/* -------------------------------------------------------------------------- */
+/*                                   SEARCH                                   */
+/* -------------------------------------------------------------------------- */
 
-      await incidentReportController.getIncidentReportStatistics(
-        req,
-        res,
-        mockNext
-      );
+describe('searchIncidents', () => {
+  it('400 for invalid status / uuids / ids', async () => {
+    const res = mockResponse();
+    const req = mockRequest(
+      {},
+      {},
+      {
+        status: 'nope',
+        createdBy: 'bad',
+        incidentId: 'bad',
+        theaterId: 'A',
+        hallId: '',
+      }
+    );
 
-      expect(mockServiceInstance.getStatistics).toHaveBeenCalledWith(
-        'theater-1'
-      );
-      expect(res.json).toHaveBeenCalledWith({
-        message: 'Incident report statistics',
-        data: theaterStats,
-      });
+    await controller.searchIncidents(req, res, mockNext);
+    // The first invalidity triggers an early 400; we only assert 400 was returned
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  it('400 for invalid dates', async () => {
+    const res = mockResponse();
+    const req = mockRequest(
+      {},
+      {},
+      {
+        createdAtFrom: 'not-a-date',
+      }
+    );
+
+    await controller.searchIncidents(req, res, mockNext);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({
+      message: 'Invalid date for createdAtFrom',
+      data: null,
     });
+  });
 
-    it('should call next if error thrown', async () => {
-      mockServiceInstance.getStatistics.mockRejectedValue(
-        new Error('Stats error')
-      );
-      const req = mockRequest();
-      const res = mockResponse();
+  it('200 and passes filters to service', async () => {
+    const res = mockResponse();
+    const req = mockRequest(
+      {},
+      {},
+      {
+        q: 'noise',
+        status: 'in_progress',
+        theaterId: 'UGC',
+        hallId: 'H1',
+        createdBy: '33333333-3333-4333-8333-333333333333',
+        incidentId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa10',
+        createdAtFrom: '2025-01-01T00:00:00Z',
+        createdAtTo: '2025-01-31T23:59:59Z',
+        updatedAtFrom: '2025-02-01T00:00:00Z',
+        updatedAtTo: '2025-02-28T23:59:59Z',
+      }
+    );
 
-      await incidentReportController.getIncidentReportStatistics(
-        req,
-        res,
-        mockNext
-      );
+    jest.spyOn(incidentReportService, 'searchIncidents').mockResolvedValue([]);
 
-      expect(mockNext).toHaveBeenCalledWith(expect.any(Error));
+    await controller.searchIncidents(req, res, mockNext);
+
+    expect(incidentReportService.searchIncidents).toHaveBeenCalledWith(
+      'noise',
+      expect.objectContaining({
+        status: 'in_progress',
+        theaterId: 'UGC',
+        hallId: 'H1',
+        createdBy: '33333333-3333-4333-8333-333333333333',
+        incidentId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa10',
+        createdAtFrom: new Date('2025-01-01T00:00:00Z'),
+        createdAtTo: new Date('2025-01-31T23:59:59Z'),
+        updatedAtFrom: new Date('2025-02-01T00:00:00Z'),
+        updatedAtTo: new Date('2025-02-28T23:59:59Z'),
+      })
+    );
+
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({
+      message: 'Search results',
+      data: [],
     });
   });
 });

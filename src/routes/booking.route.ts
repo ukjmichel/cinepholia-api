@@ -11,14 +11,13 @@ import {
   markBookingAsUsed,
   cancelBooking,
   getBookingById,
-  restrictSearch,
+  getUpcomingBookingsByUser,
 } from '../controllers/booking.controller.js';
 import {
   createBookingValidator,
   updateBookingValidator,
   bookingIdParamValidator,
   searchBookingValidator,
-  restrictSearchValidator,
 } from '../validators/booking.validator.js';
 import { userIdParamValidator } from '../validators/user.validator.js';
 import { screeningIdParamValidator } from '../validators/screening.validator.js';
@@ -26,6 +25,7 @@ import { handleValidationError } from '../middlewares/handleValidatonError.middl
 import { decodeJwtToken } from '../middlewares/auth.middleware.js';
 import { permission } from '../middlewares/permission.js';
 import { generateTicket } from '../controllers/generate-ticket.controller.js';
+import { getBookedSeatsByScreeningId } from '../controllers/booked-seat.controller.js';
 
 const router = express.Router();
 
@@ -59,10 +59,10 @@ const router = express.Router();
  */
 router.post(
   '/',
-  decodeJwtToken,
-  permission.canCreateBooking,
   createBookingValidator,
   handleValidationError,
+  decodeJwtToken,
+  permission.canCreateBooking,
   createBooking
 );
 
@@ -70,97 +70,18 @@ router.post(
  * @swagger
  * /bookings/search:
  *   get:
- *     summary: Search all bookings by query or filters (admin/staff only)
- *     description: Returns bookings matching the query. Supports filters by status, userId, screeningId, seatsNumber, totalPrice, and bookingDate.
+ *     summary: Search bookings by query string (status, userId, screeningId)
  *     tags: [Bookings]
- *     security:
- *       - bearerAuth: []
  *     parameters:
  *       - in: query
  *         name: q
  *         schema:
  *           type: string
- *         required: false
- *         description: Global search string (matches bookingId, status, userId, etc.)
- *       - in: query
- *         name: status
- *         schema:
- *           type: string
- *         required: false
- *         description: Filter by booking status
- *       - in: query
- *         name: userId
- *         schema:
- *           type: string
- *         required: false
- *         description: Filter by user ID
- *       - in: query
- *         name: screeningId
- *         schema:
- *           type: string
- *         required: false
- *         description: Filter by screening ID
- *       - in: query
- *         name: bookingDate
- *         schema:
- *           type: string
- *           format: date
- *         required: false
- *         description: Filter by booking creation date (YYYY-MM-DD)
+ *         required: true
+ *         description: Search query
  *     responses:
  *       200:
- *         description: Bookings matching search criteria
- *       400:
- *         description: Bad request (missing or invalid parameter)
- */
-router.get(
-  '/search',
-  decodeJwtToken,
-  permission.isStaff,
-  searchBookingValidator,
-  handleValidationError,
-  searchBooking
-);
-
-/**
- * @swagger
- * /bookings/restrict-search:
- *   get:
- *     summary: Get bookings for the authenticated user, filtered by screening date, booking date, and/or booking status
- *     description: >
- *       Returns bookings for the user identified by their JWT token.
- *       - Use `screeningDate` to filter by the date of the movie screening (YYYY-MM-DD).
- *       - Use `date` to filter by the date the booking was created (YYYY-MM-DD).
- *       - Use `status` to filter by booking status.
- *       All filters are optional and can be combined.
- *     tags: [Bookings]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: query
- *         name: screeningDate
- *         schema:
- *           type: string
- *           format: date
- *         required: false
- *         description: Filter by the date of the screening (YYYY-MM-DD). Returns bookings where the screening occurs on this date.
- *       - in: query
- *         name: date
- *         schema:
- *           type: string
- *           format: date
- *         required: false
- *         description: Filter by the date the booking was created (YYYY-MM-DD).
- *       - in: query
- *         name: status
- *         schema:
- *           type: string
- *           enum: [pending, used, canceled]
- *         required: false
- *         description: Filter by booking status.
- *     responses:
- *       200:
- *         description: Bookings found for the authenticated user with the given filters.
+ *         description: Bookings found
  *         content:
  *           application/json:
  *             schema:
@@ -173,29 +94,21 @@ router.get(
  *                   items:
  *                     $ref: '#/components/schemas/Booking'
  *       400:
- *         description: Bad request (missing or invalid parameters)
- *       404:
- *         description: No bookings found
- *       401:
- *         description: Unauthorized (JWT missing or invalid)
+ *         description: Bad request (missing or invalid q parameter)
  */
 router.get(
-  '/restrict-search',
-  decodeJwtToken,
-  restrictSearchValidator, 
+  '/search',
+  searchBookingValidator,
   handleValidationError,
-  restrictSearch
+  searchBooking
 );
-
 
 /**
  * @swagger
  * /bookings:
  *   get:
- *     summary: Get all bookings (staff only)
+ *     summary: Get all bookings
  *     tags: [Bookings]
- *     security:
- *       - bearerAuth: []
  *     responses:
  *       200:
  *         description: List of bookings
@@ -211,22 +124,14 @@ router.get(
  *                   items:
  *                     $ref: '#/components/schemas/Booking'
  */
-router.get(
-  '/',
-  decodeJwtToken,
-  permission.isStaff,
-  handleValidationError,
-  getAllBookings
-);
+router.get('/', getAllBookings);
 
 /**
  * @swagger
  * /bookings/{bookingId}:
  *   get:
- *     summary: Get a booking by ID (owner or staff)
+ *     summary: Get a booking by ID
  *     tags: [Bookings]
- *     security:
- *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: bookingId
@@ -246,8 +151,6 @@ router.get(
  */
 router.get(
   '/:bookingId',
-  decodeJwtToken,
-  permission.canAccessBooking,
   bookingIdParamValidator,
   handleValidationError,
   getBookingById
@@ -257,7 +160,7 @@ router.get(
  * @swagger
  * /bookings/{bookingId}:
  *   patch:
- *     summary: Update a booking (owner or staff)
+ *     summary: Update a booking (staff only)
  *     tags: [Bookings]
  *     security:
  *       - bearerAuth: []
@@ -290,11 +193,11 @@ router.get(
  */
 router.patch(
   '/:bookingId',
-  decodeJwtToken,
-  permission.canAccessBooking,
   bookingIdParamValidator,
   updateBookingValidator,
   handleValidationError,
+  decodeJwtToken,
+  permission.isStaff, // only staff can update
   updateBooking
 );
 
@@ -329,10 +232,10 @@ router.patch(
  */
 router.patch(
   '/:bookingId/used',
-  decodeJwtToken,
-  permission.isStaff,
   bookingIdParamValidator,
   handleValidationError,
+  decodeJwtToken,
+  permission.isStaff, // only staff can mark as used
   markBookingAsUsed
 );
 
@@ -367,10 +270,10 @@ router.patch(
  */
 router.patch(
   '/:bookingId/cancel',
-  decodeJwtToken,
-  permission.canAccessBooking,
   bookingIdParamValidator,
   handleValidationError,
+  decodeJwtToken,
+  permission.canAccessBooking, // owner or staff can cancel
   cancelBooking
 );
 
@@ -378,7 +281,7 @@ router.patch(
  * @swagger
  * /bookings/{bookingId}:
  *   delete:
- *     summary: Delete a booking (owner or staff)
+ *     summary: Delete a booking (ownership or staff only)
  *     tags: [Bookings]
  *     security:
  *       - bearerAuth: []
@@ -401,10 +304,10 @@ router.patch(
  */
 router.delete(
   '/:bookingId',
-  decodeJwtToken,
-  permission.canAccessBooking,
   bookingIdParamValidator,
   handleValidationError,
+  decodeJwtToken,
+  permission.canAccessBooking,
   deleteBooking
 );
 
@@ -412,10 +315,8 @@ router.delete(
  * @swagger
  * /bookings/user/{userId}:
  *   get:
- *     summary: Get all bookings for a specific user (owner or staff)
+ *     summary: Get all bookings for a specific user
  *     tags: [Bookings]
- *     security:
- *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: userId
@@ -440,8 +341,6 @@ router.delete(
  */
 router.get(
   '/user/:userId',
-  decodeJwtToken,
-  permission.isOwnerOrStaff,
   userIdParamValidator,
   handleValidationError,
   getBookingsByUser
@@ -451,10 +350,8 @@ router.get(
  * @swagger
  * /bookings/screening/{screeningId}:
  *   get:
- *     summary: Get all bookings for a screening (staff only)
+ *     summary: Get all bookings for a screening
  *     tags: [Bookings]
- *     security:
- *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: screeningId
@@ -479,8 +376,6 @@ router.get(
  */
 router.get(
   '/screening/:screeningId',
-  decodeJwtToken,
-  permission.isStaff,
   screeningIdParamValidator,
   handleValidationError,
   getBookingsByScreening
@@ -490,10 +385,8 @@ router.get(
  * @swagger
  * /bookings/status/{status}:
  *   get:
- *     summary: Get bookings by status (staff only)
+ *     summary: Get bookings by status
  *     tags: [Bookings]
- *     security:
- *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: status
@@ -517,43 +410,57 @@ router.get(
  *                   items:
  *                     $ref: '#/components/schemas/Booking'
  */
-router.get(
-  '/status/:status',
-  decodeJwtToken,
-  permission.isStaff,
-  handleValidationError,
-  getBookingsByStatus
-);
+router.get('/status/:status', handleValidationError, getBookingsByStatus);
 
 /**
  * @swagger
- * /bookings/{bookingId}/ticket:
+ * /bookings/user/{userId}/upcoming:
  *   get:
- *     summary: Generate a ticket for a booking (owner or staff)
+ *     summary: Get all upcoming bookings for a user (screening is today or in the future)
  *     tags: [Bookings]
  *     security:
  *       - bearerAuth: []
  *     parameters:
  *       - in: path
- *         name: bookingId
+ *         name: userId
  *         schema:
  *           type: string
  *         required: true
- *         description: UUID of the booking
+ *         description: UUID of the user
  *     responses:
  *       200:
- *         description: Ticket generated
+ *         description: Upcoming bookings for the user
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/Booking'
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Booking'
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden (if not self or staff)
  */
 router.get(
-  '/:bookingId/ticket',
+  '/user/:userId/upcoming',
   decodeJwtToken,
-  permission.canAccessBooking,
+  permission.isSelfOrStaff,
+  userIdParamValidator,
+  handleValidationError,
+  getUpcomingBookingsByUser
+);
+
+router.get(
+  '/:bookingId/ticket',
   bookingIdParamValidator,
   handleValidationError,
+  decodeJwtToken,
+  permission.canAccessBooking,
   generateTicket
 );
 

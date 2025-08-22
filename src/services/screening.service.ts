@@ -1,3 +1,13 @@
+/**
+ * @fileoverview Service for managing movie screenings (CRUD, conflict detection, search).
+ *
+ * Features:
+ * - Create, read, update, delete screenings with transactional integrity
+ * - Check time overlap per hall to prevent scheduling conflicts
+ * - Rich queries and filters (by movie, theater, hall, date, text, etc.)
+ *
+ */ 
+
 import {
   ScreeningModel,
   ScreeningAttributes,
@@ -11,18 +21,16 @@ import { MovieTheaterModel } from '../models/movie-theater.model.js';
 import { MovieHallModel } from '../models/movie-hall.model.js';
 import { ConflictError } from '../errors/conflict-error.js';
 
-/**
- * Service for managing movie screenings (CRUD, conflict checking, search, etc).
- */
 export class ScreeningService {
   // === CRUD ===
 
   /**
    * Get a screening by its ID, including related movie, theater, and hall.
-   * @param screeningId - Screening unique identifier.
-   * @param transaction - Optional Sequelize transaction.
-   * @returns The found screening with relations.
-   * @throws NotFoundError If the screening does not exist.
+   *
+   * @param {string} screeningId - Screening unique identifier.
+   * @param {Transaction} [transaction] - Optional Sequelize transaction.
+   * @returns {Promise<ScreeningModel>} The found screening with relations.
+   * @throws {NotFoundError} If the screening does not exist.
    */
   async getScreeningById(
     screeningId: string,
@@ -40,10 +48,11 @@ export class ScreeningService {
 
   /**
    * Create a new screening, ensuring no overlap in the same hall.
-   * @param payload - Screening details.
-   * @returns The created screening.
-   * @throws NotFoundError If the movie or hall does not exist.
-   * @throws ConflictError If there is a schedule conflict in the hall.
+   *
+   * @param {ScreeningCreationAttributes} payload - Screening details.
+   * @returns {Promise<ScreeningModel>} The created screening.
+   * @throws {NotFoundError} If the movie or hall does not exist.
+   * @throws {ConflictError} If there is a schedule conflict in the hall.
    */
   async createScreening(
     payload: ScreeningCreationAttributes
@@ -63,13 +72,13 @@ export class ScreeningService {
   }
 
   /**
-   * Update an existing screening.
-   * Checks for existence and time overlap (except itself).
-   * @param screeningId - Screening unique identifier.
-   * @param update - Fields to update.
-   * @returns The updated screening.
-   * @throws NotFoundError If the screening, movie, or hall does not exist.
-   * @throws ConflictError If there is a schedule conflict in the hall.
+   * Update an existing screening and re-check for time overlap (excluding itself).
+   *
+   * @param {string} screeningId - Screening unique identifier.
+   * @param {Partial<ScreeningAttributes>} update - Fields to update.
+   * @returns {Promise<ScreeningModel>} The updated screening.
+   * @throws {NotFoundError} If the screening, movie, or hall does not exist.
+   * @throws {ConflictError} If there is a schedule conflict in the hall.
    */
   async updateScreening(
     screeningId: string,
@@ -82,15 +91,16 @@ export class ScreeningService {
       if (!screening) {
         throw new NotFoundError(`Screening with id ${screeningId} not found`);
       }
-      // Calculate values to validate: prefer update payload, fallback to current
+
+      // Determine values to validate: prefer update payload, fallback to current
       const movieId = update.movieId ?? screening.movieId;
       const theaterId = update.theaterId ?? screening.theaterId;
       const hallId = update.hallId ?? screening.hallId;
       const startTime = update.startTime ?? screening.startTime;
-      // Check movie/hall existence
+
       const movie = await this.getMovieOrThrow(movieId, t);
       await this.ensureHallExists(theaterId, hallId, t);
-      // Check overlap (excluding this screening)
+
       await this.assertNoOverlap({
         hallId,
         theaterId,
@@ -99,6 +109,7 @@ export class ScreeningService {
         t,
         screeningIdToExclude: screeningId,
       });
+
       await screening.update(update, { transaction: t });
       return screening;
     });
@@ -106,9 +117,11 @@ export class ScreeningService {
 
   /**
    * Delete a screening by its ID.
-   * @param screeningId - Screening unique identifier.
-   * @returns void
-   * @throws NotFoundError If the screening does not exist.
+   *
+   * @param {string} screeningId - Screening unique identifier.
+   * @param {Transaction} [transaction] - Optional Sequelize transaction.
+   * @returns {Promise<void>}
+   * @throws {NotFoundError} If the screening does not exist.
    */
   async deleteScreening(
     screeningId: string,
@@ -134,9 +147,10 @@ export class ScreeningService {
   // === FILTERS / GETTERS ===
 
   /**
-   * Get all screenings, ordered by start time.
-   * @param transaction - Optional Sequelize transaction.
-   * @returns List of all screenings with related movie, theater, and hall.
+   * Get all screenings, ordered by start time (ascending).
+   *
+   * @param {Transaction} [transaction] - Optional Sequelize transaction.
+   * @returns {Promise<ScreeningModel[]>} List of screenings with related movie, theater, and hall.
    */
   async getAllScreenings(transaction?: Transaction): Promise<ScreeningModel[]> {
     return ScreeningModel.findAll({
@@ -148,9 +162,10 @@ export class ScreeningService {
 
   /**
    * Get all screenings for a given movie.
-   * @param movieId - Movie unique identifier.
-   * @param transaction - Optional Sequelize transaction.
-   * @returns List of screenings for the movie.
+   *
+   * @param {string} movieId - Movie unique identifier.
+   * @param {Transaction} [transaction] - Optional Sequelize transaction.
+   * @returns {Promise<ScreeningModel[]>} List of screenings for the movie.
    */
   async getScreeningsByMovieId(
     movieId: string,
@@ -166,9 +181,10 @@ export class ScreeningService {
 
   /**
    * Get all screenings for a given theater.
-   * @param theaterId - Theater unique identifier.
-   * @param transaction - Optional Sequelize transaction.
-   * @returns List of screenings for the theater.
+   *
+   * @param {string} theaterId - Theater unique identifier.
+   * @param {Transaction} [transaction] - Optional Sequelize transaction.
+   * @returns {Promise<ScreeningModel[]>} List of screenings for the theater.
    */
   async getScreeningsByTheaterId(
     theaterId: string,
@@ -184,10 +200,11 @@ export class ScreeningService {
 
   /**
    * Get all screenings for a given hall (optionally filtered by theater).
-   * @param hallId - Hall unique identifier.
-   * @param theaterId - Optional theater unique identifier.
-   * @param transaction - Optional Sequelize transaction.
-   * @returns List of screenings for the hall.
+   *
+   * @param {string} hallId - Hall unique identifier.
+   * @param {string} [theaterId] - Optional theater unique identifier.
+   * @param {Transaction} [transaction] - Optional Sequelize transaction.
+   * @returns {Promise<ScreeningModel[]>} List of screenings for the hall.
    */
   async getScreeningsByHallId(
     hallId: string,
@@ -203,10 +220,11 @@ export class ScreeningService {
   }
 
   /**
-   * Get all screenings for a specific date (UTC).
-   * @param date - The date to filter by.
-   * @param transaction - Optional Sequelize transaction.
-   * @returns List of screenings on the date.
+   * Get all screenings for a specific date (server time, 00:00:00–23:59:59.999).
+   *
+   * @param {Date} date - The date to filter by.
+   * @param {Transaction} [transaction] - Optional Sequelize transaction.
+   * @returns {Promise<ScreeningModel[]>} List of screenings on the date.
    */
   async getScreeningsByDate(
     date: Date,
@@ -228,11 +246,19 @@ export class ScreeningService {
   }
 
   /**
-   * Global search for screenings (multi-criteria, full-text, by movie, theater, hall, etc).
-   * Accepts free text and structured filters.
-   * @param filters - Filter and query parameters.
-   * @param transaction - Optional Sequelize transaction.
-   * @returns List of matching screenings.
+   * Global search for screenings (multi-criteria & text).
+   *
+   * Supported filters:
+   * - movieId, theaterId, hallId
+   * - startTime or date (YYYY-MM-DD, expands to the day range)
+   * - priceMin, priceMax
+   * - quality (LIKE)
+   * - recommended (boolean string 'true'|'false'|'1'|'0')
+   * - q (global LIKE across movie, theater, hall fields)
+   *
+   * @param {any} filters - Filter and query parameters.
+   * @param {Transaction} [transaction] - Optional Sequelize transaction.
+   * @returns {Promise<ScreeningModel[]>} List of matching screenings.
    */
   async searchScreenings(
     filters: any,
@@ -256,6 +282,7 @@ export class ScreeningService {
         ...(where.price || {}),
         [Op.lte]: Number(filters.priceMax),
       };
+
     if (filters.date) {
       const date = filters.date;
       where.startTime = {
@@ -301,8 +328,13 @@ export class ScreeningService {
   // === PRIVATE HELPERS ===
 
   /**
-   * Throws NotFoundError if movie does not exist.
+   * Ensure the movie exists or throw.
+   *
    * @private
+   * @param {string} movieId - Movie ID to check.
+   * @param {Transaction} t - Transaction.
+   * @returns {Promise<MovieModel>} The found movie.
+   * @throws {NotFoundError} If the movie is not found.
    */
   private async getMovieOrThrow(movieId: string, t: Transaction) {
     const movie = await MovieModel.findByPk(movieId, { transaction: t });
@@ -311,8 +343,14 @@ export class ScreeningService {
   }
 
   /**
-   * Throws NotFoundError if hall does not exist for a given theater.
+   * Ensure the hall exists for the given theater or throw.
+   *
    * @private
+   * @param {string} theaterId - Theater ID.
+   * @param {string} hallId - Hall ID.
+   * @param {Transaction} t - Transaction.
+   * @returns {Promise<MovieHallModel>} The found hall.
+   * @throws {NotFoundError} If the hall is not found.
    */
   private async ensureHallExists(
     theaterId: string,
@@ -328,9 +366,21 @@ export class ScreeningService {
   }
 
   /**
-   * Checks for overlapping screenings. Throws ConflictError if overlap found.
-   * If updating, pass screeningIdToExclude to ignore the current screening.
+   * Check for overlapping screenings in the same hall/time window.
+   * Throws ConflictError if an overlap is found.
+   *
+   * If updating, pass `screeningIdToExclude` to ignore the current screening.
+   *
    * @private
+   * @param {object} params - Overlap params.
+   * @param {string} params.hallId - Hall ID.
+   * @param {string} params.theaterId - Theater ID.
+   * @param {Date} params.startTime - Proposed start time.
+   * @param {number} params.durationMinutes - Duration of the movie (minutes).
+   * @param {Transaction} params.t - Transaction.
+   * @param {string} [params.screeningIdToExclude] - Screening ID to ignore during update.
+   * @returns {Promise<void>}
+   * @throws {ConflictError} If an overlap is detected.
    */
   private async assertNoOverlap({
     hallId,
@@ -367,7 +417,6 @@ export class ScreeningService {
       const existingEnd = new Date(
         existingStart.getTime() + existingDuration * 60 * 1000
       );
-      // Check for time overlap
       if (existingStart < newEnd && existingEnd > newStart) {
         throw new ConflictError(
           `Hall is occupied: overlaps with screening '${screening.movie.title}' from ${existingStart.toISOString()} to ${existingEnd.toISOString()}`

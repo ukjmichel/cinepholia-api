@@ -1,12 +1,33 @@
 /**
- * Contrôleur des salles de cinéma (Movie Hall Controller)
+ * @module controllers/movie-hall.controller
  *
- * Fournit les handlers Express pour la gestion des salles de cinéma, incluant la création,
- * la liste (avec pagination), la récupération par clé composite, la mise à jour, la suppression,
- * et la recherche. Utilise MovieHallService pour toute la logique métier et l’accès aux données.
+ * @description
+ * Express controller for managing cinema halls.
  *
- * Tous les handlers délèguent la gestion des erreurs au middleware Express.
+ * @features
+ * - Create a new hall.
+ * - List all halls with optional pagination.
+ * - Get all halls for a specific theater.
+ * - Retrieve a hall by its composite key (theaterId + hallId).
+ * - Update hall details.
+ * - Delete a hall.
+ * - Search halls by `theaterId` or `hallId`.
  *
+ * @response
+ * All endpoints return JSON in the following format:
+ * ```json
+ * {
+ *   "message": "Short description of the result",
+ *   "data": { ... } | [ ... ] | null
+ * }
+ * ```
+ * - `message`: Human-readable description of the operation result.
+ * - `data`: An object, array, or `null` (for deletions or no matches found).
+ *
+ * @dependencies
+ * - `movieHallService`: Business logic and database operations for halls.
+ * - `NotFoundError`: Thrown when the requested hall is not found.
+ * - `BadRequestError`: Thrown when provided input is invalid.
  */
 
 import { Request, Response, NextFunction } from 'express';
@@ -15,11 +36,12 @@ import { MovieHallService } from '../services/movie-hall.service.js';
 const service = new MovieHallService();
 
 /**
- * Creates a new movie hall.
- * @param {Request} req - Express request (body: MovieHall info)
- * @param {Response} res - Express response
- * @param {NextFunction} next - Express next middleware
- * @returns {Promise<void>}
+ * Create a new movie hall.
+ *
+ * @param {Request} req - Express request containing hall data in `body`.
+ * @param {Response} res - Express response used to send the created hall data.
+ * @param {NextFunction} next - Express error handler callback.
+ * @returns {Promise<void>} A promise resolving to a JSON response with the created hall.
  */
 export async function createMovieHall(
   req: Request,
@@ -28,18 +50,19 @@ export async function createMovieHall(
 ) {
   try {
     const hall = await service.create(req.body);
-    res.status(201).json(hall);
+    res.status(201).json({ message: 'Movie hall created', data: hall });
   } catch (err) {
     next(err);
   }
 }
 
 /**
- * Returns all movie halls, optionally paginated with ?limit= and ?offset=.
- * @param {Request} req - Express request (query: limit, offset)
- * @param {Response} res - Express response
- * @param {NextFunction} next - Express next middleware
- * @returns {Promise<void>}
+ * Get all movie halls, optionally paginated using `limit` and `offset` query parameters.
+ *
+ * @param {Request} req - Express request with optional `limit` and `offset` query parameters.
+ * @param {Response} res - Express response used to send the list of halls.
+ * @param {NextFunction} next - Express error handler callback.
+ * @returns {Promise<void>} A promise resolving to a JSON response with the list of halls.
  */
 export async function getAllMovieHalls(
   req: Request,
@@ -52,18 +75,19 @@ export async function getAllMovieHalls(
       limit: limit ? Number(limit) : undefined,
       offset: offset ? Number(offset) : undefined,
     });
-    res.json(halls);
+    res.json({ message: 'All movie halls', data: halls });
   } catch (err) {
     next(err);
   }
 }
 
 /**
- * Returns all movie halls for a specific theater.
- * @param {Request} req - Express request (params: theaterId)
- * @param {Response} res - Express response
- * @param {NextFunction} next - Express next middleware
- * @returns {Promise<void>}
+ * Get all movie halls for a given theater.
+ *
+ * @param {Request} req - Express request containing `theaterId` in route parameters.
+ * @param {Response} res - Express response used to send the list of halls.
+ * @param {NextFunction} next - Express error handler callback.
+ * @returns {Promise<void>} A promise resolving to a JSON response with the halls for the theater.
  */
 export async function getMovieHallsByTheater(
   req: Request,
@@ -72,18 +96,22 @@ export async function getMovieHallsByTheater(
 ) {
   try {
     const halls = await service.findAllByTheaterId(req.params.theaterId);
-    res.json(halls);
+    res.json({
+      message: `Movie halls for theater ${req.params.theaterId}`,
+      data: halls,
+    });
   } catch (err) {
     next(err);
   }
 }
 
 /**
- * Returns a single hall by theaterId and hallId.
- * @param {Request} req - Express request (params: theaterId, hallId)
- * @param {Response} res - Express response
- * @param {NextFunction} next - Express next middleware
- * @returns {Promise<void>}
+ * Get a single hall by composite key (`theaterId` + `hallId`).
+ *
+ * @param {Request} req - Express request containing `theaterId` and `hallId` in route parameters.
+ * @param {Response} res - Express response used to send the hall data.
+ * @param {NextFunction} next - Express error handler callback.
+ * @returns {Promise<void>} A promise resolving to a JSON response with the hall data.
  */
 export async function getMovieHall(
   req: Request,
@@ -95,18 +123,22 @@ export async function getMovieHall(
       req.params.theaterId,
       req.params.hallId
     );
-    res.json(hall);
+    res.json({
+      message: 'Movie hall found',
+      data: hall,
+    });
   } catch (err) {
     next(err);
   }
 }
 
 /**
- * Updates a hall by theaterId and hallId.
- * @param {Request} req - Express request (params: theaterId, hallId; body: fields to update)
- * @param {Response} res - Express response
- * @param {NextFunction} next - Express next middleware
- * @returns {Promise<void>}
+ * Update a hall by composite key (`theaterId` + `hallId`).
+ *
+ * @param {Request} req - Express request containing hall update data in `body` and `theaterId`, `hallId` in route parameters.
+ * @param {Response} res - Express response used to send the updated hall data.
+ * @param {NextFunction} next - Express error handler callback.
+ * @returns {Promise<void>} A promise resolving to a JSON response with the updated hall.
  */
 export async function updateMovieHall(
   req: Request,
@@ -119,18 +151,19 @@ export async function updateMovieHall(
       req.params.hallId,
       req.body
     );
-    res.json(hall);
+    res.json({ message: 'Movie hall updated', data: hall });
   } catch (err) {
     next(err);
   }
 }
 
 /**
- * Deletes a hall by theaterId and hallId.
- * @param {Request} req - Express request (params: theaterId, hallId)
- * @param {Response} res - Express response
- * @param {NextFunction} next - Express next middleware
- * @returns {Promise<void>}
+ * Delete a hall by composite key (`theaterId` + `hallId`).
+ *
+ * @param {Request} req - Express request containing `theaterId` and `hallId` in route parameters.
+ * @param {Response} res - Express response used to confirm deletion.
+ * @param {NextFunction} next - Express error handler callback.
+ * @returns {Promise<void>} A promise resolving to a JSON response confirming deletion.
  */
 export async function deleteMovieHall(
   req: Request,
@@ -138,22 +171,27 @@ export async function deleteMovieHall(
   next: NextFunction
 ) {
   try {
-    const result = await service.deleteByTheaterIdAndHallId(
+    await service.deleteByTheaterIdAndHallId(
       req.params.theaterId,
       req.params.hallId
     );
-    res.json(result);
+    res.json({ message: 'Movie hall deleted', data: null });
   } catch (err) {
     next(err);
   }
 }
 
 /**
- * Searches movie halls by theaterId or hallId (?theaterId=...&hallId=...).
- * @param {Request} req - Express request (query: theaterId, hallId)
- * @param {Response} res - Express response
- * @param {NextFunction} next - Express next middleware
- * @returns {Promise<void>}
+ * Search movie halls by `theaterId` or `hallId`.
+ *
+ * @param {Request} req - Express request containing optional query params:
+ *   - `theaterId` {string} - Filter by theater ID.
+ *   - `hallId` {string} - Filter by hall ID.
+ *   - `limit` {number} - Pagination limit.
+ *   - `offset` {number} - Pagination offset.
+ * @param {Response} res - Express response used to send the search results.
+ * @param {NextFunction} next - Express error handler callback.
+ * @returns {Promise<void>} A promise resolving to a JSON response with the search results.
  */
 export async function searchMovieHalls(
   req: Request,
@@ -168,7 +206,7 @@ export async function searchMovieHalls(
       limit: limit ? Number(limit) : undefined,
       offset: offset ? Number(offset) : undefined,
     });
-    res.json(halls);
+    res.json({ message: 'Search results', data: halls });
   } catch (err) {
     next(err);
   }

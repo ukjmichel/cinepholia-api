@@ -1,17 +1,16 @@
 /**
- * Service class for managing movie theaters in the database.
  *
- * Main functionalities:
- * - Create a movie theater (throws ConflictError if already exists)
- * - Retrieve by ID (throws NotFoundError if not found)
+ * Provides transactional CRUD and search operations for `MovieTheaterModel`,
+ * ensuring data integrity and meaningful error handling.
+ *
+ * Features:
+ * - Create a theater (throws ConflictError if already exists)
+ * - Retrieve a theater by ID (throws NotFoundError if not found)
  * - Retrieve all theaters
- * - Update a theater (throws NotFoundError if not found)
- * - Delete a theater (throws NotFoundError if not found)
- * - Search theaters by city, address, postalCode, or theaterId (partial match)
- *
- * Explicitly handled errors:
- * - ConflictError if a theater with the same ID already exists
- * - NotFoundError if a theater is not found for read/update/delete
+ * - Update a theater by ID (throws NotFoundError if not found)
+ * - Delete a theater by ID (throws NotFoundError if not found)
+ * - Search theaters by city, address, postal code, or theaterId (partial match)
+ * - Bulk create multiple theaters in one transaction (throws ConflictError if duplicates exist)
  *
  */
 
@@ -28,9 +27,8 @@ import { sequelize } from '../config/db.js';
 export class MovieTheaterService {
   /**
    * Creates a new movie theater.
-   * Throws a ConflictError if a theater with the same ID already exists.
    *
-   * @param {MovieTheaterAttributes} theaterData - The data for the new movie theater.
+   * @param {MovieTheaterAttributes} theaterData - Data for the new movie theater.
    * @returns {Promise<MovieTheaterModel>} The created movie theater instance.
    * @throws {ConflictError} If a theater with the same ID already exists.
    */
@@ -53,7 +51,6 @@ export class MovieTheaterService {
 
   /**
    * Retrieves a movie theater by its unique theaterId.
-   * Throws a NotFoundError if the theater does not exist.
    *
    * @param {string} theaterId - The ID of the theater to retrieve.
    * @returns {Promise<MovieTheaterModel>} The found movie theater instance.
@@ -80,10 +77,9 @@ export class MovieTheaterService {
 
   /**
    * Updates a movie theater by its ID.
-   * Throws a NotFoundError if the theater does not exist.
    *
    * @param {string} theaterId - The ID of the theater to update.
-   * @param {Partial<MovieTheaterAttributes>} updateData - The data to update.
+   * @param {Partial<MovieTheaterAttributes>} updateData - Data to update.
    * @returns {Promise<MovieTheaterModel>} The updated movie theater instance.
    * @throws {NotFoundError} If the theater is not found.
    */
@@ -107,7 +103,6 @@ export class MovieTheaterService {
 
   /**
    * Deletes a movie theater by its ID.
-   * Throws a NotFoundError if the theater does not exist.
    *
    * @param {string} theaterId - The ID of the theater to delete.
    * @returns {Promise<void>}
@@ -129,11 +124,11 @@ export class MovieTheaterService {
 
   /**
    * Searches for movie theaters by filter criteria.
-   * Supports partial matching on address, city, postalCode, or theaterId.
+   * Supports partial matching on `address`, `city`, `postalCode`, or `theaterId`.
    *
    * @param {Partial<Pick<MovieTheaterAttributes, 'city' | 'address' | 'postalCode' | 'theaterId'>>} filters
-   *   The search filters: city, address, postalCode, or theaterId.
-   * @returns {Promise<MovieTheaterModel[]>} The list of matched movie theaters.
+   *   Search filters.
+   * @returns {Promise<MovieTheaterModel[]>} List of matched movie theaters.
    */
   async search(
     filters: Partial<
@@ -163,16 +158,14 @@ export class MovieTheaterService {
 
   /**
    * Bulk-creates multiple movie theaters in a single transaction.
-   * Throws a ConflictError if any theater with a duplicate ID already exists.
    *
-   * @param {MovieTheaterAttributes[]} theatersData - The array of movie theaters to create.
-   * @returns {Promise<MovieTheaterModel[]>} The created movie theater instances, or an empty array if no input.
+   * @param {MovieTheaterAttributes[]} theatersData - Array of theaters to create.
+   * @returns {Promise<MovieTheaterModel[]>} The created movie theaters.
    * @throws {ConflictError} If any theater with the same ID already exists.
    */
   async bulkCreate(
     theatersData: MovieTheaterAttributes[]
   ): Promise<MovieTheaterModel[]> {
-    // ✅ Early return for empty input to prevent unnecessary DB queries
     if (!theatersData || theatersData.length === 0) {
       return [];
     }
@@ -202,7 +195,8 @@ export class MovieTheaterService {
 
 /**
  * Validator for the `theaterId` route parameter.
- * Checks that theaterId exists, is a string, not empty, and matches allowed pattern.
+ *
+ * Ensures `theaterId` exists, is a string, and is not empty.
  */
 export const theaterIdParamValidator = [
   param('theaterId')
@@ -214,7 +208,7 @@ export const theaterIdParamValidator = [
     .bail()
     .notEmpty()
     .withMessage('Theater ID cannot be empty'),
-  // You can add a regex if you want to restrict the allowed format, e.g.:
+  // Optional: Add regex to restrict format
   // .matches(/^[a-zA-Z0-9\-]+$/).withMessage('Invalid theater ID format')
 ];
 

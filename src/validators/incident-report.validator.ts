@@ -1,331 +1,283 @@
+/**
+ * @module validators/incident-report.validator
+ *
+ * @description
+ * express-validator rules for Incident Reports.
+ * - No Mongo ObjectId usage anywhere; single-record routes use business `incidentId` (UUID).
+ * - `createIncidentValidation` treats `incidentId` as optional: if provided, it must be a valid UUID;
+ *   if omitted, the model generates it.
+ */
+
 import { body, param, query } from 'express-validator';
+import type { Request } from 'express';
 
-/**
- * Validator for creating a new incident report
- */
-export const createIncidentReportValidator = [
-  body('theaterId')
-    .notEmpty()
-    .withMessage('Theater ID is required')
-    .isString()
-    .withMessage('Theater ID must be a string')
-    .trim()
-    .isLength({ min: 1, max: 50 })
-    .withMessage('Theater ID must be between 1 and 50 characters'),
+export const uuidRegex =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+export const idRegex = /^[a-zA-Z0-9_-]+$/;
+export const ALLOWED_STATUSES = [
+  'open',
+  'acknowledged',
+  'in_progress',
+  'resolved',
+  'closed',
+] as const;
 
-  body('hallId')
-    .notEmpty()
-    .withMessage('Hall ID is required')
-    .isString()
-    .withMessage('Hall ID must be a string')
-    .trim()
-    .isLength({ min: 1, max: 50 })
-    .withMessage('Hall ID must be between 1 and 50 characters'),
+function getReqQuery(req: Request): Record<string, any> {
+  return ((req as any)?.query ?? {}) as Record<string, any>;
+}
 
-  body('title')
-    .notEmpty()
-    .withMessage('Title is required')
-    .isString()
-    .withMessage('Title must be a string')
-    .trim()
-    .isLength({ min: 3, max: 255 })
-    .withMessage('Title must be between 3 and 255 characters')
-    .matches(/^[^<>]*$/)
-    .withMessage('Title cannot contain HTML tags'),
+/* ------------------------------- Param rules ------------------------------ */
 
-  body('description')
-    .notEmpty()
-    .withMessage('Description is required')
-    .isString()
-    .withMessage('Description must be a string')
-    .trim()
-    .isLength({ min: 5, max: 2000 })
-    .withMessage('Description must be between 5 and 2000 characters')
-    .matches(/^[^<>]*$/)
-    .withMessage('Description cannot contain HTML tags'),
-
-  body('status')
-    .optional()
-    .isIn(['pending', 'in_progress', 'fulfilled'])
-    .withMessage('Status must be one of: pending, in_progress, fulfilled'),
-
-  body('date')
-    .optional()
-    .isISO8601()
-    .withMessage('Date must be a valid ISO 8601 date')
-    .custom((value) => {
-      const date = new Date(value);
-      const now = new Date();
-      const oneYearAgo = new Date();
-      oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
-
-      if (date > now) {
-        throw new Error('Incident date cannot be in the future');
-      }
-      if (date < oneYearAgo) {
-        throw new Error('Incident date cannot be more than one year ago');
-      }
-      return true;
-    }),
-
-  body('userId')
-    .notEmpty()
-    .withMessage('User ID is required')
-    .isUUID(4)
-    .withMessage('User ID must be a valid UUID'),
-];
-
-/**
- * Validator for updating an incident report
- */
-export const updateIncidentReportValidator = [
-  body('title')
-    .optional()
-    .isString()
-    .withMessage('Title must be a string')
-    .trim()
-    .isLength({ min: 3, max: 255 })
-    .withMessage('Title must be between 3 and 255 characters')
-    .matches(/^[^<>]*$/)
-    .withMessage('Title cannot contain HTML tags'),
-
-  body('description')
-    .optional()
-    .isString()
-    .withMessage('Description must be a string')
-    .trim()
-    .isLength({ min: 5, max: 2000 })
-    .withMessage('Description must be between 5 and 2000 characters')
-    .matches(/^[^<>]*$/)
-    .withMessage('Description cannot contain HTML tags'),
-
-  body('status')
-    .optional()
-    .isIn(['pending', 'in_progress', 'fulfilled'])
-    .withMessage('Status must be one of: pending, in_progress, fulfilled'),
-
-  body('theaterId')
-    .optional()
-    .isString()
-    .withMessage('Theater ID must be a string')
-    .trim()
-    .isLength({ min: 1, max: 50 })
-    .withMessage('Theater ID must be between 1 and 50 characters'),
-
-  body('hallId')
-    .optional()
-    .isString()
-    .withMessage('Hall ID must be a string')
-    .trim()
-    .isLength({ min: 1, max: 50 })
-    .withMessage('Hall ID must be between 1 and 50 characters'),
-
-  body('userId')
-    .optional()
-    .isUUID(4)
-    .withMessage('User ID must be a valid UUID'),
-];
-
-/**
- * Validator for incident report ID parameter
- */
-export const incidentReportIdParamValidator = [
+export const incidentIdParamValidation = [
   param('incidentId')
-    .notEmpty()
-    .withMessage('Incident ID is required')
-    .isUUID(4)
-    .withMessage('Incident ID must be a valid UUID'),
+    .trim()
+    .matches(uuidRegex)
+    .withMessage('Invalid UUID format for "incidentId"'),
 ];
 
-/**
- * Validator for theater ID parameter
- */
-export const theaterIdParamValidator = [
+export const createdByParamValidation = [
+  param('createdBy')
+    .trim()
+    .matches(uuidRegex)
+    .withMessage('Invalid UUID format for "createdBy"'),
+];
+
+export const theaterIdParamValidation = [
   param('theaterId')
-    .notEmpty()
-    .withMessage('Theater ID is required')
-    .isString()
-    .withMessage('Theater ID must be a string')
     .trim()
-    .isLength({ min: 1, max: 50 })
-    .withMessage('Theater ID must be between 1 and 50 characters'),
-];
-
-/**
- * Validator for hall ID parameter
- */
-export const hallIdParamValidator = [
-  param('hallId')
-    .notEmpty()
-    .withMessage('Hall ID is required')
-    .isString()
-    .withMessage('Hall ID must be a string')
-    .trim()
-    .isLength({ min: 1, max: 50 })
-    .withMessage('Hall ID must be between 1 and 50 characters'),
-];
-
-/**
- * Validator for incident report status parameter
- */
-export const incidentReportStatusParamValidator = [
-  param('status')
-    .notEmpty()
-    .withMessage('Status is required')
-    .isIn(['pending', 'in_progress', 'fulfilled'])
-    .withMessage('Status must be one of: pending, in_progress, fulfilled'),
-];
-
-/**
- * Validator for updating incident report status
- */
-export const updateIncidentReportStatusValidator = [
-  body('status')
-    .notEmpty()
-    .withMessage('Status is required')
-    .isIn(['pending', 'in_progress', 'fulfilled'])
-    .withMessage('Status must be one of: pending, in_progress, fulfilled'),
-];
-
-/**
- * Validator for searching incident reports
- */
-export const searchIncidentReportValidator = [
-  query('title')
-    .optional()
-    .isString()
-    .withMessage('Title must be a string')
-    .trim()
-    .isLength({ min: 1, max: 255 })
-    .withMessage('Title search term must be between 1 and 255 characters'),
-
-  query('description')
-    .optional()
-    .isString()
-    .withMessage('Description must be a string')
-    .trim()
-    .isLength({ min: 1, max: 255 })
+    .isLength({ min: 2, max: 36 })
+    .withMessage('theaterId must be between 2 and 36 characters')
+    .matches(idRegex)
     .withMessage(
-      'Description search term must be between 1 and 255 characters'
+      'theaterId must contain only letters, numbers, underscores, or hyphens'
     ),
+];
+
+export const hallIdParamValidation = [
+  param('hallId')
+    .trim()
+    .isLength({ min: 1, max: 16 })
+    .withMessage('hallId must be between 1 and 16 characters')
+    .matches(idRegex)
+    .withMessage(
+      'hallId must contain only letters, numbers, underscores, or hyphens'
+    ),
+];
+
+export const statusParamValidation = [
+  param('status')
+    .trim()
+    .customSanitizer((v) => String(v).toLowerCase())
+    .isIn(ALLOWED_STATUSES as unknown as string[])
+    .withMessage(`status must be one of: ${ALLOWED_STATUSES.join(', ')}`),
+];
+
+/* ------------------------------- Body rules -------------------------------- */
+
+/**
+ * Create Incident:
+ * - `incidentId` optional; if present must be UUID.
+ * - `theaterId`, `hallId`, `description`, `createdBy` required.
+ * - `status` optional enum.
+ */
+export const createIncidentValidation = [
+  body('incidentId')
+    .optional()
+    .trim()
+    .matches(uuidRegex)
+    .withMessage('Invalid UUID format for "incidentId"'),
+
+  body('theaterId')
+    .exists({ checkNull: true })
+    .withMessage('theaterId is required')
+    .bail()
+    .trim()
+    .isLength({ min: 2, max: 36 })
+    .withMessage('theaterId must be between 2 and 36 characters')
+    .matches(idRegex)
+    .withMessage(
+      'theaterId must contain only letters, numbers, underscores, or hyphens'
+    ),
+
+  body('hallId')
+    .exists({ checkNull: true })
+    .withMessage('hallId is required')
+    .bail()
+    .trim()
+    .isLength({ min: 1, max: 16 })
+    .withMessage('hallId must be between 1 and 16 characters')
+    .matches(idRegex)
+    .withMessage(
+      'hallId must contain only letters, numbers, underscores, or hyphens'
+    ),
+
+  body('description')
+    .exists({ checkNull: true })
+    .withMessage('description is required')
+    .bail()
+    .isString()
+    .withMessage('description must be a string')
+    .trim()
+    .isLength({ min: 1, max: 5000 })
+    .withMessage('description must be between 1 and 5000 characters'),
+
+  body('createdBy')
+    .exists({ checkNull: true })
+    .withMessage('createdBy is required')
+    .bail()
+    .trim()
+    .matches(uuidRegex)
+    .withMessage('Invalid UUID format for "createdBy"'),
+
+  body('status')
+    .optional()
+    .trim()
+    .customSanitizer((v) => String(v).toLowerCase())
+    .isIn(ALLOWED_STATUSES as unknown as string[])
+    .withMessage(`status must be one of: ${ALLOWED_STATUSES.join(', ')}`),
+];
+
+/**
+ * Update Incident:
+ * - Forbid updating `incidentId`.
+ * - Other fields optional with constraints.
+ */
+export const updateIncidentValidation = [
+  body().isObject().withMessage('Body must be a JSON object'),
+
+  body('incidentId').not().exists().withMessage('incidentId cannot be updated'),
+
+  body('theaterId')
+    .optional()
+    .trim()
+    .isLength({ min: 2, max: 36 })
+    .withMessage('theaterId must be between 2 and 36 characters')
+    .matches(idRegex)
+    .withMessage(
+      'theaterId must contain only letters, numbers, underscores, or hyphens'
+    ),
+
+  body('hallId')
+    .optional()
+    .trim()
+    .isLength({ min: 1, max: 16 })
+    .withMessage('hallId must be between 1 and 16 characters')
+    .matches(idRegex)
+    .withMessage(
+      'hallId must contain only letters, numbers, underscores, or hyphens'
+    ),
+
+  body('description')
+    .optional()
+    .isString()
+    .withMessage('description must be a string')
+    .trim()
+    .isLength({ min: 1, max: 5000 })
+    .withMessage('description must be between 1 and 5000 characters'),
+
+  body('createdBy')
+    .optional()
+    .trim()
+    .matches(uuidRegex)
+    .withMessage('Invalid UUID format for "createdBy"'),
+
+  body('status')
+    .optional()
+    .trim()
+    .customSanitizer((v) => String(v).toLowerCase())
+    .isIn(ALLOWED_STATUSES as unknown as string[])
+    .withMessage(`status must be one of: ${ALLOWED_STATUSES.join(', ')}`),
+];
+
+/* ------------------------------- Query rules ------------------------------- */
+
+export const searchQueryValidation = [
+  query('q').optional().isString().withMessage('q must be a string').trim(),
 
   query('status')
     .optional()
-    .isIn(['pending', 'in_progress', 'fulfilled'])
-    .withMessage('Status must be one of: pending, in_progress, fulfilled'),
+    .trim()
+    .customSanitizer((v) => String(v).toLowerCase())
+    .isIn(ALLOWED_STATUSES as unknown as string[])
+    .withMessage(`status must be one of: ${ALLOWED_STATUSES.join(', ')}`),
 
   query('theaterId')
     .optional()
-    .isString()
-    .withMessage('Theater ID must be a string')
     .trim()
-    .isLength({ min: 1, max: 50 })
-    .withMessage('Theater ID must be between 1 and 50 characters'),
+    .isLength({ min: 2, max: 36 })
+    .withMessage('theaterId must be between 2 and 36 characters')
+    .matches(idRegex)
+    .withMessage(
+      'theaterId must contain only letters, numbers, underscores, or hyphens'
+    ),
 
   query('hallId')
     .optional()
-    .isString()
-    .withMessage('Hall ID must be a string')
     .trim()
-    .isLength({ min: 1, max: 50 })
-    .withMessage('Hall ID must be between 1 and 50 characters'),
+    .isLength({ min: 1, max: 16 })
+    .withMessage('hallId must be between 1 and 16 characters')
+    .matches(idRegex)
+    .withMessage(
+      'hallId must contain only letters, numbers, underscores, or hyphens'
+    ),
 
-  query('userId')
+  query('createdBy')
     .optional()
-    .isUUID(4)
-    .withMessage('User ID must be a valid UUID'),
+    .trim()
+    .matches(uuidRegex)
+    .withMessage('Invalid UUID format for "createdBy"'),
 
-  query('dateFrom')
+  query('incidentId')
+    .optional()
+    .trim()
+    .matches(uuidRegex)
+    .withMessage('Invalid UUID format for "incidentId"'),
+
+  query('createdAtFrom')
     .optional()
     .isISO8601()
-    .withMessage('Date from must be a valid ISO 8601 date'),
+    .withMessage('createdAtFrom must be an ISO 8601 date')
+    .toDate(),
 
-  query('dateTo')
+  query('createdAtTo')
     .optional()
     .isISO8601()
-    .withMessage('Date to must be a valid ISO 8601 date'),
-
-  query('limit')
-    .optional()
-    .isInt({ min: 1, max: 100 })
-    .withMessage('Limit must be an integer between 1 and 100'),
-
-  query('offset')
-    .optional()
-    .isInt({ min: 0 })
-    .withMessage('Offset must be a non-negative integer'),
-
-  // Custom validation to ensure at least one search parameter is provided
-  query().custom((value, { req }) => {
-    const {
-      title,
-      description,
-      status,
-      theaterId,
-      hallId,
-      userId,
-      dateFrom,
-      dateTo,
-    } = (req.query || {}) as Record<string, any>;
-
-    const hasSearchParam =
-      title ||
-      description ||
-      status ||
-      theaterId ||
-      hallId ||
-      userId ||
-      dateFrom ||
-      dateTo;
-
-    if (!hasSearchParam) {
-      throw new Error('At least one search parameter is required');
-    }
-
-    return true;
-  }),
-
-  // Custom validation for date range
-  query('dateTo')
-    .optional()
-    .custom((value, { req }) => {
-      const { dateFrom } = (req.query || {}) as Record<string, any>;
-      if (dateFrom && value) {
-        const fromDate = new Date(dateFrom as string);
-        const toDate = new Date(value);
-
-        if (toDate < fromDate) {
-          throw new Error('Date to must be after date from');
+    .withMessage('createdAtTo must be an ISO 8601 date')
+    .toDate()
+    .custom((to, meta) => {
+      const q = getReqQuery(meta.req as Request);
+      const from = q.createdAtFrom;
+      if (from) {
+        const f = new Date(from);
+        const t = new Date(to as any);
+        if (!isNaN(f.getTime()) && !isNaN(t.getTime()) && f > t) {
+          throw new Error('createdAtFrom must be <= createdAtTo');
         }
       }
       return true;
     }),
-];
 
-/**
- * Validator for pagination query parameters
- */
-export const paginationValidator = [
-  query('limit')
+  query('updatedAtFrom')
     .optional()
-    .isInt({ min: 1, max: 100 })
-    .withMessage('Limit must be an integer between 1 and 100'),
+    .isISO8601()
+    .withMessage('updatedAtFrom must be an ISO 8601 date')
+    .toDate(),
 
-  query('offset')
+  query('updatedAtTo')
     .optional()
-    .isInt({ min: 0 })
-    .withMessage('Offset must be a non-negative integer'),
-];
-
-/**
- * Validator for statistics query parameters
- */
-export const statisticsValidator = [
-  query('theaterId')
-    .optional()
-    .isString()
-    .withMessage('Theater ID must be a string')
-    .trim()
-    .isLength({ min: 1, max: 50 })
-    .withMessage('Theater ID must be between 1 and 50 characters'),
+    .isISO8601()
+    .withMessage('updatedAtTo must be an ISO 8601 date')
+    .toDate()
+    .custom((to, meta) => {
+      const q = getReqQuery(meta.req as Request);
+      const from = q.updatedAtFrom;
+      if (from) {
+        const f = new Date(from);
+        const t = new Date(to as any);
+        if (!isNaN(f.getTime()) && !isNaN(t.getTime()) && f > t) {
+          throw new Error('updatedAtFrom must be <= updatedAtTo');
+        }
+      }
+      return true;
+    }),
 ];

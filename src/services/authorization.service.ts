@@ -1,11 +1,12 @@
 /**
- * User authorizations and roles management service.
+ * @module services/authorization.service
  *
+ * @description
  * This service allows the creation, retrieval, modification, and deletion
  * of permissions (roles) associated with each user, with conflict management
  * and transactional management to ensure data consistency.
  *
- * Main features:
+ * @features
  * - Creation of authorization for a given user, handling cases where authorization already exists
  * - Retrieval of a user's authorization by their identifier
  * - Modification of the role assigned to a user

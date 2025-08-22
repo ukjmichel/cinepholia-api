@@ -1,17 +1,20 @@
 /**
- * Booking comments management service.
+ * BookingCommentService
+ * ---------------------
+ * Service for managing comments linked to bookings.
  *
- * This service provides operations to create, read, update, delete, and search comments
- * linked to bookings. It also supports filtering by status, movie, user, and text search.
- * Business rules such as preventing duplicate comments and restricting comments to used bookings
- * are enforced. Additionally, it can confirm comments and calculate average ratings for movies.
+ * Features:
+ * - Create, read, update, delete, and search comments.
+ * - Filter comments by status, movie, user, and text search.
+ * - Enforce business rules:
+ *   - Prevent duplicate comments for the same booking.
+ *   - Allow comments only on "used" bookings.
+ * - Confirm comments and calculate average ratings per movie.
  *
- * Integrates:
- *  - MongoDB (Mongoose) for comment storage
- *  - Sequelize (SQL) for bookings and screenings lookup
+ * Integrations:
+ * - MongoDB (Mongoose) for comment storage.
+ * - Sequelize (SQL) for bookings, screenings, and movie lookups.
  *
- * @module services/booking-comment.service
- * @since 2024
  */
 
 import {
@@ -42,7 +45,7 @@ export class BookingCommentService {
    * Retrieves a comment by its booking ID.
    * @param bookingId - UUID of the booking.
    * @returns The found comment.
-   * @throws NotFoundError If no comment is found for the given booking ID.
+   * @throws {NotFoundError} If no comment is found for the given booking ID.
    */
   async getCommentByBookingId(bookingId: string): Promise<BookingComment> {
     const comment = await BookingCommentModel.findOne({ bookingId }).lean();
@@ -56,8 +59,9 @@ export class BookingCommentService {
    * Creates a new comment for a booking if the booking is used and no comment exists yet.
    * @param data - The comment data to create.
    * @returns The created comment.
-   * @throws NotFoundError If the booking does not exist.
-   * @throws ConflictError If the booking is not used or a comment already exists.
+   * @throws {NotFoundError} If the booking does not exist.
+   * @throws {ConflictError} If the booking is not used or a comment already exists.
+   * @throws {Error} If creation fails unexpectedly.
    */
   async createComment(data: BookingComment): Promise<BookingComment> {
     const booking = (await BookingModel.findOne({
@@ -87,7 +91,8 @@ export class BookingCommentService {
    * @param bookingId - UUID of the booking.
    * @param updateData - Partial comment data to update.
    * @returns The updated comment.
-   * @throws NotFoundError If no comment is found.
+   * @throws {NotFoundError} If no comment is found.
+   * @throws {Error} If update fails unexpectedly.
    */
   async updateComment(
     bookingId: string,
@@ -107,7 +112,8 @@ export class BookingCommentService {
   /**
    * Deletes a comment by booking ID.
    * @param bookingId - UUID of the booking.
-   * @throws NotFoundError If no comment is found.
+   * @throws {NotFoundError} If no comment is found.
+   * @throws {Error} If deletion fails unexpectedly.
    */
   async deleteComment(bookingId: string): Promise<void> {
     const result = await BookingCommentModel.deleteOne({ bookingId });
@@ -119,6 +125,7 @@ export class BookingCommentService {
   /**
    * Retrieves all comments sorted by creation date (newest first).
    * @returns A list of comments.
+   * @throws {Error} If retrieval fails.
    */
   async getAllComments(): Promise<BookingComment[]> {
     return BookingCommentModel.find().sort({ createdAt: -1 }).lean();
@@ -126,9 +133,9 @@ export class BookingCommentService {
 
   /**
    * Retrieves all comments linked to a specific movie.
-   * Uses SQL queries to get screenings and bookings, then fetches Mongo comments.
    * @param movieId - UUID of the movie.
    * @returns A list of comments for the movie.
+   * @throws {Error} If retrieval fails.
    */
   async getCommentsByMovie(movieId: string): Promise<BookingComment[]> {
     const screenings = await ScreeningModel.findAll({
@@ -156,6 +163,7 @@ export class BookingCommentService {
    * Retrieves comments filtered by status.
    * @param status - The status to filter ('pending' or 'confirmed').
    * @returns A list of comments.
+   * @throws {Error} If retrieval fails.
    */
   async getCommentsByStatus(
     status: 'pending' | 'confirmed'
@@ -166,7 +174,8 @@ export class BookingCommentService {
   /**
    * Retrieves all comments submitted by a user, enriched with related movie information.
    * @param userId - UUID of the user.
-   * @returns A list of comments with additional movie data.
+   * @returns A list of comments with movie details.
+   * @throws {Error} If retrieval or enrichment fails.
    */
   async getCommentsByUser(userId: string): Promise<any[]> {
     const bookings = await BookingModel.findAll({
@@ -222,10 +231,10 @@ export class BookingCommentService {
 
   /**
    * Performs an advanced search for comments using text search and field filters.
-   * Supports filtering by status, rating, booking, movie, creation date, and text query.
    * @param q - Optional free-text search in the comment.
    * @param filters - Optional structured filters.
    * @returns A list of matching comments.
+   * @throws {Error} If search fails.
    */
   async searchComments(
     q?: string,
@@ -268,7 +277,8 @@ export class BookingCommentService {
    * Confirms a comment by setting its status to 'confirmed'.
    * @param bookingId - UUID of the booking.
    * @returns The updated comment.
-   * @throws NotFoundError If no comment is found.
+   * @throws {NotFoundError} If no comment is found.
+   * @throws {Error} If confirmation fails unexpectedly.
    */
   async confirmComment(bookingId: string): Promise<BookingComment> {
     const updated = await BookingCommentModel.findOneAndUpdate(
@@ -286,6 +296,7 @@ export class BookingCommentService {
    * Only confirmed comments are considered.
    * @param movieId - UUID of the movie.
    * @returns The average rating rounded to 2 decimals, or null if no ratings are found.
+   * @throws {Error} If aggregation fails.
    */
   async getAverageRatingForMovie(movieId: string): Promise<number | null> {
     const screenings = await ScreeningModel.findAll({

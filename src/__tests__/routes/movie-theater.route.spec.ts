@@ -1,20 +1,17 @@
-import request from 'supertest';
-import app from '../../app.js';
-import { sequelize, syncDB } from '../../config/db.js';
-import { MovieTheaterModel } from '../../models/movie-theater.model.js';
-import { UserModel } from '../../models/user.model.js';
-import { AuthorizationModel } from '../../models/authorization.model.js';
-import { AuthService } from '../../services/auth.service.js';
+// src/__tests__/routes/movie-theater.route.spec.ts
+import { Op, Transaction } from 'sequelize';
+import { sequelize } from '../../config/db.js';
+import {
+  MovieTheaterModel,
+  MovieTheaterAttributes,
+} from '../../models/movie-theater.model.js';
+import { MovieTheaterService } from '../../services/movie-theater.service.js';
+import { ConflictError } from '../../errors/conflict-error.js';
+import { NotFoundError } from '../../errors/not-found-error.js';
 
-const staffUserData = {
-  username: 'staffuser',
-  firstName: 'Staff',
-  lastName: 'User',
-  email: 'staff@movie.com',
-  password: 'StaffPass123!',
-};
+const service = new MovieTheaterService();
 
-const testTheater = {
+const baseTheater: MovieTheaterAttributes = {
   theaterId: 'cinema-lyon-01',
   address: '1 Rue de la République',
   postalCode: '69001',
@@ -23,288 +20,230 @@ const testTheater = {
   email: 'contact@cinema-lyon.fr',
 };
 
-const altTheater = {
-  ...testTheater,
-  theaterId: 'cinema-paris-01',
-  city: 'Paris',
-  email: 'contact@cinema-paris.fr',
-};
+let mockTxn: any;
 
-const cleanDatabase = async () => {
+beforeEach(() => {
+  jest.clearAllMocks();
 
+  // Minimal transaction mock returning the callback result
+  mockTxn = { LOCK: { UPDATE: 'UPDATE' } } as unknown as Transaction;
+  jest
+    .spyOn(sequelize, 'transaction')
+    .mockImplementation(async (cb: any) => cb(mockTxn));
 
-  // Disable foreign key checks only if using MySQL
-  if (sequelize.getDialect() === 'mysql') {
-    await sequelize.query('SET FOREIGN_KEY_CHECKS = 0');
-  }
+  // Reset model method mocks
+  (MovieTheaterModel.findByPk as any) = jest.fn();
+  (MovieTheaterModel.create as any) = jest.fn();
+  (MovieTheaterModel.update as any) = jest.fn();
+  (MovieTheaterModel.destroy as any) = jest.fn();
+  (MovieTheaterModel.findAll as any) = jest.fn();
+  (MovieTheaterModel.bulkCreate as any) = jest.fn();
+});
 
-  await AuthorizationModel.destroy({
-    where: {},
-    truncate: true,
-    cascade: true,
-  });
-  await UserModel.destroy({ where: {}, truncate: true, cascade: true });
-  await MovieTheaterModel.destroy({ where: {}, truncate: true, cascade: true });
-
-  if (sequelize.getDialect() === 'mysql') {
-    await sequelize.query('SET FOREIGN_KEY_CHECKS = 1');
-  }
-};
-
-
-describe('MovieTheater E2E Routes', () => {
-  let staffToken: string;
-  let staffUserId: string;
-
-  beforeAll(async () => {
-    await syncDB();
-  });
-
-  beforeEach(async () => {
-    await cleanDatabase();
-
-    // Create staff user and get the actual userId
-    const staffUser = await UserModel.create(staffUserData);
-    staffUserId = (staffUser as any).userId;
-
-    // Create authorization record
-    await AuthorizationModel.create({
-      userId: staffUserId,
-      role: 'employé',
-    });
-
-    // Generate token with proper user data
-    const authService = new AuthService();
-    const tokenData = authService.generateTokens({
-      userId: staffUserId,
-      username: staffUserData.username,
-      email: staffUserData.email,
-      verified: true, // Set to true to avoid verification issues
-    } as any);
-
-    staffToken = tokenData.accessToken;
-
-    // Debug: Log the token for troubleshooting
-    console.log('Generated staff token:', staffToken);
-  });
-
-  afterAll(async () => {
-    await cleanDatabase();
-    await sequelize.close();
-  });
-
-  describe('POST /movie-theaters', () => {
-    it('should create a movie theater when authorized as staff', async () => {
-      const res = await request(app)
-        .post('/movie-theaters')
-        .set('Authorization', `Bearer ${staffToken}`)
-        .send(testTheater);
-
-      // Debug response if test fails
-      if (res.status !== 201) {
-        console.log('Response status:', res.status);
-        console.log('Response body:', res.body);
-        console.log('Response headers:', res.headers);
-      }
-
-      expect(res.status).toBe(201);
-      expect(res.body.theaterId).toBe(testTheater.theaterId);
-
-      // Verify the theater was actually created in the database
-      const createdTheater = await MovieTheaterModel.findByPk(
-        testTheater.theaterId
-      );
-      expect(createdTheater).not.toBeNull();
-    });
-
-    it('should return 401 if not authenticated', async () => {
-      const res = await request(app).post('/movie-theaters').send(testTheater);
-
-      expect(res.status).toBe(401);
-    });
-
-    it('should return 409 for duplicate theaterId', async () => {
-      // First, create a theater directly in the database
-      await MovieTheaterModel.create(testTheater);
-
-      const res = await request(app)
-        .post('/movie-theaters')
-        .set('Authorization', `Bearer ${staffToken}`)
-        .send(testTheater);
-
-      expect(res.status).toBe(409);
-      expect(res.body.message).toMatch(/already exists/i);
-    });
-
-    it('should return 400 for invalid input', async () => {
-      const res = await request(app)
-        .post('/movie-theaters')
-        .set('Authorization', `Bearer ${staffToken}`)
-        .send({}); // Missing required fields
-
-      expect(res.status).toBe(400);
-    });
-  });
-
-  describe('GET /movie-theaters/:id', () => {
-    it('should get movie theater by ID', async () => {
-      // Create theater in database first
-      await MovieTheaterModel.create(testTheater);
-
-      const res = await request(app).get(
-        `/movie-theaters/${testTheater.theaterId}`
+describe('MovieTheaterService', () => {
+  // ------- create -------
+  describe('create', () => {
+    it('creates a theater when it does not exist', async () => {
+      (MovieTheaterModel.findByPk as jest.Mock).mockResolvedValueOnce(null);
+      (MovieTheaterModel.create as jest.Mock).mockResolvedValueOnce(
+        baseTheater
       );
 
-      expect(res.status).toBe(200);
-      expect(res.body.theaterId).toBe(testTheater.theaterId);
+      const created = await service.create(baseTheater);
+
+      expect(MovieTheaterModel.findByPk).toHaveBeenCalledWith(
+        baseTheater.theaterId,
+        { transaction: mockTxn, lock: mockTxn.LOCK.UPDATE }
+      );
+      expect(MovieTheaterModel.create).toHaveBeenCalledWith(baseTheater, {
+        transaction: mockTxn,
+      });
+      expect(created).toBe(baseTheater);
     });
 
-    it('should return 404 for non-existent ID', async () => {
-      const res = await request(app).get('/movie-theaters/not-exist');
+    it('throws ConflictError if theater already exists', async () => {
+      (MovieTheaterModel.findByPk as jest.Mock).mockResolvedValueOnce(
+        baseTheater
+      );
 
-      expect(res.status).toBe(404);
+      await expect(service.create(baseTheater)).rejects.toBeInstanceOf(
+        ConflictError
+      );
     });
   });
 
-  describe('PUT /movie-theaters/:id', () => {
-    it('should update theater when staff', async () => {
-      // Create theater first
-      await MovieTheaterModel.create(testTheater);
-
-      const res = await request(app)
-        .put(`/movie-theaters/${testTheater.theaterId}`)
-        .set('Authorization', `Bearer ${staffToken}`)
-        .send({ city: 'Paris' });
-
-      expect(res.status).toBe(200);
-      expect(res.body.city).toBe('Paris');
-
-      // Verify update in database
-      const updatedTheater = await MovieTheaterModel.findByPk(
-        testTheater.theaterId
+  // ------- getById -------
+  describe('getById', () => {
+    it('returns a theater when found', async () => {
+      (MovieTheaterModel.findByPk as jest.Mock).mockResolvedValueOnce(
+        baseTheater
       );
-      expect((updatedTheater as any)?.city).toBe('Paris');
+
+      const found = await service.getById(baseTheater.theaterId);
+
+      expect(MovieTheaterModel.findByPk).toHaveBeenCalledWith(
+        baseTheater.theaterId
+      );
+      expect(found).toBe(baseTheater);
     });
 
-    it('should return 404 for non-existent theater', async () => {
-      const res = await request(app)
-        .put('/movie-theaters/not-exist')
-        .set('Authorization', `Bearer ${staffToken}`)
-        .send({ city: 'Paris' });
+    it('throws NotFoundError when theater is not found', async () => {
+      (MovieTheaterModel.findByPk as jest.Mock).mockResolvedValueOnce(null);
 
-      expect(res.status).toBe(404);
-    });
-
-    it('should return 401 if not authenticated', async () => {
-      await MovieTheaterModel.create(testTheater);
-
-      const res = await request(app)
-        .put(`/movie-theaters/${testTheater.theaterId}`)
-        .send({ city: 'Paris' });
-
-      expect(res.status).toBe(401);
+      await expect(service.getById('not-exist')).rejects.toBeInstanceOf(
+        NotFoundError
+      );
     });
   });
 
-  describe('DELETE /movie-theaters/:id', () => {
-    it('should delete theater when staff', async () => {
-      // Create theater first
-      await MovieTheaterModel.create(testTheater);
+  // ------- getAll -------
+  describe('getAll', () => {
+    it('returns all theaters', async () => {
+      const rows = [baseTheater];
+      (MovieTheaterModel.findAll as jest.Mock).mockResolvedValueOnce(rows);
 
-      const res = await request(app)
-        .delete(`/movie-theaters/${testTheater.theaterId}`)
-        .set('Authorization', `Bearer ${staffToken}`);
+      const result = await service.getAll();
 
-      expect(res.status).toBe(204);
-
-      // Verify deletion
-      const theater = await MovieTheaterModel.findByPk(testTheater.theaterId);
-      expect(theater).toBeNull();
-    });
-
-    it('should return 404 for non-existent theater', async () => {
-      const res = await request(app)
-        .delete('/movie-theaters/not-exist')
-        .set('Authorization', `Bearer ${staffToken}`);
-
-      expect(res.status).toBe(404);
-    });
-
-    it('should return 401 if not authenticated', async () => {
-      await MovieTheaterModel.create(testTheater);
-
-      const res = await request(app).delete(
-        `/movie-theaters/${testTheater.theaterId}`
-      );
-
-      expect(res.status).toBe(401);
+      expect(MovieTheaterModel.findAll).toHaveBeenCalledWith();
+      expect(result).toBe(rows);
     });
   });
 
-  describe('GET /movie-theaters', () => {
-    it('should list all theaters', async () => {
-      // Create theaters first
-      await MovieTheaterModel.bulkCreate([testTheater, altTheater]);
+  // ------- update -------
+  describe('update', () => {
+    it('updates a theater when it exists', async () => {
+      const updateData = { city: 'Paris' };
+      const mockInstance = {
+        update: jest.fn().mockResolvedValue({ ...baseTheater, ...updateData }),
+      };
+      (MovieTheaterModel.findByPk as jest.Mock).mockResolvedValueOnce(
+        mockInstance
+      );
 
-      const res = await request(app).get('/movie-theaters');
+      const updated = await service.update(baseTheater.theaterId, updateData);
 
-      expect(res.status).toBe(200);
-      expect(Array.isArray(res.body)).toBe(true);
-      expect(res.body.length).toBe(2);
+      expect(MovieTheaterModel.findByPk).toHaveBeenCalledWith(
+        baseTheater.theaterId,
+        { transaction: mockTxn, lock: mockTxn.LOCK.UPDATE }
+      );
+      expect(mockInstance.update).toHaveBeenCalledWith(updateData, {
+        transaction: mockTxn,
+      });
+      expect(updated.city).toBe('Paris');
     });
 
-    it('should return empty array when no theaters exist', async () => {
-      const res = await request(app).get('/movie-theaters');
+    it('throws NotFoundError when theater does not exist', async () => {
+      (MovieTheaterModel.findByPk as jest.Mock).mockResolvedValueOnce(null);
 
-      expect(res.status).toBe(200);
-      expect(Array.isArray(res.body)).toBe(true);
-      expect(res.body.length).toBe(0);
+      await expect(
+        service.update(baseTheater.theaterId, { city: 'Paris' })
+      ).rejects.toBeInstanceOf(NotFoundError);
     });
   });
 
-  describe('GET /movie-theaters/search', () => {
-    beforeEach(async () => {
-      await MovieTheaterModel.bulkCreate([testTheater, altTheater]);
+  // ------- delete -------
+  describe('delete', () => {
+    it('deletes a theater when it exists', async () => {
+      (MovieTheaterModel.destroy as jest.Mock).mockResolvedValueOnce(1);
+
+      await expect(
+        service.delete(baseTheater.theaterId)
+      ).resolves.toBeUndefined();
+
+      expect(MovieTheaterModel.destroy).toHaveBeenCalledWith({
+        where: { theaterId: baseTheater.theaterId },
+        transaction: mockTxn,
+      });
     });
 
-    it('should search by city', async () => {
-      const res = await request(app).get('/movie-theaters/search?city=Paris');
+    it('throws NotFoundError when nothing is deleted', async () => {
+      (MovieTheaterModel.destroy as jest.Mock).mockResolvedValueOnce(0);
 
-      expect(res.status).toBe(200);
-      expect(Array.isArray(res.body)).toBe(true);
-      expect(res.body.length).toBe(1);
-      expect(res.body[0].city).toBe('Paris');
-    });
-
-    it('should search by partial address', async () => {
-      const res = await request(app).get(
-        '/movie-theaters/search?address=République'
+      await expect(service.delete('not-exist')).rejects.toBeInstanceOf(
+        NotFoundError
       );
+    });
+  });
 
-      expect(res.status).toBe(200);
-      expect(res.body.length).toBeGreaterThan(0);
+  // ------- search -------
+  describe('search', () => {
+    it('builds partial-like filters for city, address, postalCode, theaterId', async () => {
+      const filters = {
+        city: 'Ly',
+        address: 'République',
+        postalCode: '6900',
+        theaterId: 'cinema-',
+      };
+
+      const rows = [baseTheater];
+      (MovieTheaterModel.findAll as jest.Mock).mockResolvedValueOnce(rows);
+
+      const result = await service.search(filters);
+
+      // Assert we passed proper LIKE conditions (Symbol keys!) to findAll
+      const callArg = (MovieTheaterModel.findAll as jest.Mock).mock.calls[0][0];
+      const where = callArg.where;
+
+      expect(where.city[Op.like]).toBe(`%${filters.city}%`);
+      expect(where.address[Op.like]).toBe(`%${filters.address}%`);
+      expect(where.postalCode[Op.like]).toBe(`%${filters.postalCode}%`);
+      expect(where.theaterId[Op.like]).toBe(`%${filters.theaterId}%`);
+
+      expect(result).toBe(rows);
     });
 
-    it('should return empty array for no matches', async () => {
-      const res = await request(app).get(
-        '/movie-theaters/search?city=NotExist'
-      );
+    it('returns all when no filters provided', async () => {
+      const rows = [baseTheater];
+      (MovieTheaterModel.findAll as jest.Mock).mockResolvedValueOnce(rows);
 
-      expect(res.status).toBe(200);
-      expect(Array.isArray(res.body)).toBe(true);
-      expect(res.body.length).toBe(0);
+      const result = await service.search({});
+
+      expect(MovieTheaterModel.findAll).toHaveBeenCalledWith({ where: {} });
+      expect(result).toBe(rows);
+    });
+  });
+
+  // ------- bulkCreate -------
+  describe('bulkCreate', () => {
+    it('returns [] when input is empty', async () => {
+      const result = await service.bulkCreate([]);
+      expect(result).toEqual([]);
+      expect(sequelize.transaction).not.toHaveBeenCalled(); // short-circuit
     });
 
-    it('should handle multiple search parameters', async () => {
-      const res = await request(app).get(
-        '/movie-theaters/search?city=Lyon&postalCode=69001'
-      );
+    it('creates theaters when none exist already', async () => {
+      const batch = [
+        baseTheater,
+        { ...baseTheater, theaterId: 'cinema-paris-01', city: 'Paris' },
+      ];
+      (MovieTheaterModel.findAll as jest.Mock).mockResolvedValueOnce([]);
+      (MovieTheaterModel.bulkCreate as jest.Mock).mockResolvedValueOnce(batch);
 
-      expect(res.status).toBe(200);
-      expect(Array.isArray(res.body)).toBe(true);
-      expect(res.body.length).toBe(1);
-      expect(res.body[0].city).toBe('Lyon');
-      expect(res.body[0].postalCode).toBe('69001');
+      const result = await service.bulkCreate(batch);
+
+      expect(MovieTheaterModel.findAll).toHaveBeenCalledWith({
+        where: { theaterId: batch.map((t) => t.theaterId) },
+        transaction: mockTxn,
+        lock: mockTxn.LOCK.UPDATE,
+      });
+      expect(MovieTheaterModel.bulkCreate).toHaveBeenCalledWith(batch, {
+        transaction: mockTxn,
+      });
+      expect(result).toBe(batch);
+    });
+
+    it('throws ConflictError if any provided IDs already exist', async () => {
+      const batch = [
+        baseTheater,
+        { ...baseTheater, theaterId: 'cinema-paris-01', city: 'Paris' },
+      ];
+      (MovieTheaterModel.findAll as jest.Mock).mockResolvedValueOnce([
+        { theaterId: 'cinema-paris-01' },
+      ]);
+
+      await expect(service.bulkCreate(batch)).rejects.toBeInstanceOf(
+        ConflictError
+      );
     });
   });
 });

@@ -1,9 +1,39 @@
 /**
- * Contrôleur pour la gestion des séances (Screenings).
- * Fournit les handlers Express pour CRUD, recherche et filtrage des séances de cinéma.
+ * @module controllers/screening.controller
  *
- * Toutes les méthodes transmettent les erreurs à Express (next).
+ * @description
+ * Controller for managing movie screenings.
  *
+ * @features
+ * - Full CRUD operations (Create, Read, Update, Delete).
+ * - Search and filtering of screenings.
+ * - Specialized queries:
+ *   - By movie ID
+ *   - By theater ID
+ *   - By hall ID
+ *   - By screening date
+ *
+ * @response
+ * All endpoints return JSON in the format:
+ * ```json
+ * {
+ *   "message": "Short description of the result",
+ *   "data": { ... } | [ ... ] | null
+ * }
+ * ```
+ * - `message`: Human-readable description of the operation result.
+ * - `data`: An object, array, or `null` (for deletions or when no results are found).
+ *
+ * @dependencies
+ * - `screeningService`: Handles all database queries and business logic for screenings.
+ * - `NotFoundError`: Thrown when a requested screening does not exist.
+ * - `BadRequestError`: Thrown for invalid input parameters.
+ *
+ * @security
+ * - Validates IDs and date formats to prevent malformed queries.
+ * - Relies on parameterized queries through the ORM to prevent SQL injection.
+ *
+ * All methods forward errors to Express via `next()`.
  */
 
 import { Request, Response, NextFunction } from 'express';
@@ -12,12 +42,13 @@ import { ScreeningCreationAttributes } from '../models/screening.model.js';
 import { BadRequestError } from '../errors/bad-request-error.js';
 
 /**
- * Récupère une séance par son identifiant unique.
- * @param {Request} req - Express request (params: screeningId)
- * @param {Response} res - Express response (JSON : séance)
- * @param {NextFunction} next - Express next middleware
- * @returns {Promise<void>}
- * @throws {NotFoundError} Si la séance n’existe pas.
+ * Retrieve a screening by its unique ID.
+ *
+ * @route GET /screenings/:screeningId
+ * @param {Request} req - Express request (params: `screeningId`)
+ * @param {Response} res - Express response
+ * @param {NextFunction} next - Express error-handling middleware
+ * @returns {200 OK | 404 Not Found} `{ message, data }`
  */
 export async function getScreeningById(
   req: Request<{ screeningId: string }>,
@@ -28,19 +59,23 @@ export async function getScreeningById(
     const screening = await screeningService.getScreeningById(
       req.params.screeningId
     );
-    res.json({ data: screening });
+    res
+      .status(200)
+      .json({ message: 'Screening fetched successfully', data: screening });
   } catch (err) {
     next(err);
   }
 }
 
 /**
- * Crée une nouvelle séance.
- * @param {Request} req - Express request (body: ScreeningCreationAttributes)
- * @param {Response} res - Express response (JSON : séance créée)
- * @param {NextFunction} next - Express next middleware
- * @returns {Promise<void>}
- * @throws {BadRequestError} En cas de données invalides.
+ * Create a new screening.
+ *
+ * @route POST /screenings
+ * @param {Request} req - Express request (body: `ScreeningCreationAttributes`)
+ * @param {Response} res - Express response
+ * @param {NextFunction} next - Express error-handling middleware
+ * @returns {201 Created} `{ message, data }`
+ * @throws {BadRequestError} If invalid data is provided
  */
 export async function createScreening(
   req: Request<{}, {}, ScreeningCreationAttributes>,
@@ -49,19 +84,23 @@ export async function createScreening(
 ) {
   try {
     const screening = await screeningService.createScreening(req.body);
-    res.status(201).json({ data: screening });
+    res
+      .status(201)
+      .json({ message: 'Screening created successfully', data: screening });
   } catch (err) {
     next(err);
   }
 }
 
 /**
- * Met à jour partiellement une séance existante.
- * @param {Request} req - Express request (params: screeningId, body: champs à mettre à jour)
- * @param {Response} res - Express response (JSON : séance mise à jour)
- * @param {NextFunction} next - Express next middleware
- * @returns {Promise<void>}
- * @throws {NotFoundError} Si la séance n’existe pas.
+ * Partially update an existing screening.
+ *
+ * @route PATCH /screenings/:screeningId
+ * @param {Request} req - Express request (params: `screeningId`, body: partial fields to update)
+ * @param {Response} res - Express response
+ * @param {NextFunction} next - Express error-handling middleware
+ * @returns {200 OK} `{ message, data }`
+ * @throws {NotFoundError} If the screening does not exist
  */
 export async function updateScreening(
   req: Request<
@@ -77,19 +116,23 @@ export async function updateScreening(
       req.params.screeningId,
       req.body
     );
-    res.json({ data: screening });
+    res
+      .status(200)
+      .json({ message: 'Screening updated successfully', data: screening });
   } catch (err) {
     next(err);
   }
 }
 
 /**
- * Supprime une séance par son identifiant.
- * @param {Request} req - Express request (params: screeningId)
- * @param {Response} res - Express response (statut 204)
- * @param {NextFunction} next - Express next middleware
- * @returns {Promise<void>}
- * @throws {NotFoundError} Si la séance n’existe pas.
+ * Delete a screening by its ID.
+ *
+ * @route DELETE /screenings/:screeningId
+ * @param {Request} req - Express request (params: `screeningId`)
+ * @param {Response} res - Express response
+ * @param {NextFunction} next - Express error-handling middleware
+ * @returns {200 OK} `{ message, data: null }`
+ * @throws {NotFoundError} If the screening does not exist
  */
 export async function deleteScreening(
   req: Request<{ screeningId: string }>,
@@ -98,18 +141,22 @@ export async function deleteScreening(
 ) {
   try {
     await screeningService.deleteScreening(req.params.screeningId);
-    res.status(204).send();
+    res
+      .status(200)
+      .json({ message: 'Screening deleted successfully', data: null });
   } catch (err) {
     next(err);
   }
 }
 
 /**
- * Récupère toutes les séances.
+ * Retrieve all screenings.
+ *
+ * @route GET /screenings
  * @param {Request} req - Express request
- * @param {Response} res - Express response (JSON : tableau de séances)
- * @param {NextFunction} next - Express next middleware
- * @returns {Promise<void>}
+ * @param {Response} res - Express response
+ * @param {NextFunction} next - Express error-handling middleware
+ * @returns {200 OK} `{ message, data }`
  */
 export async function getAllScreenings(
   req: Request,
@@ -118,18 +165,22 @@ export async function getAllScreenings(
 ) {
   try {
     const screenings = await screeningService.getAllScreenings();
-    res.json({ data: screenings });
+    res
+      .status(200)
+      .json({ message: 'Screenings fetched successfully', data: screenings });
   } catch (err) {
     next(err);
   }
 }
 
 /**
- * Recherche des séances : soit par texte global (q), soit par filtres (admin).
- * @param {Request} req - Express request (query: q OU filtres avancés)
- * @param {Response} res - Express response (JSON : résultats de recherche)
- * @param {NextFunction} next - Express next middleware
- * @returns {Promise<void>}
+ * Search screenings either by a global text query (`q`) or by advanced filters.
+ *
+ * @route GET /screenings/search
+ * @param {Request} req - Express request (query: `q` OR advanced filters)
+ * @param {Response} res - Express response
+ * @param {NextFunction} next - Express error-handling middleware
+ * @returns {200 OK} `{ message, data }`
  */
 export async function searchScreenings(
   req: Request,
@@ -137,28 +188,26 @@ export async function searchScreenings(
   next: NextFunction
 ) {
   try {
-    if (req.query.q) {
-      // Recherche textuelle globale
-      const results = await screeningService.searchScreenings(
-        String(req.query.q)
-      );
-      res.json({ data: results });
-    } else {
-      // Recherche avancée par filtres
-      const results = await screeningService.searchScreenings(req.query);
-      res.json({ data: results });
-    }
+    const results = req.query.q
+      ? await screeningService.searchScreenings(String(req.query.q))
+      : await screeningService.searchScreenings(req.query);
+
+    res
+      .status(200)
+      .json({ message: 'Screenings search completed', data: results });
   } catch (err) {
     next(err);
   }
 }
 
 /**
- * Récupère toutes les séances pour un film donné.
- * @param {Request} req - Express request (params: movieId)
- * @param {Response} res - Express response (JSON : séances du film)
- * @param {NextFunction} next - Express next middleware
- * @returns {Promise<void>}
+ * Retrieve all screenings for a given movie.
+ *
+ * @route GET /movies/:movieId/screenings
+ * @param {Request} req - Express request (params: `movieId`)
+ * @param {Response} res - Express response
+ * @param {NextFunction} next - Express error-handling middleware
+ * @returns {200 OK} `{ message, data }`
  */
 export async function getScreeningsByMovieId(
   req: Request<{ movieId: string }>,
@@ -169,18 +218,23 @@ export async function getScreeningsByMovieId(
     const screenings = await screeningService.getScreeningsByMovieId(
       req.params.movieId
     );
-    res.json({ data: screenings });
+    res.status(200).json({
+      message: 'Screenings by movie fetched successfully',
+      data: screenings,
+    });
   } catch (err) {
     next(err);
   }
 }
 
 /**
- * Récupère toutes les séances pour un cinéma donné.
- * @param {Request} req - Express request (params: theaterId)
- * @param {Response} res - Express response (JSON : séances du cinéma)
- * @param {NextFunction} next - Express next middleware
- * @returns {Promise<void>}
+ * Retrieve all screenings for a given theater.
+ *
+ * @route GET /theaters/:theaterId/screenings
+ * @param {Request} req - Express request (params: `theaterId`)
+ * @param {Response} res - Express response
+ * @param {NextFunction} next - Express error-handling middleware
+ * @returns {200 OK} `{ message, data }`
  */
 export async function getScreeningsByTheaterId(
   req: Request<{ theaterId: string }>,
@@ -191,19 +245,24 @@ export async function getScreeningsByTheaterId(
     const screenings = await screeningService.getScreeningsByTheaterId(
       req.params.theaterId
     );
-    res.json({ data: screenings });
+    res.status(200).json({
+      message: 'Screenings by theater fetched successfully',
+      data: screenings,
+    });
   } catch (err) {
     next(err);
   }
 }
 
 /**
- * Récupère toutes les séances pour une salle donnée,
- * @param {Request} req - Express request (params: hallId, query: theaterId obligatoire)
- * @param {Response} res - Express response (JSON : séances de la salle)
- * @param {NextFunction} next - Express next middleware
- * @returns {Promise<void>}
- * @throws {BadRequestError} Si theaterId absent.
+ * Retrieve all screenings for a given hall in a given theater.
+ *
+ * @route GET /halls/:hallId/screenings?theaterId={theaterId}
+ * @param {Request} req - Express request (params: `hallId`, query: `theaterId` required)
+ * @param {Response} res - Express response
+ * @param {NextFunction} next - Express error-handling middleware
+ * @returns {200 OK} `{ message, data }`
+ * @throws {BadRequestError} If `theaterId` is missing
  */
 export async function getScreeningsByHallId(
   req: Request<{ hallId: string }, {}, {}, { theaterId?: string }>,
@@ -219,32 +278,40 @@ export async function getScreeningsByHallId(
       req.params.hallId,
       theaterId
     );
-    res.json({ data: screenings });
+    res.status(200).json({
+      message: 'Screenings by hall fetched successfully',
+      data: screenings,
+    });
   } catch (err) {
     next(err);
   }
 }
 
 /**
- * Récupère toutes les séances pour une date précise (format : YYYY-MM-DD).
- * @param {Request} req - Express request (params: date)
- * @param {Response} res - Express response (JSON : séances du jour)
- * @param {NextFunction} next - Express next middleware
- * @returns {Promise<void>}
- * @throws {BadRequestError} Si le format de date est invalide.
+ * Retrieve all screenings for a specific date.
+ *
+ * @route GET /screenings/date/:date
+ * @param {Request} req - Express request (params: `date` in format YYYY-MM-DD)
+ * @param {Response} res - Express response
+ * @param {NextFunction} next - Express error-handling middleware
+ * @returns {200 OK} `{ message, data }`
+ * @throws {BadRequestError} If date format is invalid
  */
 export async function getScreeningsByDate(
   req: Request<{ date: string }>,
   res: Response,
   next: NextFunction
-): Promise<any> {
+): Promise<void> {
   try {
     const date = new Date(req.params.date);
     if (isNaN(date.getTime())) {
-      return res.status(400).json({ error: 'Invalid date format' });
+      return next(new BadRequestError('Invalid date format'));
     }
     const screenings = await screeningService.getScreeningsByDate(date);
-    res.json({ data: screenings });
+    res.status(200).json({
+      message: 'Screenings by date fetched successfully',
+      data: screenings,
+    });
   } catch (err) {
     next(err);
   }

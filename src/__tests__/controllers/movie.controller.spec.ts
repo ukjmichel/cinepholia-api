@@ -120,32 +120,32 @@ describe('MovieController', () => {
     });
   });
 
-  describe('deleteMovie', () => {
-    it('deletes movie and returns 204', async () => {
-      (movieService.deleteMovie as jest.Mock).mockResolvedValue(undefined);
-      const req = { params: { movieId: 'movie-1' } } as any;
-      const res = mockRes();
+ describe('deleteMovie', () => {
+   it('deletes movie and returns 200 with message', async () => {
+     (movieService.deleteMovie as jest.Mock).mockResolvedValue(undefined);
+     const req = { params: { movieId: 'movie-1' } } as any;
+     const res = mockRes();
 
-      await MovieController.deleteMovie(req, res, next);
+     await MovieController.deleteMovie(req, res, next);
 
-      expect(res.status).toHaveBeenCalledWith(204);
-      expect(res.json).toHaveBeenCalledWith({
-        message: 'Movie deleted successfully',
-        data: null,
-      });
-    });
+     expect(res.status).toHaveBeenCalledWith(200);
+     expect(res.json).toHaveBeenCalledWith({
+       message: 'Movie deleted successfully',
+       data: null,
+     });
+   });
 
-    it('calls next on error', async () => {
-      (movieService.deleteMovie as jest.Mock).mockRejectedValue(
-        new Error('fail')
-      );
-      const req = { params: { movieId: 'movie-1' } } as any;
-      const res = mockRes();
+   it('calls next on error', async () => {
+     (movieService.deleteMovie as jest.Mock).mockRejectedValue(
+       new Error('fail')
+     );
+     const req = { params: { movieId: 'movie-1' } } as any;
+     const res = mockRes();
 
-      await MovieController.deleteMovie(req, res, next);
-      expect(next).toHaveBeenCalledWith(expect.any(Error));
-    });
-  });
+     await MovieController.deleteMovie(req, res, next);
+     expect(next).toHaveBeenCalledWith(expect.any(Error));
+   });
+ });
 
   describe('getAllMovies', () => {
     it('returns all movies enriched with ratings', async () => {

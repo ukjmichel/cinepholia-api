@@ -1,487 +1,217 @@
+/**
+ * @module services/incident-report.service
+ *
+ * @description
+ * Minimal Incident Report service (Mongoose) with **no business logic**:
+ * - No SQL lookups, no status-transition rules, no dedupe/upsert tricks.
+ * - All single-record operations address documents by the business key `incidentId`
+ *   (not MongoDB `_id`).
+ * - Search helpers support free-text on `description` and common structured filters.
+ *
+ * Notes:
+ * - `incidentId` immutability and validation are enforced by the schema.
+ * - Errors: throws `NotFoundError` when a requested incident cannot be found.
+ */
+
 import {
+  IncidentReport,
   IncidentReportModel,
-  IncidentReportAttributes,
-} from '../models/incident-report.model.js';
-import { MovieTheaterModel } from '../models/movie-theater.model.js';
-import { MovieHallModel } from '../models/movie-hall.model.js';
-import { UserModel } from '../models/user.model.js';
-import { Op } from 'sequelize';
+} from '../models/incident-report.schema.js';
 import { NotFoundError } from '../errors/not-found-error.js';
 
+export type IncidentStatus =
+  | 'open'
+  | 'acknowledged'
+  | 'in_progress'
+  | 'resolved'
+  | 'closed';
+
+export interface IncidentReportFilter {
+  status?: IncidentStatus;
+  theaterId?: string;
+  hallId?: string;
+  createdBy?: string;
+  incidentId?: string;
+  createdAtFrom?: Date;
+  createdAtTo?: Date;
+  updatedAtFrom?: Date;
+  updatedAtTo?: Date;
+}
+
+/**
+ * Thin data-access layer around the IncidentReport Mongoose model.
+ * This class intentionally avoids domain/business rules.
+ */
 export class IncidentReportService {
   /**
-   * Create a new incident report, only if theater, hall, and user exist.
-   * @param data - The incident report attributes
-   * @returns The created IncidentReportModel instance
-   * @throws {NotFoundError} If the theater, hall, or user does not exist
+   * Get a single incident by its business id (`incidentId`).
+   * @param incidentId - The business UUID of the incident.
+   * @returns The incident report document.
+   * @throws {NotFoundError} If no incident exists with the given `incidentId`.
    */
-  async create(
-    data: Omit<
-      IncidentReportAttributes,
-      'incidentId' | 'createdAt' | 'updatedAt'
-    >
-  ): Promise<IncidentReportModel> {
-    // Verify theater exists
-    const theater = await MovieTheaterModel.findOne({
-      where: { theaterId: data.theaterId },
-    });
-    if (!theater) {
+  async getIncident(incidentId: string): Promise<IncidentReport> {
+    const doc = await IncidentReportModel.findOne({ incidentId }).lean();
+    if (!doc) {
       throw new NotFoundError(
-        `Theater not found for theaterId: ${data.theaterId}`
+        `Incident with incidentId "${incidentId}" not found`
       );
     }
-
-    // Verify hall exists and belongs to the theater
-    const hall = await MovieHallModel.findOne({
-      where: {
-        theaterId: data.theaterId,
-        hallId: data.hallId,
-      },
-    });
-    if (!hall) {
-      throw new NotFoundError(
-        `Hall not found for theaterId: ${data.theaterId}, hallId: ${data.hallId}`
-      );
-    }
-
-    // Verify user exists
-    const user = await UserModel.findOne({
-      where: { userId: data.userId },
-    });
-    if (!user) {
-      throw new NotFoundError(`User not found for userId: ${data.userId}`);
-    }
-
-    return IncidentReportModel.create(data);
+    return doc;
   }
 
   /**
-   * Find all incident reports, optionally paginated and filtered.
-   * @param options - Optional filtering and pagination options
-   * @returns An array of IncidentReportModel instances
+   * Create a new incident.
+   * - If `incidentId` is omitted, the schema default will generate one.
+   * - No deduplication/uniqueness logic is applied here.
+   * @param data - The incident payload.
+   * @returns The created incident report.
    */
-  async findAll(options?: {
-    limit?: number;
-    offset?: number;
-    status?: IncidentReportAttributes['status'];
-    theaterId?: string;
-    hallId?: string;
-    userId?: string;
-    includeAssociations?: boolean;
-  }): Promise<IncidentReportModel[]> {
-    const where: any = {};
-
-    if (options?.status) {
-      where.status = options.status;
-    }
-    if (options?.theaterId) {
-      where.theaterId = options.theaterId;
-    }
-    if (options?.hallId) {
-      where.hallId = options.hallId;
-    }
-    if (options?.userId) {
-      where.userId = options.userId;
-    }
-
-    const include = options?.includeAssociations
-      ? [UserModel, MovieTheaterModel, MovieHallModel]
-      : [];
-
-    return IncidentReportModel.findAll({
-      where,
-      include,
-      limit: options?.limit,
-      offset: options?.offset,
-      order: [
-        ['date', 'DESC'],
-        ['createdAt', 'DESC'],
-      ],
-    });
+  async createIncident(
+    data: Omit<IncidentReport, 'createdAt' | 'updatedAt'>
+  ): Promise<IncidentReport> {
+    const created = await IncidentReportModel.create(data as any);
+    return created.toObject() as IncidentReport;
   }
 
   /**
-   * Find an incident report by its ID.
-   * @param incidentId - The ID of the incident report
-   * @param includeAssociations - Whether to include related models
-   * @returns The found IncidentReportModel instance
-   * @throws {NotFoundError} If the incident report does not exist
+   * Update an incident by `incidentId`.
+   * - Passes updates as-is; relies on schema to enforce any immutability (e.g., `incidentId`).
+   * @param incidentId - The business UUID of the incident to update.
+   * @param updateData - Partial fields to update.
+   * @returns The updated incident report.
+   * @throws {NotFoundError} If the incident does not exist.
    */
-  async findById(
+  async updateIncident(
     incidentId: string,
-    includeAssociations: boolean = false
-  ): Promise<IncidentReportModel> {
-    const include = includeAssociations
-      ? [UserModel, MovieTheaterModel, MovieHallModel]
-      : [];
+    updateData: Partial<IncidentReport>
+  ): Promise<IncidentReport> {
+    const updated = await IncidentReportModel.findOneAndUpdate(
+      { incidentId },
+      updateData,
+      { new: true }
+    ).lean();
 
-    const incident = await IncidentReportModel.findByPk(incidentId, {
-      include,
-    });
-    if (!incident) {
+    if (!updated) {
       throw new NotFoundError(
-        `Incident report not found for incidentId: ${incidentId}`
+        `Incident with incidentId "${incidentId}" not found`
       );
     }
-    return incident;
+    return updated;
   }
 
   /**
-   * Find all incident reports by theater ID.
-   * @param theaterId - The ID of the theater
-   * @param includeAssociations - Whether to include related models
-   * @returns An array of IncidentReportModel instances
-   * @throws {NotFoundError} If no incidents are found for the theater
+   * Delete an incident by `incidentId`.
+   * @param incidentId - The business UUID of the incident to delete.
+   * @throws {NotFoundError} If the incident does not exist.
    */
-  async findAllByTheaterId(
+  async deleteIncident(incidentId: string): Promise<void> {
+    const res = await IncidentReportModel.deleteOne({ incidentId });
+    if (res.deletedCount === 0) {
+      throw new NotFoundError(
+        `Incident with incidentId "${incidentId}" not found`
+      );
+    }
+  }
+
+  /**
+   * List all incidents, newest first.
+   * @returns Array of incident reports.
+   */
+  async getAllIncidents(): Promise<IncidentReport[]> {
+    return IncidentReportModel.find().sort({ createdAt: -1 }).lean();
+  }
+
+  /**
+   * List incidents by status, newest first.
+   * @param status - One of the allowed status values.
+   * @returns Array of incident reports.
+   */
+  async getIncidentsByStatus(
+    status: IncidentStatus
+  ): Promise<IncidentReport[]> {
+    return IncidentReportModel.find({ status }).sort({ createdAt: -1 }).lean();
+  }
+
+  /**
+   * List incidents by location. If `hallId` is provided, narrows to that hall.
+   * @param theaterId - Theater identifier.
+   * @param hallId - Optional hall identifier.
+   * @returns Array of incident reports.
+   */
+  async getIncidentsByLocation(
     theaterId: string,
-    includeAssociations: boolean = false
-  ): Promise<IncidentReportModel[]> {
-    // Verify theater exists
-    const theater = await MovieTheaterModel.findOne({
-      where: { theaterId },
-    });
-    if (!theater) {
-      throw new NotFoundError(`Theater not found for theaterId: ${theaterId}`);
-    }
-
-    const include = includeAssociations
-      ? [UserModel, MovieTheaterModel, MovieHallModel]
-      : [];
-
-    const incidents = await IncidentReportModel.findAll({
-      where: { theaterId },
-      include,
-      order: [
-        ['date', 'DESC'],
-        ['createdAt', 'DESC'],
-      ],
-    });
-
-    if (!incidents.length) {
-      throw new NotFoundError(
-        `No incident reports found for theaterId: ${theaterId}`
-      );
-    }
-    return incidents;
+    hallId?: string
+  ): Promise<IncidentReport[]> {
+    const filter: any = { theaterId };
+    if (hallId) filter.hallId = hallId;
+    return IncidentReportModel.find(filter).sort({ createdAt: -1 }).lean();
   }
 
   /**
-   * Find all incident reports by hall ID and theater ID.
-   * @param theaterId - The ID of the theater
-   * @param hallId - The ID of the hall
-   * @param includeAssociations - Whether to include related models
-   * @returns An array of IncidentReportModel instances
-   * @throws {NotFoundError} If no incidents are found for the hall
+   * List incidents created by a specific user (UUID), newest first.
+   * @param createdBy - Creator's UUID.
+   * @returns Array of incident reports.
    */
-  async findAllByHall(
-    theaterId: string,
-    hallId: string,
-    includeAssociations: boolean = false
-  ): Promise<IncidentReportModel[]> {
-    // Verify hall exists
-    const hall = await MovieHallModel.findOne({
-      where: { theaterId, hallId },
-    });
-    if (!hall) {
-      throw new NotFoundError(
-        `Hall not found for theaterId: ${theaterId}, hallId: ${hallId}`
-      );
-    }
-
-    const include = includeAssociations
-      ? [UserModel, MovieTheaterModel, MovieHallModel]
-      : [];
-
-    const incidents = await IncidentReportModel.findAll({
-      where: { theaterId, hallId },
-      include,
-      order: [
-        ['date', 'DESC'],
-        ['createdAt', 'DESC'],
-      ],
-    });
-
-    if (!incidents.length) {
-      throw new NotFoundError(
-        `No incident reports found for theaterId: ${theaterId}, hallId: ${hallId}`
-      );
-    }
-    return incidents;
+  async getIncidentsByUser(createdBy: string): Promise<IncidentReport[]> {
+    return IncidentReportModel.find({ createdBy })
+      .sort({ createdAt: -1 })
+      .lean();
   }
 
   /**
-   * Find all incident reports by user ID.
-   * @param userId - The ID of the user
-   * @param includeAssociations - Whether to include related models
-   * @returns An array of IncidentReportModel instances
-   * @throws {NotFoundError} If no incidents are found for the user
+   * List incidents by `incidentId`. (Useful if you want to inspect potential duplicates.)
+   * @param incidentId - The business UUID to match.
+   * @returns Array of incident reports.
    */
-  async findAllByUserId(
-    userId: string,
-    includeAssociations: boolean = false
-  ): Promise<IncidentReportModel[]> {
-    // Verify user exists
-    const user = await UserModel.findOne({
-      where: { userId },
-    });
-    if (!user) {
-      throw new NotFoundError(`User not found for userId: ${userId}`);
-    }
-
-    const include = includeAssociations
-      ? [UserModel, MovieTheaterModel, MovieHallModel]
-      : [];
-
-    const incidents = await IncidentReportModel.findAll({
-      where: { userId },
-      include,
-      order: [
-        ['date', 'DESC'],
-        ['createdAt', 'DESC'],
-      ],
-    });
-
-    if (!incidents.length) {
-      throw new NotFoundError(
-        `No incident reports found for userId: ${userId}`
-      );
-    }
-    return incidents;
+  async getIncidentsByIncidentId(
+    incidentId: string
+  ): Promise<IncidentReport[]> {
+    return IncidentReportModel.find({ incidentId })
+      .sort({ createdAt: -1 })
+      .lean();
   }
 
   /**
-   * Find all incident reports by status.
-   * @param status - The status to filter by
-   * @param includeAssociations - Whether to include related models
-   * @returns An array of IncidentReportModel instances
-   * @throws {NotFoundError} If no incidents are found with the given status
+   * Search incidents with optional free text and structured filters.
+   * - Free text (`q`) applies to `description` (case-insensitive).
+   * - Supports date ranges for `createdAt` and `updatedAt`.
+   * @param q - Optional free-text query for `description`.
+   * @param filters - Optional structured filters.
+   * @returns Array of incident reports.
    */
-  async findAllByStatus(
-    status: IncidentReportAttributes['status'],
-    includeAssociations: boolean = false
-  ): Promise<IncidentReportModel[]> {
-    const include = includeAssociations
-      ? [UserModel, MovieTheaterModel, MovieHallModel]
-      : [];
+  async searchIncidents(
+    q?: string,
+    filters?: IncidentReportFilter
+  ): Promise<IncidentReport[]> {
+    const mongoFilter: any = {};
 
-    const incidents = await IncidentReportModel.findAll({
-      where: { status },
-      include,
-      order: [
-        ['date', 'DESC'],
-        ['createdAt', 'DESC'],
-      ],
-    });
+    if (filters) {
+      if (filters.status) mongoFilter.status = filters.status;
+      if (filters.theaterId) mongoFilter.theaterId = filters.theaterId;
+      if (filters.hallId) mongoFilter.hallId = filters.hallId;
+      if (filters.createdBy) mongoFilter.createdBy = filters.createdBy;
+      if (filters.incidentId) mongoFilter.incidentId = filters.incidentId;
 
-    if (!incidents.length) {
-      throw new NotFoundError(
-        `No incident reports found with status: ${status}`
-      );
-    }
-    return incidents;
-  }
-
-  /**
-   * Update an incident report by its ID.
-   * @param incidentId - The ID of the incident report
-   * @param data - Partial incident report attributes for update
-   * @returns The updated IncidentReportModel instance
-   * @throws {NotFoundError} If the incident report does not exist
-   */
-  async updateById(
-    incidentId: string,
-    data: Partial<
-      Omit<IncidentReportAttributes, 'incidentId' | 'createdAt' | 'updatedAt'>
-    >
-  ): Promise<IncidentReportModel> {
-    const incident = await this.findById(incidentId);
-
-    // If updating theater/hall references, verify they exist
-    if (data.theaterId || data.hallId) {
-      const theaterId = data.theaterId || incident.theaterId;
-      const hallId = data.hallId || incident.hallId;
-
-      const theater = await MovieTheaterModel.findOne({
-        where: { theaterId },
-      });
-      if (!theater) {
-        throw new NotFoundError(
-          `Theater not found for theaterId: ${theaterId}`
-        );
+      if (filters.createdAtFrom || filters.createdAtTo) {
+        mongoFilter.createdAt = {};
+        if (filters.createdAtFrom)
+          mongoFilter.createdAt.$gte = filters.createdAtFrom;
+        if (filters.createdAtTo)
+          mongoFilter.createdAt.$lte = filters.createdAtTo;
       }
-
-      const hall = await MovieHallModel.findOne({
-        where: { theaterId, hallId },
-      });
-      if (!hall) {
-        throw new NotFoundError(
-          `Hall not found for theaterId: ${theaterId}, hallId: ${hallId}`
-        );
+      if (filters.updatedAtFrom || filters.updatedAtTo) {
+        mongoFilter.updatedAt = {};
+        if (filters.updatedAtFrom)
+          mongoFilter.updatedAt.$gte = filters.updatedAtFrom;
+        if (filters.updatedAtTo)
+          mongoFilter.updatedAt.$lte = filters.updatedAtTo;
       }
     }
 
-    // If updating user reference, verify user exists
-    if (data.userId) {
-      const user = await UserModel.findOne({
-        where: { userId: data.userId },
-      });
-      if (!user) {
-        throw new NotFoundError(`User not found for userId: ${data.userId}`);
-      }
-    }
+    if (q) mongoFilter.description = { $regex: q, $options: 'i' };
 
-    return incident.update(data);
-  }
-
-  /**
-   * Update the status of an incident report.
-   * @param incidentId - The ID of the incident report
-   * @param status - The new status
-   * @returns The updated IncidentReportModel instance
-   * @throws {NotFoundError} If the incident report does not exist
-   */
-  async updateStatus(
-    incidentId: string,
-    status: IncidentReportAttributes['status']
-  ): Promise<IncidentReportModel> {
-    return this.updateById(incidentId, { status });
-  }
-
-  /**
-   * Delete an incident report by its ID.
-   * @param incidentId - The ID of the incident report
-   * @returns An object with a success message
-   * @throws {NotFoundError} If the incident report does not exist
-   */
-  async deleteById(incidentId: string): Promise<{ message: string }> {
-    const incident = await this.findById(incidentId);
-    await incident.destroy();
-    return { message: 'Incident report deleted' };
-  }
-
-  /**
-   * Search incident reports by title, description, or status.
-   * @param query - Search parameters
-   * @param options - Optional pagination options
-   * @returns An array of matching IncidentReportModel instances
-   * @throws {NotFoundError} If no incidents match the search criteria
-   */
-  async search(
-    query: {
-      title?: string;
-      description?: string;
-      status?: IncidentReportAttributes['status'];
-      theaterId?: string;
-      hallId?: string;
-      userId?: string;
-      dateFrom?: Date;
-      dateTo?: Date;
-    },
-    options?: {
-      limit?: number;
-      offset?: number;
-      includeAssociations?: boolean;
-    }
-  ): Promise<IncidentReportModel[]> {
-    const where: any = {};
-
-    if (query.title) {
-      where.title = { [Op.like]: `%${query.title}%` };
-    }
-    if (query.description) {
-      where.description = { [Op.like]: `%${query.description}%` };
-    }
-    if (query.status) {
-      where.status = query.status;
-    }
-    if (query.theaterId) {
-      where.theaterId = query.theaterId;
-    }
-    if (query.hallId) {
-      where.hallId = query.hallId;
-    }
-    if (query.userId) {
-      where.userId = query.userId;
-    }
-    if (query.dateFrom || query.dateTo) {
-      where.date = {};
-      if (query.dateFrom) {
-        where.date[Op.gte] = query.dateFrom;
-      }
-      if (query.dateTo) {
-        where.date[Op.lte] = query.dateTo;
-      }
-    }
-
-    const include = options?.includeAssociations
-      ? [UserModel, MovieTheaterModel, MovieHallModel]
-      : [];
-
-    const incidents = await IncidentReportModel.findAll({
-      where,
-      include,
-      limit: options?.limit,
-      offset: options?.offset,
-      order: [
-        ['date', 'DESC'],
-        ['createdAt', 'DESC'],
-      ],
-    });
-
-    if (!incidents.length) {
-      throw new NotFoundError(
-        'No incident reports matched the search criteria.'
-      );
-    }
-    return incidents;
-  }
-
-  /**
-   * Get incident report statistics.
-   * @param theaterId - Optional theater ID to filter by
-   * @returns Statistics about incident reports
-   */
-  async getStatistics(theaterId?: string): Promise<{
-    total: number;
-    pending: number;
-    inProgress: number;
-    fulfilled: number;
-    byTheater?: { [theaterId: string]: number };
-  }> {
-    const where = theaterId ? { theaterId } : {};
-
-    const [total, pending, inProgress, fulfilled] = await Promise.all([
-      IncidentReportModel.count({ where }),
-      IncidentReportModel.count({ where: { ...where, status: 'pending' } }),
-      IncidentReportModel.count({ where: { ...where, status: 'in_progress' } }),
-      IncidentReportModel.count({ where: { ...where, status: 'fulfilled' } }),
-    ]);
-
-    const result: any = {
-      total,
-      pending,
-      inProgress,
-      fulfilled,
-    };
-
-    // If no specific theater, get counts by theater
-    if (!theaterId) {
-      const byTheaterRaw = await IncidentReportModel.findAll({
-        attributes: [
-          'theaterId',
-          [IncidentReportModel.sequelize!.fn('COUNT', '*'), 'count'],
-        ],
-        group: ['theaterId'],
-        raw: true,
-      });
-
-      result.byTheater = byTheaterRaw.reduce((acc: any, item: any) => {
-        acc[item.theaterId] = parseInt(item.count);
-        return acc;
-      }, {});
-    }
-
-    return result;
+    return IncidentReportModel.find(mongoFilter).sort({ createdAt: -1 }).lean();
   }
 }
+
+export const incidentReportService = new IncidentReportService();

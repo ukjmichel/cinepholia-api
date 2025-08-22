@@ -179,7 +179,7 @@ describe('Movie E2E Routes', () => {
         .delete(`/movies/${movie.movieId}`)
         .set('Authorization', `Bearer ${staffToken}`);
 
-      expect(res.status).toBe(204);
+      expect(res.status).toBe(200);
 
       const deleted = await MovieModel.findByPk(movie.movieId);
       expect(deleted).toBeNull();

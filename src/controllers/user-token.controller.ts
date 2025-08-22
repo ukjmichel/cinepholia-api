@@ -1,32 +1,48 @@
 /**
- * Controller for password reset token management.
+ * @module controllers/user-token.controller
  *
- * Endpoints:
- * - Send a password reset token to a user's email.
- * - Validate a provided reset token.
- * - Reset a user's password using a valid token.
+ * @description
+ * Express controller for managing user tokens and the full password reset workflow.
  *
- * Security:
- * - Responses are user enumeration safe.
- * - Tokens are hashed in DB, single-use, and deleted after password reset.
+ * @features
+ * - Secure generation and storage of `reset_password` tokens
+ * - Sends one-time 6-digit codes by email with expiration
+ * - Middleware for validating reset tokens before password change
+ * - Atomic password reset with immediate token invalidation after use
+ *
+ * @security
+ * - Prevents user enumeration by always returning a generic success message
+ * - Tokens have short expiration times and are single-use
+ *
+ * @dependencies
+ * - `userService`: Finds and updates user accounts
+ * - `resetPasswordTokenService`: Creates, validates, and deletes reset tokens
+ * - `EmailService`: Sends password reset codes
+ * - `BadRequestError`: For explicit client input errors
  */
 
 import { Request, Response, NextFunction } from 'express';
 import { UserTokenService } from '../services/user-token.service.js';
 import { EmailService } from '../services/email.service.js';
 import { UserModel } from '../models/user.model.js';
+import { UserTokenType } from '../models/user-token.model.js';
 import { BadRequestError } from '../errors/bad-request-error.js';
 import { UserService } from '../services/user.service.js';
 
 const emailService = new EmailService();
+const userTokenService = new UserTokenService();
 const userService = new UserService();
 
 /**
- * Sends a password reset code to the user's email.
+ * Send a password reset code to the provided email.
+ * If the email exists, a token is generated, stored, and emailed.
+ * Always returns the same response to avoid revealing if the email is registered.
  *
- * - Always responds with a generic message, whether the user exists or not.
- * - Uses `UserTokenService` to enforce rate limiting and hashing.
- * - Sends the raw 6-digit code by email to the user.
+ * @route POST /auth/password-reset/send
+ * @param {Request} req - Express request (body: `{ email }`)
+ * @param {Response} res - Express response
+ * @param {NextFunction} next - Express error handler
+ * @returns {200 OK} `{ message, data: null }` Generic success message
  */
 export const sendResetPasswordToken = async (
   req: Request,
@@ -36,119 +52,105 @@ export const sendResetPasswordToken = async (
   try {
     const { email } = req.body;
     if (!email) {
-      return res.status(400).json({ error: 'Email is required.' });
+      return next(new BadRequestError('Email is required.'));
     }
 
+    // Look up user (case-insensitive)
     const user = await UserModel.findOne({
       where: { email: email.trim().toLowerCase() },
     });
 
+    // Generic message to prevent user enumeration
     const genericMessage =
-      'If this email is registered, you will receive a reset code.';
+      'If this email is registered, you will receive a code.';
 
-    // If user not found → respond with generic message
     if (!user) {
-      return res.status(200).json({ message: genericMessage });
+      return res.status(200).json({ message: genericMessage, data: null });
     }
 
-    try {
-      // ✅ Service generates + hashes token and enforces rate limit
-      const code = await UserTokenService.createPasswordResetToken(
-        user.userId,
-        60 // token expires in 60 minutes
-      );
+    // Generate 6-digit code and set expiration (1 hour)
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
 
-      // ✅ Send raw code via email
-      await emailService.sendResetPasswordEmail(
-        user.email,
-        user.username,
-        code
-      );
-    } catch (err: any) {
-      // ✅ Handle rate limit error gracefully
-      if (err.message.includes('wait')) {
-        return res.status(429).json({ message: err.message });
-      }
-      throw err;
-    }
+    // Store code as token
+    await userTokenService.createOrReplaceToken({
+      userId: user.userId,
+      token: code,
+      type: 'reset_password',
+      expiresAt,
+    });
 
-    return res.status(200).json({ message: genericMessage });
+    // Send email with the code
+    await emailService.sendResetPasswordEmail(user.email, user.username, code);
+
+    return res.status(200).json({ message: genericMessage, data: null });
   } catch (err) {
     next(err);
   }
 };
 
 /**
- * Middleware to validate a password reset token.
+ * Middleware to validate if a provided token is valid for a given type.
  *
- * - Validates that the token exists, is not expired, and has not exceeded max attempts.
- * - Increments attempt counter on failures.
+ * @param {UserTokenType} tokenType - Token type to validate (e.g. `reset_password`)
+ * @returns {Function} Express middleware function
+ *
+ * @example
+ * router.post('/auth/password-reset/validate', validateTokenValidity('reset_password'));
  */
 export const validateTokenValidity =
-  () =>
-  async (req: Request, res: Response, next: NextFunction): Promise<any> => {
+  (tokenType: UserTokenType) =>
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { token } = req.body;
       if (!token) {
         return next(new BadRequestError('Token is required.'));
       }
 
-      try {
-        const record = await UserTokenService.validatePasswordResetToken(token);
-        if (!record) {
-          return next(new BadRequestError('Invalid or expired token.'));
-        }
-        return res.json({ message: 'Token is valid.' });
-      } catch (err: any) {
-        // ✅ Handle max attempts exceeded
-        if (err.message.includes('Too many invalid attempts')) {
-          return res.status(429).json({ message: err.message });
-        }
-        throw err;
-      }
+      await userTokenService.validateToken(token, tokenType);
+
+      res.status(200).json({ message: 'Token is valid.', data: null });
     } catch (error) {
       next(error);
     }
   };
 
 /**
- * Resets the user's password using a valid reset token.
+ * Reset the user's password using a valid reset token.
+ * - Validates the token
+ * - Updates the user's password
+ * - Deletes the token after use
  *
- * - Validates the token with attempt tracking.
- * - Updates the user's password via `UserService`.
- * - Deletes the token after successful password reset.
+ * @route POST /auth/password-reset/confirm
+ * @param {Request} req - Express request (body: `{ token, password }`)
+ * @param {Response} res - Express response
+ * @param {NextFunction} next - Express error handler
+ * @returns {200 OK} `{ message, data: null }`
  */
 export const resetPasswordController = async (
   req: Request,
   res: Response,
   next: NextFunction
-): Promise<any> => {
+): Promise<void> => {
   try {
     const { token, password } = req.body;
     if (!token || !password) {
       return next(new BadRequestError('Token and new password are required.'));
     }
 
-    let tokenRecord;
-    try {
-      tokenRecord = await UserTokenService.validatePasswordResetToken(token);
-      if (!tokenRecord) {
-        return next(new BadRequestError('Invalid or expired token.'));
-      }
-    } catch (err: any) {
-      if (err.message.includes('Too many invalid attempts')) {
-        return res.status(429).json({ message: err.message });
-      }
-      throw err;
-    }
+    // Validate token (must be reset_password type)
+    const tokenInstance = await userTokenService.validateToken(
+      token,
+      'reset_password'
+    );
 
-    // ✅ Update password
-    await userService.changePassword(tokenRecord.userId, password);
+    // Update password
+    await userService.changePassword(tokenInstance.userId, password);
 
-    // ✅ Consume (delete) token
-    await UserTokenService.consumePasswordResetToken(tokenRecord.userId);
+    // Delete token after successful password change
+    await userTokenService.deleteTokenForUser(tokenInstance.userId);
 
-    return res.json({ message: 'Password has been reset.' });
+    res.status(200).json({ message: 'Password has been reset.', data: null });
   } catch (err) {
     next(err);
   }

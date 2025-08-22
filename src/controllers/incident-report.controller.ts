@@ -1,372 +1,520 @@
+/**
+ * @module controllers/incident-report.controller
+ *
+ * @description
+ * Express handlers for Incident Reports.
+ *
+ * Security & Validation:
+ * - XSS sanitization of `description` via DOMPurify (server-side jsdom).
+ * - Basic runtime validation for UUIDs, ids, statuses, and date parsing.
+ *
+ * Notable behavior:
+ * - `incidentId` is optional on create: if omitted, the model generates it.
+ * - `incidentId` cannot be updated later (immutable).
+ * - `searchIncidents` is strongly typed to avoid `req.query` optional errors.
+ *
+ * Routing note:
+ * - Single-record routes should use `/:incidentId` (UUID) — never Mongo `_id`.
+ */
+
 import { Request, Response, NextFunction } from 'express';
-import { IncidentReportService } from '../services/incident-report.service.js';
-import { BadRequestError } from '../errors/bad-request-error.js';
+import { incidentReportService } from '../services/incident-report.service.js';
+import { IncidentReport } from '../models/incident-report.schema.js';
+import createDOMPurify from 'dompurify';
+import { JSDOM } from 'jsdom';
 
-/**
- * Get an incident report by its ID.
- * @route GET /incident-reports/:incidentId
- * @param {Request} req - Express request object (expects incidentId in params)
- * @param {Response} res - Express response object (returns incident report)
- * @param {NextFunction} next - Express next middleware
- * @returns {Promise<void>}
- * @async
- */
-export const getIncidentReportById = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-): Promise<void> => {
-  try {
-    const incidentReport = await new IncidentReportService().findById(
-      req.params.incidentId
-    );
-    res.json({ message: 'Incident report found', data: incidentReport });
-  } catch (err) {
-    next(err);
+/* -------------------------------------------------------------------------- */
+/*                                Sanitization                                */
+/* -------------------------------------------------------------------------- */
+
+const { window } = new JSDOM('');
+const DOMPurifyInstance = createDOMPurify(window as any);
+
+/** Sanitize a description to prevent XSS (strips all tags/attrs). */
+export function sanitizeDescription(input: string): string {
+  return DOMPurifyInstance.sanitize(input, {
+    ALLOWED_TAGS: [],
+    ALLOWED_ATTR: [],
+  });
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                  Helpers                                   */
+/* -------------------------------------------------------------------------- */
+
+const uuidRegex =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const idRegex = /^[a-zA-Z0-9_-]+$/;
+
+const ALLOWED_STATUSES = [
+  'open',
+  'acknowledged',
+  'in_progress',
+  'resolved',
+  'closed',
+] as const;
+type AllowedStatus = (typeof ALLOWED_STATUSES)[number];
+
+function isValidUUID(v?: string) {
+  return typeof v === 'string' && uuidRegex.test(v);
+}
+function isValidId(v?: string, min = 1, max = 36) {
+  return (
+    typeof v === 'string' &&
+    v.length >= min &&
+    v.length <= max &&
+    idRegex.test(v)
+  );
+}
+function isValidStatus(v?: string): v is AllowedStatus {
+  return (
+    typeof v === 'string' && (ALLOWED_STATUSES as readonly string[]).includes(v)
+  );
+}
+function parseDateOr400(
+  val: unknown,
+  field: string,
+  res: Response
+): Date | undefined {
+  if (val === undefined) return undefined;
+  const d = new Date(String(val));
+  if (isNaN(d.getTime())) {
+    res.status(400).json({ message: `Invalid date for ${field}`, data: null });
+    return undefined as any;
   }
-};
+  return d;
+}
 
-/**
- * Create a new incident report.
- * @route POST /incident-reports
- * @param {Request} req - Express request object (expects incident report data in body)
- * @param {Response} res - Express response object (returns created incident report)
- * @param {NextFunction} next - Express next middleware
- * @returns {Promise<void>}
- * @async
- */
-export const createIncidentReport = async (
+/* -------------------------------------------------------------------------- */
+/*                                 CRUD GETs                                  */
+/* -------------------------------------------------------------------------- */
+
+export async function getAllIncidents(
   req: Request,
   res: Response,
   next: NextFunction
-): Promise<void> => {
+) {
   try {
-    const incidentReport = await new IncidentReportService().create(req.body);
+    const incidents = await incidentReportService.getAllIncidents();
+    res.status(200).json({ message: 'All incidents', data: incidents });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getIncident(
+  req: Request<{ incidentId: string }>,
+  res: Response,
+  next: NextFunction
+): Promise<any> {
+  try {
+    const { incidentId } = req.params;
+    if (!isValidUUID(incidentId)) {
+      return res
+        .status(400)
+        .json({ message: 'Invalid incidentId (UUID)', data: null });
+    }
+    const incident = await incidentReportService.getIncident(incidentId);
+    res.status(200).json({ message: 'Incident found', data: incident });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getIncidentsByStatus(
+  req: Request<{ status: string }>,
+  res: Response,
+  next: NextFunction
+): Promise<any> {
+  try {
+    const { status } = req.params;
+    if (!isValidStatus(status)) {
+      return res.status(400).json({ message: 'Invalid status', data: null });
+    }
+    const incidents = await incidentReportService.getIncidentsByStatus(status);
     res
-      .status(201)
-      .json({ message: 'Incident report created', data: incidentReport });
-  } catch (err) {
-    next(err);
+      .status(200)
+      .json({ message: `Incidents with status ${status}`, data: incidents });
+  } catch (error) {
+    next(error);
   }
-};
+}
 
-/**
- * Update an incident report by its ID.
- * @route PATCH /incident-reports/:incidentId
- * @param {Request} req - Express request object (expects incidentId in params and update data in body)
- * @param {Response} res - Express response object (returns updated incident report)
- * @param {NextFunction} next - Express next middleware
- * @returns {Promise<void>}
- * @async
- */
-export const updateIncidentReport = async (
-  req: Request,
+export async function getIncidentsByLocation(
+  req: Request<{ theaterId: string; hallId?: string }>,
   res: Response,
   next: NextFunction
-): Promise<void> => {
+): Promise<any> {
   try {
-    const incidentReport = await new IncidentReportService().updateById(
-      req.params.incidentId,
-      req.body
+    const { theaterId, hallId } = req.params;
+    if (!isValidId(theaterId, 2, 36)) {
+      return res.status(400).json({ message: 'Invalid theaterId', data: null });
+    }
+    if (hallId && !isValidId(hallId, 1, 16)) {
+      return res.status(400).json({ message: 'Invalid hallId', data: null });
+    }
+    const incidents = await incidentReportService.getIncidentsByLocation(
+      theaterId,
+      hallId
     );
-    res.json({ message: 'Incident report updated', data: incidentReport });
-  } catch (err) {
-    next(err);
+    res.status(200).json({ message: 'Incidents by location', data: incidents });
+  } catch (error) {
+    next(error);
   }
-};
+}
 
-/**
- * Delete an incident report by its ID.
- * @route DELETE /incident-reports/:incidentId
- * @param {Request} req - Express request object (expects incidentId in params)
- * @param {Response} res - Express response object
- * @param {NextFunction} next - Express next middleware
- * @returns {Promise<void>}
- * @async
- */
-export const deleteIncidentReport = async (
-  req: Request,
+export async function getIncidentsByUser(
+  req: Request<{ createdBy: string }>,
   res: Response,
   next: NextFunction
-): Promise<void> => {
+): Promise<any> {
   try {
-    await new IncidentReportService().deleteById(req.params.incidentId);
-    res.status(204).send(); // No body for 204
-  } catch (err) {
-    next(err);
+    const { createdBy } = req.params;
+    if (!isValidUUID(createdBy)) {
+      return res
+        .status(400)
+        .json({ message: 'Invalid createdBy UUID', data: null });
+    }
+    const incidents = await incidentReportService.getIncidentsByUser(createdBy);
+    res
+      .status(200)
+      .json({ message: `Incidents by user ${createdBy}`, data: incidents });
+  } catch (error) {
+    next(error);
   }
-};
+}
 
-/**
- * Get all incident reports.
- * @route GET /incident-reports
- * @param {Request} req - Express request object (supports limit and offset query params)
- * @param {Response} res - Express response object (returns all incident reports)
- * @param {NextFunction} next - Express next middleware
- * @returns {Promise<void>}
- * @async
- */
-export const getAllIncidentReports = async (
-  req: Request,
+/** Optional: list all docs that share a given incidentId (mainly for debugging). */
+export async function getIncidentsByIncidentId(
+  req: Request<{ incidentId: string }>,
   res: Response,
   next: NextFunction
-): Promise<void> => {
+): Promise<any> {
   try {
-    const limit = req.query.limit
-      ? parseInt(req.query.limit as string)
-      : undefined;
-    const offset = req.query.offset
-      ? parseInt(req.query.offset as string)
-      : undefined;
-
-    const incidentReports = await new IncidentReportService().findAll({
-      limit,
-      offset,
+    const { incidentId } = req.params;
+    if (!isValidUUID(incidentId)) {
+      return res
+        .status(400)
+        .json({ message: 'Invalid incidentId', data: null });
+    }
+    const incidents =
+      await incidentReportService.getIncidentsByIncidentId(incidentId);
+    res.status(200).json({
+      message: `Incidents for incidentId ${incidentId}`,
+      data: incidents,
     });
-    res.json({ message: 'All incident reports', data: incidentReports });
-  } catch (err) {
-    next(err);
+  } catch (error) {
+    next(error);
   }
-};
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                    POST                                    */
+/* -------------------------------------------------------------------------- */
 
 /**
- * Get incident reports for a theater.
- * @route GET /incident-reports/theater/:theaterId
- * @param {Request} req - Express request object (expects theaterId in params)
- * @param {Response} res - Express response object (returns incident reports for theater)
- * @param {NextFunction} next - Express next middleware
- * @returns {Promise<void>}
- * @async
+ * **POST /incidents**
+ * Create a new incident (XSS sanitized).
+ * - `incidentId` is optional; if absent, it is auto-generated by the model.
  */
-export const getIncidentReportsByTheater = async (
+export async function createIncident(
   req: Request,
   res: Response,
   next: NextFunction
-): Promise<void> => {
+): Promise<any> {
   try {
-    const incidentReports =
-      await new IncidentReportService().findAllByTheaterId(
-        req.params.theaterId
-      );
-    res.json({
-      message: 'Incident reports for theater',
-      data: incidentReports,
-    });
-  } catch (err) {
-    next(err);
-  }
-};
+    const payload: Omit<IncidentReport, 'createdAt' | 'updatedAt'> & {
+      incidentId?: string;
+    } = {
+      incidentId: req.body.incidentId, // optional
+      theaterId: req.body.theaterId,
+      hallId: req.body.hallId,
+      description: req.body.description,
+      createdBy: req.body.createdBy,
+      status: req.body.status ?? 'open',
+    };
 
-/**
- * Get incident reports for a specific hall.
- * @route GET /incident-reports/hall/:theaterId/:hallId
- * @param {Request} req - Express request object (expects theaterId and hallId in params)
- * @param {Response} res - Express response object (returns incident reports for hall)
- * @param {NextFunction} next - Express next middleware
- * @returns {Promise<void>}
- * @async
- */
-export const getIncidentReportsByHall = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-): Promise<void> => {
-  try {
-    const incidentReports = await new IncidentReportService().findAllByHall(
-      req.params.theaterId,
-      req.params.hallId
-    );
-    res.json({ message: 'Incident reports for hall', data: incidentReports });
-  } catch (err) {
-    next(err);
-  }
-};
-
-/**
- * Get incident reports for a user.
- * @route GET /incident-reports/user/:userId
- * @param {Request} req - Express request object (expects userId in params)
- * @param {Response} res - Express response object (returns incident reports for user)
- * @param {NextFunction} next - Express next middleware
- * @returns {Promise<void>}
- * @async
- */
-export const getIncidentReportsByUser = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-): Promise<void> => {
-  try {
-    const incidentReports = await new IncidentReportService().findAllByUserId(
-      req.params.userId
-    );
-    res.json({ message: 'Incident reports for user', data: incidentReports });
-  } catch (err) {
-    next(err);
-  }
-};
-
-/**
- * Get incident reports by status.
- * @route GET /incident-reports/status/:status
- * @param {Request} req - Express request object (expects status in params)
- * @param {Response} res - Express response object (returns incident reports by status)
- * @param {NextFunction} next - Express next middleware
- * @returns {Promise<void>}
- * @async
- */
-export const getIncidentReportsByStatus = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-): Promise<void> => {
-  try {
-    const incidentReports = await new IncidentReportService().findAllByStatus(
-      req.params.status as 'pending' | 'in_progress' | 'fulfilled'
-    );
-    res.json({
-      message: `Incident reports with status ${req.params.status}`,
-      data: incidentReports,
-    });
-  } catch (err) {
-    next(err);
-  }
-};
-
-/**
- * Update the status of an incident report.
- * @route PATCH /incident-reports/:incidentId/status
- * @param {Request} req - Express request object (expects incidentId in params and status in body)
- * @param {Response} res - Express response object (returns updated incident report)
- * @param {NextFunction} next - Express next middleware
- * @returns {Promise<void>}
- * @async
- */
-export const updateIncidentReportStatus = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-): Promise<void> => {
-  try {
-    const { status } = req.body;
-    if (!status) {
-      return next(new BadRequestError('Status is required in request body'));
+    // Optional incidentId validation (only if provided)
+    if (payload.incidentId && !isValidUUID(payload.incidentId)) {
+      return res
+        .status(400)
+        .json({ message: 'Invalid incidentId (UUID)', data: null });
     }
 
-    const validStatuses = ['pending', 'in_progress', 'fulfilled'];
-    if (!validStatuses.includes(status)) {
-      return next(
-        new BadRequestError(
-          `Status must be one of: ${validStatuses.join(', ')}`
-        )
-      );
+    // Basic required fields
+    if (!isValidId(payload.theaterId, 2, 36))
+      return res.status(400).json({ message: 'Invalid theaterId', data: null });
+    if (!isValidId(payload.hallId, 1, 16))
+      return res.status(400).json({ message: 'Invalid hallId', data: null });
+    if (!isValidUUID(payload.createdBy))
+      return res
+        .status(400)
+        .json({ message: 'Invalid createdBy (UUID)', data: null });
+    if (payload.status && !isValidStatus(payload.status))
+      return res
+        .status(400)
+        .json({ message: 'Invalid status value', data: null });
+
+    if (payload.description) {
+      payload.description = sanitizeDescription(payload.description);
     }
 
-    const incidentReport = await new IncidentReportService().updateStatus(
-      req.params.incidentId,
-      status
-    );
-    res.json({
-      message: 'Incident report status updated',
-      data: incidentReport,
-    });
-  } catch (err) {
-    next(err);
+    const created = await incidentReportService.createIncident(payload);
+    res.status(201).json({ message: 'Incident created', data: created });
+  } catch (error) {
+    next(error);
   }
-};
+}
 
-/**
- * Search incident reports by title, description, status, theater, hall, user, or date range.
- * @route GET /incident-reports/search
- * @param {Request} req - Express request object (expects search criteria in query params)
- * @param {Response} res - Express response object (returns search results)
- * @param {NextFunction} next - Express next middleware
- * @returns {Promise<void>}
- * @async
- */
-export const searchIncidentReports = async (
-  req: Request,
+/* -------------------------------------------------------------------------- */
+/*                                    PUT                                     */
+/* -------------------------------------------------------------------------- */
+
+export async function updateIncident(
+  req: Request<{ incidentId: string }>,
   res: Response,
   next: NextFunction
-): Promise<void> => {
+): Promise<any> {
   try {
+    const { incidentId } = req.params;
+    if (!isValidUUID(incidentId)) {
+      return res
+        .status(400)
+        .json({ message: 'Invalid incidentId (UUID)', data: null });
+    }
+
+    const updateData: Partial<IncidentReport> = { ...req.body };
+
+    // Do not allow updating incidentId (immutable)
+    if (updateData.incidentId !== undefined) {
+      delete updateData.incidentId;
+    }
+
+    if (updateData.description) {
+      updateData.description = sanitizeDescription(updateData.description);
+    }
+    if (updateData.status && !isValidStatus(updateData.status)) {
+      return res
+        .status(400)
+        .json({ message: 'Invalid status value', data: null });
+    }
+    if (updateData.createdBy && !isValidUUID(updateData.createdBy)) {
+      return res.status(400).json({ message: 'Invalid createdBy', data: null });
+    }
+    if (updateData.theaterId && !isValidId(updateData.theaterId, 2, 36)) {
+      return res.status(400).json({ message: 'Invalid theaterId', data: null });
+    }
+    if (updateData.hallId && !isValidId(updateData.hallId, 1, 16)) {
+      return res.status(400).json({ message: 'Invalid hallId', data: null });
+    }
+
+    const updated = await incidentReportService.updateIncident(
+      incidentId,
+      updateData
+    );
+    res.status(200).json({ message: 'Incident updated', data: updated });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                   DELETE                                   */
+/* -------------------------------------------------------------------------- */
+
+export async function deleteIncident(
+  req: Request<{ incidentId: string }>,
+  res: Response,
+  next: NextFunction
+): Promise<any> {
+  try {
+    const { incidentId } = req.params;
+    if (!isValidUUID(incidentId)) {
+      return res
+        .status(400)
+        .json({ message: 'Invalid incidentId (UUID)', data: null });
+    }
+    await incidentReportService.deleteIncident(incidentId);
+    res.status(200).json({ message: 'Incident deleted', data: null });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                           STATUS TRANSITION ROUTES                         */
+/* -------------------------------------------------------------------------- */
+
+export async function acknowledgeIncident(
+  req: Request<{ incidentId: string }>,
+  res: Response,
+  next: NextFunction
+): Promise<any> {
+  try {
+    const { incidentId } = req.params;
+    if (!isValidUUID(incidentId)) {
+      return res
+        .status(400)
+        .json({ message: 'Invalid incidentId (UUID)', data: null });
+    }
+    const updated = await incidentReportService.updateIncident(incidentId, {
+      status: 'acknowledged',
+    });
+    res.status(200).json({ message: 'Incident acknowledged', data: updated });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function startProgress(
+  req: Request<{ incidentId: string }>,
+  res: Response,
+  next: NextFunction
+): Promise<any> {
+  try {
+    const { incidentId } = req.params;
+    if (!isValidUUID(incidentId)) {
+      return res
+        .status(400)
+        .json({ message: 'Invalid incidentId (UUID)', data: null });
+    }
+    const updated = await incidentReportService.updateIncident(incidentId, {
+      status: 'in_progress',
+    });
+    res.status(200).json({ message: 'Incident in progress', data: updated });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function resolveIncident(
+  req: Request<{ incidentId: string }>,
+  res: Response,
+  next: NextFunction
+): Promise<any> {
+  try {
+    const { incidentId } = req.params;
+    if (!isValidUUID(incidentId)) {
+      return res
+        .status(400)
+        .json({ message: 'Invalid incidentId (UUID)', data: null });
+    }
+    const updated = await incidentReportService.updateIncident(incidentId, {
+      status: 'resolved',
+    });
+    res.status(200).json({ message: 'Incident resolved', data: updated });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function closeIncident(
+  req: Request<{ incidentId: string }>,
+  res: Response,
+  next: NextFunction
+): Promise<any> {
+  try {
+    const { incidentId } = req.params;
+    if (!isValidUUID(incidentId)) {
+      return res
+        .status(400)
+        .json({ message: 'Invalid incidentId (UUID)', data: null });
+    }
+    const updated = await incidentReportService.updateIncident(incidentId, {
+      status: 'closed',
+    });
+    res.status(200).json({ message: 'Incident closed', data: updated });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                   SEARCH                                   */
+/* -------------------------------------------------------------------------- */
+
+/** Strongly typed query to avoid `req.query` being possibly undefined. */
+type IncidentSearchQuery = {
+  q?: string;
+  status?: string;
+  theaterId?: string;
+  hallId?: string;
+  createdBy?: string; // UUID
+  incidentId?: string; // UUID
+  createdAtFrom?: string; // ISO date
+  createdAtTo?: string; // ISO date
+  updatedAtFrom?: string; // ISO date
+  updatedAtTo?: string; // ISO date
+};
+
+export async function searchIncidents(
+  req: Request<{}, {}, {}, IncidentSearchQuery>,
+  res: Response,
+  next: NextFunction
+): Promise<any> {
+  try {
+    const query = (req.query ?? {}) as IncidentSearchQuery;
+
     const {
-      title,
-      description,
+      q,
       status,
       theaterId,
       hallId,
-      userId,
-      dateFrom,
-      dateTo,
-      limit,
-      offset,
-    } = req.query;
+      createdBy,
+      incidentId,
+      createdAtFrom,
+      createdAtTo,
+      updatedAtFrom,
+      updatedAtTo,
+    } = query;
 
-    // Validate that at least one search parameter is provided
-    if (
-      !title &&
-      !description &&
-      !status &&
-      !theaterId &&
-      !hallId &&
-      !userId &&
-      !dateFrom &&
-      !dateTo
-    ) {
-      return next(
-        new BadRequestError('At least one search parameter is required')
-      );
+    if (status && !isValidStatus(status)) {
+      return res.status(400).json({ message: 'Invalid status', data: null });
+    }
+    if (createdBy && !isValidUUID(createdBy)) {
+      return res
+        .status(400)
+        .json({ message: 'Invalid createdBy UUID', data: null });
+    }
+    if (incidentId && !isValidUUID(incidentId)) {
+      return res
+        .status(400)
+        .json({ message: 'Invalid incidentId UUID', data: null });
+    }
+    if (theaterId && !isValidId(theaterId, 2, 36)) {
+      return res.status(400).json({ message: 'Invalid theaterId', data: null });
+    }
+    if (hallId && !isValidId(hallId, 1, 16)) {
+      return res.status(400).json({ message: 'Invalid hallId', data: null });
     }
 
-    const searchQuery: any = {};
-    if (title) searchQuery.title = title as string;
-    if (description) searchQuery.description = description as string;
-    if (status) searchQuery.status = status as string;
-    if (theaterId) searchQuery.theaterId = theaterId as string;
-    if (hallId) searchQuery.hallId = hallId as string;
-    if (userId) searchQuery.userId = userId as string;
-    if (dateFrom) searchQuery.dateFrom = new Date(dateFrom as string);
-    if (dateTo) searchQuery.dateTo = new Date(dateTo as string);
+    const createdFrom = parseDateOr400(createdAtFrom, 'createdAtFrom', res);
+    if (createdAtFrom && !createdFrom) return;
+    const createdToDate = parseDateOr400(createdAtTo, 'createdAtTo', res);
+    if (createdAtTo && !createdToDate) return;
+    const updatedFromDate = parseDateOr400(updatedAtFrom, 'updatedAtFrom', res);
+    if (updatedAtFrom && !updatedFromDate) return;
+    const updatedToDate = parseDateOr400(updatedAtTo, 'updatedAtTo', res);
+    if (updatedAtTo && !updatedToDate) return;
 
-    const options: any = {};
-    if (limit) options.limit = parseInt(limit as string);
-    if (offset) options.offset = parseInt(offset as string);
+    const filters = {
+      status: status as AllowedStatus | undefined,
+      theaterId,
+      hallId,
+      createdBy,
+      incidentId,
+      createdAtFrom: createdFrom,
+      createdAtTo: createdToDate,
+      updatedAtFrom: updatedFromDate,
+      updatedAtTo: updatedToDate,
+    };
 
-    const incidentReports = await new IncidentReportService().search(
-      searchQuery,
-      options
+    const results = await incidentReportService.searchIncidents(
+      q,
+      filters as any
     );
-    res.json({
-      message: 'Incident reports search results',
-      data: incidentReports,
-    });
-  } catch (err) {
-    next(err);
+    res.status(200).json({ message: 'Search results', data: results });
+  } catch (error) {
+    next(error);
   }
-};
-
-/**
- * Get incident report statistics.
- * @route GET /incident-reports/statistics
- * @param {Request} req - Express request object (optional theaterId query param)
- * @param {Response} res - Express response object (returns statistics)
- * @param {NextFunction} next - Express next middleware
- * @returns {Promise<void>}
- * @async
- */
-export const getIncidentReportStatistics = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-): Promise<void> => {
-  try {
-    const theaterId = req.query.theaterId as string | undefined;
-    const statistics = await new IncidentReportService().getStatistics(
-      theaterId
-    );
-    res.json({ message: 'Incident report statistics', data: statistics });
-  } catch (err) {
-    next(err);
-  }
-};
+}

@@ -1,17 +1,19 @@
 /**
+ * EmailService
+ * ------------
  * Transactional email sending service via the Resend API.
  *
- * This service allows sending emails to users, such as:
+ * This service allows sending emails to users for scenarios such as:
  * - Welcome email upon account creation
  * - Email containing a password reset code
+ * - Contact messages about a theater
  *
- * The service handles errors and uses a test address if configured for the development or test environment.
- *
- * Main features:
+ * Features:
  * - Preliminary verification of the Resend API configuration
  * - Centralized management of the email sender
- * - Sending HTML-formatted emails using reusable templates
+ * - HTML-formatted emails using reusable templates
  * - Explicit error handling with detailed logging
+ *
  */
 
 import { Resend } from 'resend';
@@ -20,20 +22,20 @@ import { welcomeEmailTemplate } from '../templates/emails/welcome-email.js';
 import { resetPasswordEmailTemplate } from '../templates/emails/reset-password-email.js';
 
 /**
- * EmailService class to manage sending emails via Resend.
+ * Service class to manage sending emails via the Resend API.
  */
 export class EmailService {
   /** Instance of the Resend client */
   private resend: Resend;
   /** Sender email address used for sending */
   private from: string;
-  /** Test email address for test or development environment */
+  /** Test email address for dev/test environments */
   private testReceiver = config.testEmail;
 
   /**
-   * Constructor checking the configuration and initializing Resend.
+   * Creates an instance of EmailService and checks configuration.
    *
-   * @throws {Error} If the Resend API key is missing in the environment variables.
+   * @throws {Error} If the RESEND_API_KEY environment variable is missing.
    */
   constructor() {
     if (!config.resendApiKey) {
@@ -92,7 +94,6 @@ export class EmailService {
     username: string,
     code: string
   ): Promise<void> {
-    //const recipient = this.testReceiver || to;
     const recipient = this.testReceiver || to;
     try {
       const { data, error } = await this.resend.emails.send({
@@ -121,7 +122,7 @@ export class EmailService {
   /**
    * Sends a custom contact message related to a theater.
    *
-   * @param {string} theaterId - The theater ID the message is about.
+   * @param {string} theaterId - The theater ID the message concerns.
    * @param {string} to - Recipient's email address.
    * @param {string} message - The message content from the user.
    * @returns {Promise<void>}
@@ -132,7 +133,7 @@ export class EmailService {
     to: string,
     message: string
   ): Promise<void> {
-    const recipient = this.testReceiver || '';
+    const recipient = this.testReceiver || to;
     try {
       const { data, error } = await this.resend.emails.send({
         from: this.from,

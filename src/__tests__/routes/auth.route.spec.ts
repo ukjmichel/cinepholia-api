@@ -103,8 +103,8 @@ describe('Authentication System Tests', () => {
           .expect(201);
 
         expect(res.body.message).toBe('User created successfully');
-        expect(res.body.data.email).toBe(testUser.email);
-        expect(res.body.data.role).toBe('utilisateur');
+        expect(res.body.data.user.email).toBe(testUser.email);
+        expect(res.body.data.user.role).toBe('utilisateur');
 
         const cookies = getCookiesArray(res);
         expect(cookies.join(';').toLowerCase()).toMatch(/accesstoken/);
@@ -144,7 +144,7 @@ describe('Authentication System Tests', () => {
           })
           .expect(201);
 
-        expect(res.body.data.role).toBe('employé');
+        expect(res.body.data.user.role).toBe('employé');
       });
 
      it('should forbid non-admin users', async () => {
@@ -291,11 +291,11 @@ describe('Authentication System Tests', () => {
         expect(accessTokenCookie).toBeDefined();
 
         const protectedRes = await request(app)
-          .get(`/users/${registerRes.body.data.userId}`)
+          .get(`/users/${registerRes.body.data.user.userId}`)
           .set('Cookie', [accessTokenCookie!.split(';')[0]])
           .expect(200);
 
-        expect(protectedRes.body.data.email).toBe('flow@example.com');
+        expect(protectedRes.body.data.user.email).toBe('flow@example.com');
       });
     });
   });
