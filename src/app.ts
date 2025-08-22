@@ -22,6 +22,7 @@ import bookingRouter from './routes/booking.route.js';
 import bookingCommentRouter from './routes/booking-comment.route.js';
 import contactRouter from './routes/contact.route.js';
 import initDbRouter from './routes/init-db.route.js';
+import incidentReportRouter from './routes/incident-report.route.js';
 
 const app = express();
 
@@ -82,7 +83,6 @@ const corsOptions: cors.CorsOptions = {
 
 app.use(cors(corsOptions));
 
-
 /* ───────────────────────────────────────────────────────────
    4) Helmet (CSP adapted for web + mobile)
    - Allow data:/blob: for local images/media,
@@ -119,6 +119,7 @@ app.use(
       },
     },
     crossOriginEmbedderPolicy: false,
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
   })
 );
 
@@ -159,6 +160,7 @@ app.use('/screenings', screeningRouter);
 app.use('/bookings', bookingRouter);
 app.use('', bookingCommentRouter);
 app.use('/contact', contactRouter);
+app.use('/incident-reports', incidentReportRouter);
 app.use('/init', initDbRouter);
 
 /* ───────────────────────────────────────────────────────────
