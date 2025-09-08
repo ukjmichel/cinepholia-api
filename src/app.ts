@@ -62,11 +62,10 @@ const STATIC_WHITELIST = [
   'http://10.0.2.2:8100',
   'http://10.0.2.2:3000',
 
-  // Prod 
+  // Prod
   'https://cinepholia.netlify.app',
   process.env.FRONTEND_ORIGIN || '',
 ].filter(Boolean);
-
 
 const NETLIFY_PREVIEW_REGEX =
   /^https:\/\/(?:deploy-preview-\d+|[a-z0-9-]+)--cinepholia\.netlify\.app$/;
