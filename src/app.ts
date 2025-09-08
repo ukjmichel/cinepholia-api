@@ -47,7 +47,7 @@ app.use(cookieParser());
    - credentials: true if using cookies.
    - Also allow OPTIONS globally (preflight).
 ─────────────────────────────────────────────────────────── */
-const WHITELIST = [
+const STATIC_WHITELIST = [
   // Web dev (Angular/Ionic/Next)
   'http://localhost:4200',
   'http://localhost:8100',
@@ -61,13 +61,31 @@ const WHITELIST = [
   'http://10.0.2.2:4200',
   'http://10.0.2.2:8100',
   'http://10.0.2.2:3000',
+
+  // Prod 
+  'https://cinepholia.netlify.app',
+  process.env.FRONTEND_ORIGIN || '',
+].filter(Boolean);
+
+
+const NETLIFY_PREVIEW_REGEX =
+  /^https:\/\/(?:deploy-preview-\d+|[a-z0-9-]+)--cinepholia\.netlify\.app$/;
+
+const ALLOWED_ORIGINS: (string | RegExp)[] = [
+  ...STATIC_WHITELIST,
+  NETLIFY_PREVIEW_REGEX,
 ];
 
-const corsOptions: cors.CorsOptions = {
+const isAllowedOrigin = (origin: string) =>
+  ALLOWED_ORIGINS.some((entry) =>
+    typeof entry === 'string' ? entry === origin : entry.test(origin)
+  );
+
+export const corsOptions: cors.CorsOptions = {
   origin(origin, cb) {
-    // Allow requests without an origin (native apps, curl, etc.)
+    // Autorise les requêtes sans origin (curl, apps natives, Postman)
     if (!origin) return cb(null, true);
-    if (WHITELIST.includes(origin)) return cb(null, true);
+    if (isAllowedOrigin(origin)) return cb(null, true);
     return cb(new Error(`Origin not allowed: ${origin}`));
   },
   credentials: true,
