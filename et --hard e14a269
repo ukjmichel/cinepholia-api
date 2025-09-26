@@ -1,0 +1,32 @@
+[33mb4cb2da[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mdevelopment[m[33m)[m HEAD@{0}: reset: moving to HEAD~1
+[33me14a269[m HEAD@{1}: commit: 201- CRUD Cinémas
+[33mb4cb2da[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mdevelopment[m[33m)[m HEAD@{2}: reset: moving to HEAD~1
+[33mc3d9e2d[m[33m ([m[1;31morigin/development[m[33m)[m HEAD@{3}: commit: 201- CRUD Cinémas
+[33mb4cb2da[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mdevelopment[m[33m)[m HEAD@{4}: commit: 130- Gestion profil utilisateur
+[33m9502644[m HEAD@{5}: checkout: moving from main to development
+[33medb8149[m[33m ([m[1;31morigin/main[m[33m, [m[1;32mmain[m[33m)[m HEAD@{6}: commit (merge): Merge development into main - resolved workflow conflicts
+[33meb3f0b3[m HEAD@{7}: rebase (finish): returning to refs/heads/main
+[33meb3f0b3[m HEAD@{8}: rebase (pick): Update coverage reports
+[33mc88c2e8[m HEAD@{9}: rebase (continue): 130- Gestion profil utilisateur
+[33m1f78c79[m HEAD@{10}: pull --rebase origin main (start): checkout 1f78c79d63756b06e3490d44177b2dd22625b438
+[33mdca64a7[m HEAD@{11}: commit: Update coverage reports
+[33m9502644[m HEAD@{12}: pull origin main: updating HEAD
+[33m9502644[m HEAD@{13}: merge development: Fast-forward
+[33mea91cc7[m HEAD@{14}: checkout: moving from development to main
+[33m9502644[m HEAD@{15}: commit: 130- Gestion profil utilisateur
+[33mea91cc7[m HEAD@{16}: checkout: moving from main to development
+[33mea91cc7[m HEAD@{17}: merge development: Fast-forward
+[33m1327e2e[m HEAD@{18}: checkout: moving from development to main
+[33mea91cc7[m HEAD@{19}: commit: 120- Gestion du mot de passe oublié
+[33m9efb56f[m HEAD@{20}: commit: 110- Connexion & Authentification JWT
+[33m1327e2e[m HEAD@{21}: pull origin main: Fast-forward
+[33mb8399e7[m HEAD@{22}: checkout: moving from main to development
+[33m1327e2e[m HEAD@{23}: commit: 101 Inscription utilisateur
+[33m10a3b92[m HEAD@{24}: checkout: moving from main to main
+[33m10a3b92[m HEAD@{25}: commit: 101- Inscription Utilisateur
+[33mb8399e7[m HEAD@{26}: merge development: Fast-forward
+[33m36c534e[m HEAD@{27}: checkout: moving from development to main
+[33mb8399e7[m HEAD@{28}: commit: 010- Database
+[33m36c534e[m HEAD@{29}: checkout: moving from main to development
+[33m36c534e[m HEAD@{30}: Branch: renamed refs/heads/master to refs/heads/main
+[33m36c534e[m HEAD@{32}: commit (initial): 001- initialisation du projet API

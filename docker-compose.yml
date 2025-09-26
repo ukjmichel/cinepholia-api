@@ -1,0 +1,57 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - '${HOST_APP_PORT}:${PORT}'
+    env_file:
+      - .env
+    depends_on:
+      - mysql
+      - mongodb
+    restart: unless-stopped
+    volumes:
+      - ./:/usr/src/app
+      - node_modules:/usr/src/app/node_modules
+
+  mysql:
+    image: mysql:8.0
+    ports:
+      - '${HOST_MYSQL_PORT}:${MYSQL_PORT}'
+    env_file:
+      - .env
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./mysql-init:/docker-entrypoint-initdb.d
+    restart: unless-stopped
+
+  mongodb:
+    image: mongo:6.0
+    ports:
+      - '${HOST_MONGO_PORT}:${MONGO_PORT}'
+    env_file:
+      - .env
+    volumes:
+      - mongo_data:/data/db
+    restart: unless-stopped
+
+  mongo-express:
+    image: mongo-express
+    ports:
+      - '${HOST_MONGO_EXPRESS_PORT}:${MONGO_EXPRESS_PORT}'
+    env_file:
+      - .env
+    environment:
+      - ME_CONFIG_MONGODB_ADMINUSERNAME=${MONGO_INITDB_ROOT_USERNAME}
+      - ME_CONFIG_MONGODB_ADMINPASSWORD=${MONGO_INITDB_ROOT_PASSWORD}
+      - ME_CONFIG_MONGODB_SERVER=mongodb
+      - ME_CONFIG_MONGODB_URL=mongodb://${MONGO_INITDB_ROOT_USERNAME}:${MONGO_INITDB_ROOT_PASSWORD}@mongodb:27017/
+    depends_on:
+      - mongodb
+    restart: unless-stopped
+
+volumes:
+  mysql_data:
+  mongo_data:
+  node_modules:
