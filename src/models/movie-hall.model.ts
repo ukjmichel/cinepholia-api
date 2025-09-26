@@ -29,23 +29,24 @@ import {
  */
 import { MovieTheaterModel } from './movie-theater.model.js';
 import { ScreeningModel } from './screening.model.js';
+import { MovieHallAttributes, MovieHallCreationAttributes } from '../interfaces/movie-hall.js';
+
+/**
+ * Hall quality type definition
+ */
+export type HallQuality = '2D' | '3D' | 'IMAX' | '4DX';
 
 /**
  * MovieHall attributes interface.
  */
-export interface MovieHallAttributes {
-  theaterId: string;
-  hallId: string;
-  seatsLayout: (string | number)[][];
-  quality: '2D' | '3D' | 'IMAX' | '4DX';
-}
+
 
 /**
  * Sequelize model definition for movie_halls table.
  */
 @Table({ tableName: 'movie_halls', timestamps: true })
 export class MovieHallModel
-  extends Model<MovieHallAttributes>
+  extends Model<MovieHallAttributes, MovieHallCreationAttributes>
   implements MovieHallAttributes
 {
   /**
@@ -131,7 +132,7 @@ export class MovieHallModel
     allowNull: false,
     defaultValue: '2D',
   })
-  declare quality: '2D' | '3D' | 'IMAX' | '4DX';
+  declare quality: HallQuality;
 
   /**
    * Association: The hall belongs to a movie theater.
@@ -149,4 +150,10 @@ export class MovieHallModel
    */
   @HasMany(() => ScreeningModel)
   declare screenings: ScreeningModel[];
+
+  /**
+   * Automatic timestamps (creation and update)
+   */
+  declare readonly createdAt: Date;
+  declare readonly updatedAt: Date;
 }
