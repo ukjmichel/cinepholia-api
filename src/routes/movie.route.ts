@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { movieController } from '../controllers/movie.controller.js';
 import {
   decodeJwtToken,
@@ -6,67 +6,55 @@ import {
   requireStaffOrAdmin,
 } from '../middlewares/auth.middleware.js';
 import {
-  validateCreateMovie,
-  validateUpdateMovie,
-  validateMovieIdParam,
-  validateListMovies,
-  validateSearchMovies,
-} from '../validators/movie.validator.js';
+  uploadMiddleware,
+  handleUploadErrors,
+} from '../middlewares/upload.middleware.js';
 
-const router = Router();
+const movieRouter = Router();
 
-/** Public routes - no authentication required */
-router.get(
-  '/',
-  validateListMovies,
-  movieController.listMovies
-);
-router.get(
-  '/search',
-  validateSearchMovies,
-  movieController.searchMovies
-);
-router.get('/recommended', movieController.getRecommendedMovies);
-router.get('/genre/:genre', movieController.getMoviesByGenre);
-router.get('/director/:director', movieController.getMoviesByDirector);
-router.get(
-  '/:movieId',
-  validateMovieIdParam,
-  movieController.getMovieById
-);
+/* =============== ROUTES =============== */
 
-/** Protected routes - require staff or admin */
-router.post(
+/** Create movie - Admin/Staff only */
+movieRouter.post(
   '/',
   decodeJwtToken,
   requireStaffOrAdmin,
-  validateCreateMovie,
+  uploadMiddleware.singleImage('poster'),
   movieController.createMovie
 );
 
-router.patch(
+/** Public movie queries - no auth required */
+movieRouter.get('/search', movieController.searchMovies);
+movieRouter.get('/upcoming', movieController.getUpcomingMovies);
+movieRouter.get('/theater/:theaterId', movieController.getMoviesByTheater);
+movieRouter.get('/screening/:screeningId', movieController.getMovieByScreening);
+
+/** List movies - Admin/Staff can see all, public can see basic list */
+movieRouter.get('/', movieController.listMovies);
+
+/** Get movie by ID - public access */
+movieRouter.get('/:movieId', movieController.getMovieById);
+
+/** Update movie - Admin/Staff only */
+movieRouter.patch(
   '/:movieId',
   decodeJwtToken,
   requireStaffOrAdmin,
-  validateUpdateMovie,
+  uploadMiddleware.singleImage('poster'),
   movieController.updateMovie
 );
 
-router.post(
-  '/:movieId/toggle-recommendation',
-  decodeJwtToken,
-  requireStaffOrAdmin,
-  validateMovieIdParam,
-  movieController.toggleRecommendation
-);
-
-/** Admin only routes */
-router.delete(
+/** Delete movie - Admin only */
+movieRouter.delete(
   '/:movieId',
   decodeJwtToken,
-  requireAdmin,
-  validateMovieIdParam,
+  requireStaffOrAdmin,
   movieController.deleteMovie
 );
 
-export default router;
+/* =============== ERROR HANDLING =============== */
+
+// Handle upload errors through centralized error handler
+movieRouter.use(handleUploadErrors);
+
+export default movieRouter;

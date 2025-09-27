@@ -28,6 +28,7 @@ import { errorHandler } from './middlewares/errorHandler.js';
 import rootRouter from './routes/root.route.js';
 import userRouter from './routes/user.route.js';
 import authRouter from './routes/auth.route.js';
+import movieRouter from './routes/movie.route.js';
 
 const app = express();
 
@@ -47,6 +48,7 @@ setupSwagger(app);
 app.use('/', rootRouter); // Health checks, root info, etc.
 app.use('/api/auth', authRouter); // Authentication/login/logout/refresh.
 app.use('/api/users', userRouter); // User CRUD, profile, search, etc.
+app.use('/api/movies', movieRouter);
 
 // Centralized error handler (keep this LAST).
 app.use(errorHandler as ErrorRequestHandler);

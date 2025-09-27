@@ -22,7 +22,15 @@ import { NotFoundError } from '../errors/not-found-error.js';
 import { ConflictError } from '../errors/conflict-error.js';
 import { sequelize } from '../config/db.js';
 import { movieImageService } from './movie-image.service.js';
-import { buildMoviesByTheaterWhere, buildMovieWhere, buildOrder, buildUpcomingMoviesWhere, ListOptions, normalizeListOptions, SearchParams } from '../queries/movie.queries.js';
+import {
+  buildMoviesByTheaterWhere,
+  buildMovieWhere,
+  buildOrder,
+  buildUpcomingMoviesWhere,
+  ListOptions,
+  normalizeListOptions,
+  SearchParams,
+} from '../queries/movie.queries.js';
 
 const DEFAULT_LIMIT = 20;
 
@@ -181,18 +189,6 @@ export class MovieService {
     });
 
     return this.paginate(rows, count, page, limit);
-  }
-
-  /**
-   * Get all movies (without pagination)
-   */
-  async getAll(opts: ServiceOptions = {}): Promise<MovieDTO[]> {
-    const movies = await MovieModel.findAll({
-      transaction: opts.transaction,
-      order: [['createdAt', 'DESC']],
-    });
-
-    return movies.map((movie) => toMovieDTO(this.pickForDTO(movie)));
   }
 
   /* =============== SPECIALIZED QUERIES =============== */

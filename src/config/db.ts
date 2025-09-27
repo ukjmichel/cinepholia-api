@@ -20,7 +20,7 @@ export const sequelize = new Sequelize({
 });
 
 /**
- * ✅ Dynamically load and register all models
+ * Dynamically load and register all models
  */
 export async function loadModels() {
   const { UserModel } = await import('../models/user.model.js');
@@ -28,12 +28,9 @@ export async function loadModels() {
     '../models/authorization.model.js'
   );
 
+  const { MovieModel } = await import('../models/movie.model.js');
 
-  models = [
-    UserModel,
-    AuthorizationModel,
-
-  ];
+  models = [UserModel, AuthorizationModel, MovieModel];
 
   sequelize.addModels(models);
 }
