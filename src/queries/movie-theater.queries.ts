@@ -15,6 +15,7 @@ export type SortBy =
   | 'createdAt'
   | 'updatedAt'
   | 'theaterId'
+  | 'name'
   | 'city'
   | 'postalCode'
   | 'address'
@@ -27,6 +28,7 @@ export const SORTABLE: Record<SortBy, true> = {
   createdAt: true,
   updatedAt: true,
   theaterId: true,
+  name: true,
   city: true,
   postalCode: true,
   address: true,
@@ -39,12 +41,13 @@ export type DateLike = string | Date;
 export interface BaseList {
   page?: number; // 1-based
   limit?: number; // default: 20
-  sortBy?: SortBy; // default: city
+  sortBy?: SortBy; // default: name
   sortDir?: SortDir; // default: asc
 }
 
 export interface MovieTheaterFilters {
   theaterId?: string | string[];
+  name?: string; // partial match, case-insensitive
   city?: string; // partial match, case-insensitive
   postalCode?: string; // exact match
   address?: string; // partial match, case-insensitive
@@ -63,7 +66,7 @@ export interface ListOptions extends BaseList {
 }
 
 export interface SearchParams extends BaseList {
-  q?: string; // free-text search across theater ID, city, address, phone, email
+  q?: string; // free-text search across theater ID, name, city, address, phone, email
   filters?: MovieTheaterFilters;
 }
 
@@ -115,6 +118,10 @@ export function buildMovieTheaterWhere(
     if (filters.postalCode) (where as any).postalCode = filters.postalCode;
 
     // Partial string matches (case-insensitive)
+    if (filters.name) {
+      const term = `%${escapeLike(filters.name.trim().toLowerCase())}%`;
+      ands.push(lcLike('name', term));
+    }
     if (filters.city) {
       const term = `%${escapeLike(filters.city.trim().toLowerCase())}%`;
       ands.push(lcLike('city', term));
@@ -153,7 +160,7 @@ export function buildMovieTheaterWhere(
     }
   }
 
-  // Free-text search (q): search across theater ID, city, address, phone, email
+  // Free-text search (q): search across theater ID, name, city, address, phone, email
   const qTrim = (q ?? '').trim();
   if (qTrim) {
     const tokens = qTrim
@@ -166,6 +173,7 @@ export function buildMovieTheaterWhere(
       ands.push({
         [Op.or]: [
           lcLike('theaterId', pattern),
+          lcLike('name', pattern),
           lcLike('city', pattern),
           lcLike('address', pattern),
           lcLike('phone', pattern),
@@ -190,7 +198,7 @@ export function normalizeListOptions(options: BaseList = {}) {
     Math.max(1, options.limit ?? DEFAULT_LIMIT)
   );
   const sortBy: SortBy =
-    options.sortBy && SORTABLE[options.sortBy] ? options.sortBy : 'city';
+    options.sortBy && SORTABLE[options.sortBy] ? options.sortBy : 'name';
   const sortDir: SortDir = options.sortDir === 'asc' ? 'asc' : 'desc';
   return { page, limit, sortBy, sortDir };
 }
@@ -226,6 +234,29 @@ export function buildTheatersByLocationWhere(
     [Op.or]: [
       sqlWhere(fn('LOWER', col('city')), { [Op.like]: term }),
       { postalCode: location.trim() },
+    ],
+  } as WhereOptions<MovieTheaterAttributes>;
+}
+
+/** Helper to build WHERE clause for theaters by name (partial match) */
+export function buildTheatersByNameWhere(
+  name: string
+): WhereOptions<MovieTheaterAttributes> {
+  const term = `%${escapeLike(name.trim().toLowerCase())}%`;
+  return sqlWhere(fn('LOWER', col('name')), {
+    [Op.like]: term,
+  }) as WhereOptions<MovieTheaterAttributes>;
+}
+
+/** Helper to build WHERE clause for theaters by name OR city */
+export function buildTheatersByNameOrCityWhere(
+  search: string
+): WhereOptions<MovieTheaterAttributes> {
+  const term = `%${escapeLike(search.trim().toLowerCase())}%`;
+  return {
+    [Op.or]: [
+      sqlWhere(fn('LOWER', col('name')), { [Op.like]: term }),
+      sqlWhere(fn('LOWER', col('city')), { [Op.like]: term }),
     ],
   } as WhereOptions<MovieTheaterAttributes>;
 }

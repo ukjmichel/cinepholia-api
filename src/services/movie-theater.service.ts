@@ -169,6 +169,7 @@ export class MovieTheaterService {
     const theaters = await MovieTheaterModel.findAll({
       transaction: opts.transaction,
       order: [
+        ['name', 'ASC'],
         ['city', 'ASC'],
         ['theaterId', 'ASC'],
       ],
@@ -178,115 +179,6 @@ export class MovieTheaterService {
       toMovieTheaterDTO(this.pickForDTO(theater))
     );
   }
-
-  /* =============== LOCATION-BASED QUERIES =============== */
-
-  /**
-   * Get theaters by city
-   */
-  async getByCity(
-    city: string,
-    optsList: Omit<ListOptions, 'filters'> = {},
-    opts: ServiceOptions = {}
-  ): Promise<PaginatedResponse<MovieTheaterDTO>> {
-    const { page, limit, sortBy, sortDir } = normalizeListOptions(optsList);
-    const where = buildTheatersByCityWhere(city);
-
-    const { rows, count } = await MovieTheaterModel.findAndCountAll({
-      where,
-      offset: (page - 1) * limit,
-      limit,
-      order: buildOrder(sortBy, sortDir),
-      transaction: opts.transaction,
-    });
-
-    return this.paginate(rows, count, page, limit);
-  }
-
-  /**
-   * Get theaters by postal code
-   */
-  async getByPostalCode(
-    postalCode: string,
-    optsList: Omit<ListOptions, 'filters'> = {},
-    opts: ServiceOptions = {}
-  ): Promise<PaginatedResponse<MovieTheaterDTO>> {
-    const { page, limit, sortBy, sortDir } = normalizeListOptions(optsList);
-    const where = buildTheatersByPostalCodeWhere(postalCode);
-
-    const { rows, count } = await MovieTheaterModel.findAndCountAll({
-      where,
-      offset: (page - 1) * limit,
-      limit,
-      order: buildOrder(sortBy, sortDir),
-      transaction: opts.transaction,
-    });
-
-    return this.paginate(rows, count, page, limit);
-  }
-
-  /**
-   * Get theaters by location (city or postal code)
-   */
-  async getByLocation(
-    location: string,
-    optsList: Omit<ListOptions, 'filters'> = {},
-    opts: ServiceOptions = {}
-  ): Promise<PaginatedResponse<MovieTheaterDTO>> {
-    const { page, limit, sortBy, sortDir } = normalizeListOptions(optsList);
-    const where = buildTheatersByLocationWhere(location);
-
-    const { rows, count } = await MovieTheaterModel.findAndCountAll({
-      where,
-      offset: (page - 1) * limit,
-      limit,
-      order: buildOrder(sortBy, sortDir),
-      transaction: opts.transaction,
-    });
-
-    return this.paginate(rows, count, page, limit);
-  }
-
-  /**
-   * Get unique cities where theaters are located
-   */
-  async getCities(opts: ServiceOptions = {}): Promise<string[]> {
-    const cities = await MovieTheaterModel.findAll({
-      attributes: ['city'],
-      group: ['city'],
-      order: [['city', 'ASC']],
-      transaction: opts.transaction,
-      raw: true,
-    });
-
-    return cities.map((row) => row.city);
-  }
-
-  /**
-   * Get theater locations for mapping/geographic display
-   */
-  async getLocations(
-    optsList: Omit<ListOptions, 'filters'> = {},
-    opts: ServiceOptions = {}
-  ): Promise<TheaterLocationResult[]> {
-    const { limit, sortBy, sortDir } = normalizeListOptions(optsList);
-
-    const theaters = await MovieTheaterModel.findAll({
-      attributes: ['theaterId', 'city', 'postalCode', 'address'],
-      limit,
-      order: buildOrder(sortBy || 'city', sortDir),
-      transaction: opts.transaction,
-      raw: true,
-    });
-
-    return theaters.map((theater) => ({
-      theaterId: theater.theaterId,
-      city: theater.city,
-      postalCode: theater.postalCode,
-      address: theater.address,
-    }));
-  }
-
   /* =============== ANALYTICS =============== */
 
   /**
@@ -296,42 +188,50 @@ export class MovieTheaterService {
     total: number;
     byCities: Array<{ city: string; count: number }>;
     byPostalCodes: Array<{ postalCode: string; count: number }>;
+    byNames: Array<{ name: string; city: string; theaterId: string }>;
   }> {
-    const [total, byCitiesResults, byPostalCodesResults] = await Promise.all([
-      MovieTheaterModel.count({ transaction: opts.transaction }),
-      MovieTheaterModel.findAll({
-        attributes: [
-          'city',
-          [
-            MovieTheaterModel.sequelize!.fn(
-              'COUNT',
-              MovieTheaterModel.sequelize!.col('theaterId')
-            ),
-            'count',
+    const [total, byCitiesResults, byPostalCodesResults, theaterNames] =
+      await Promise.all([
+        MovieTheaterModel.count({ transaction: opts.transaction }),
+        MovieTheaterModel.findAll({
+          attributes: [
+            'city',
+            [
+              MovieTheaterModel.sequelize!.fn(
+                'COUNT',
+                MovieTheaterModel.sequelize!.col('theaterId')
+              ),
+              'count',
+            ],
           ],
-        ],
-        group: ['city'],
-        order: [['city', 'ASC']],
-        transaction: opts.transaction,
-        raw: true,
-      }),
-      MovieTheaterModel.findAll({
-        attributes: [
-          'postalCode',
-          [
-            MovieTheaterModel.sequelize!.fn(
-              'COUNT',
-              MovieTheaterModel.sequelize!.col('theaterId')
-            ),
-            'count',
+          group: ['city'],
+          order: [['city', 'ASC']],
+          transaction: opts.transaction,
+          raw: true,
+        }),
+        MovieTheaterModel.findAll({
+          attributes: [
+            'postalCode',
+            [
+              MovieTheaterModel.sequelize!.fn(
+                'COUNT',
+                MovieTheaterModel.sequelize!.col('theaterId')
+              ),
+              'count',
+            ],
           ],
-        ],
-        group: ['postalCode'],
-        order: [['postalCode', 'ASC']],
-        transaction: opts.transaction,
-        raw: true,
-      }),
-    ]);
+          group: ['postalCode'],
+          order: [['postalCode', 'ASC']],
+          transaction: opts.transaction,
+          raw: true,
+        }),
+        MovieTheaterModel.findAll({
+          attributes: ['name', 'city', 'theaterId'],
+          order: [['name', 'ASC']],
+          transaction: opts.transaction,
+          raw: true,
+        }),
+      ]);
 
     const byCities = (byCitiesResults as any[]).map((row) => ({
       city: row.city,
@@ -343,10 +243,17 @@ export class MovieTheaterService {
       count: parseInt(row.count),
     }));
 
+    const byNames = (theaterNames as any[]).map((row) => ({
+      name: row.name,
+      city: row.city,
+      theaterId: row.theaterId,
+    }));
+
     return {
       total,
       byCities,
       byPostalCodes,
+      byNames,
     };
   }
 
@@ -380,6 +287,7 @@ export class MovieTheaterService {
     const theater = model.get() as MovieTheaterAttributes;
     return {
       theaterId: theater.theaterId,
+      name: theater.name,
       address: theater.address,
       postalCode: theater.postalCode,
       city: theater.city,

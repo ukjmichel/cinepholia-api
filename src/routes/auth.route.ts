@@ -9,22 +9,22 @@ import {
   requireAdmin,
 } from '../middlewares/auth.middleware.js';
 
-const router = Router();
+const authRouter = Router();
 
-router.post(
+authRouter.post(
   '/register',
   validateCreateUser,
   userController.createAccount('user')
 );
-router.post(
+authRouter.post(
   '/register-staff',
   decodeJwtToken,
   requireAdmin,
   validateCreateUser,
   userController.createAccount('staff')
 );
-router.post('/login', validateLogin, authController.login);
-router.post('/refresh', authController.refreshToken);
-router.post('/logout', authController.logout);
+authRouter.post('/login', validateLogin, authController.login);
+authRouter.post('/refresh', authController.refreshToken);
+authRouter.post('/logout', authController.logout);
 
-export default router;
+export default authRouter;

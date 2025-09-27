@@ -3,12 +3,13 @@
  *
  * This file defines the data model for movie theaters in the cinema application.
  * It manages the main information of a movie theater establishment,
- * including its address, contact details, and geographical location.
+ * including its name, address, contact details, and geographical location.
  * Implementation done with sequelize-typescript for strict typing and robust
  * data validation.
  *
  * Main Features:
  *  - Each movie theater has a unique customizable and validated identifier (theaterId).
+ *  - Human-readable name for the theater establishment.
  *  - Comprehensive management of the postal address with format validation (postal code, city).
  *  - Strict validation of contact information (phone, email).
  *  - Support for international characters in city names (accents, apostrophes).
@@ -36,6 +37,7 @@ import {
 // Complete structure of a movie theater
 export interface MovieTheaterAttributes {
   theaterId: string;
+  name: string;
   address: string;
   postalCode: string;
   city: string;
@@ -68,6 +70,22 @@ export class MovieTheaterModel
     },
   })
   declare theaterId: string;
+
+  // Human-readable name of the movie theater
+  @Column({
+    type: DataType.STRING,
+    allowNull: false,
+    validate: {
+      len: {
+        args: [1, 255],
+        msg: 'Theater name must be between 1 and 255 characters',
+      },
+      notEmpty: {
+        msg: 'Theater name cannot be empty',
+      },
+    },
+  })
+  declare name: string;
 
   // Full address of the movie theater (street, number, etc.)
   @Column({

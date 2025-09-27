@@ -2,6 +2,7 @@
 
 export interface MovieTheaterAttributes {
   theaterId: string;
+  name: string;
   address: string;
   postalCode: string;
   city: string;
@@ -13,6 +14,7 @@ export interface MovieTheaterAttributes {
 
 export interface MovieTheaterCreationAttributes {
   theaterId: string;
+  name: string;
   address: string;
   postalCode: string;
   city: string;
@@ -22,6 +24,7 @@ export interface MovieTheaterCreationAttributes {
 
 export interface MovieTheaterDTO {
   theaterId: string;
+  name: string;
   address: string;
   postalCode: string;
   city: string;
@@ -33,6 +36,7 @@ export interface MovieTheaterDTO {
 
 export interface CreateMovieTheaterDTO {
   theaterId: string;
+  name: string;
   address: string;
   postalCode: string;
   city: string;
@@ -41,6 +45,7 @@ export interface CreateMovieTheaterDTO {
 }
 
 export interface UpdateMovieTheaterDTO {
+  name?: string;
   address?: string;
   postalCode?: string;
   city?: string;
@@ -67,6 +72,7 @@ export function toMovieTheaterDTO(
   theater: Pick<
     MovieTheaterAttributes,
     | 'theaterId'
+    | 'name'
     | 'address'
     | 'postalCode'
     | 'city'
@@ -78,6 +84,7 @@ export function toMovieTheaterDTO(
 ): MovieTheaterDTO {
   const {
     theaterId,
+    name,
     address,
     postalCode,
     city,
@@ -89,6 +96,7 @@ export function toMovieTheaterDTO(
 
   return {
     theaterId,
+    name,
     address,
     postalCode,
     city,
@@ -104,6 +112,7 @@ export function toMovieTheaterDTO(
  */
 export interface TheaterLocationResult {
   theaterId: string;
+  name: string;
   city: string;
   postalCode: string;
   address: string;
