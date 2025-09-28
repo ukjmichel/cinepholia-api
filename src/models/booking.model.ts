@@ -41,9 +41,9 @@ import {
 import { Optional } from 'sequelize';
 import { UserModel } from './user.model.js';
 import { ScreeningModel } from './screening.model.js';
+import { BookingStatus } from '../interfaces/booking.js';
 
-// Possible statuses for a booking
-export type BookingStatus = 'pending' | 'used' | 'canceled';
+
 
 // Complete structure of a booking
 export interface BookingAttributes {
@@ -119,7 +119,7 @@ export class BookingModel
   // Booking status (default value: "pending")
   @Default('pending')
   @Column({
-    type: DataType.ENUM('pending', 'used', 'canceled'),
+    type: DataType.ENUM('PENDING','USED','CANCELLED'),
     allowNull: false,
   })
   declare status: BookingStatus;

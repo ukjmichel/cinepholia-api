@@ -3,6 +3,8 @@ import { config } from './env.js';
 import { MovieTheaterModel } from '../models/movie-theater.model.js';
 import { MovieHallModel } from '../models/movie-hall.model.js';
 import { ScreeningModel } from '../models/screening.model.js';
+import { BookingModel } from '../models/booking.model.js';
+import { BookedSeatModel } from '../models/booked-seat.model.js';
 
 let models: ModelCtor<any>[] = [];
 
@@ -40,6 +42,8 @@ export async function loadModels() {
     MovieTheaterModel,
     MovieHallModel,
     ScreeningModel,
+    BookingModel,
+    BookedSeatModel
   ];
 
   sequelize.addModels(models);

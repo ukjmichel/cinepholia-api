@@ -29,8 +29,8 @@ import {
   ForeignKey,
   BelongsTo,
 } from 'sequelize-typescript';
-import { ScreeningModel } from './screening.model';
-import { BookingModel } from './booking.model';
+import { ScreeningModel } from './screening.model.js';
+import { BookingModel } from './booking.model.js';
 
 export interface BookedSeatAttributes {
   screeningId: string;
@@ -39,7 +39,7 @@ export interface BookedSeatAttributes {
 }
 
 @Table({
-  tableName: 'seat_bookings',
+  tableName: 'booked_seat',
   timestamps: false,
 })
 export class BookedSeatModel extends Model<BookedSeatAttributes> {

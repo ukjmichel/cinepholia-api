@@ -14,7 +14,7 @@ import type {
   TimeSlot,
   HallReference,
   HallQuality,
-} from '../interfaces/screening';
+} from '../interfaces/screening.js';
 
 /** Sorting config */
 export type SortBy =
