@@ -21,6 +21,10 @@ export interface ScreeningCreationAttributes {
   price: number;
 }
 
+/**
+ * Public DTO returned by controllers.
+ * quality is populated via a join to MovieHallModel (not a column on Screening).
+ */
 export interface ScreeningDTO {
   screeningId: string;
   movieId: string;
@@ -30,6 +34,7 @@ export interface ScreeningDTO {
   price: number;
   createdAt: Date;
   updatedAt: Date;
+  quality?: HallQuality; // <-- NEW
 }
 
 export interface CreateScreeningDTO {
@@ -61,7 +66,8 @@ export interface PaginatedResponse<T> {
 }
 
 /**
- * Mapper to convert ScreeningModel to safe DTO.
+ * Mapper to convert ScreeningModel-safe pick to ScreeningDTO.
+ * Accepts an optional quality (coming from joined hall).
  */
 export function toScreeningDTO(
   screening: Pick<
@@ -74,7 +80,7 @@ export function toScreeningDTO(
     | 'price'
     | 'createdAt'
     | 'updatedAt'
-  >
+  > & { quality?: HallQuality } // <-- allow quality passthrough
 ): ScreeningDTO {
   const {
     screeningId,
@@ -85,6 +91,7 @@ export function toScreeningDTO(
     price,
     createdAt,
     updatedAt,
+    quality,
   } = screening;
 
   return {
@@ -96,6 +103,7 @@ export function toScreeningDTO(
     price,
     createdAt,
     updatedAt,
+    quality, // <-- include if present
   };
 }
 
@@ -110,6 +118,7 @@ export interface ScreeningTimeInfo {
   startTime: Date;
   endTime: Date; // calculated based on movie duration
   duration: number; // in minutes
+  quality?: HallQuality; // <-- NEW (useful for UI/tooling)
 }
 
 /**
@@ -122,6 +131,7 @@ export interface ScreeningAvailability {
   startTime: Date;
   isAvailable: boolean;
   conflictingScreenings?: string[]; // IDs of conflicting screenings
+  quality?: HallQuality; // <-- NEW
 }
 
 /**
@@ -139,6 +149,8 @@ export interface ScreeningStats {
   availableSeats: number;
   occupancyRate: number; // percentage
   revenue: number; // estimated based on bookings
+  // NOTE: Typically analytics are aggregated; include quality only if you join hall data upstream.
+  quality?: HallQuality; // optional, for richer analytics
 }
 
 /**
@@ -154,6 +166,7 @@ export interface TheaterSchedule {
     startTime: Date;
     endTime: Date;
     price: number;
+    quality?: HallQuality; // <-- NEW
   }>;
 }
 
@@ -168,6 +181,7 @@ export interface MovieShowtimes {
     hallId: string;
     startTime: Date;
     price: number;
+    quality?: HallQuality; // <-- NEW
   }>;
 }
 

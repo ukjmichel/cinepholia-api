@@ -69,27 +69,45 @@ type ServiceOptions = {
   transaction?: Transaction;
 };
 
-/**
- * ScreeningService
- * Encapsulates CRUD, search, scheduling, analytics and bulk operations.
- */
 export class ScreeningService {
+  /* =========================================================
+   * Small helper to build the hall include with composite key
+   * =======================================================*/
+  private async buildHallInclude(
+    opts: {
+      required?: boolean;
+      where?: any;
+    } = {}
+  ) {
+    const { MovieHallModel } = await import('../models/movie-hall.model.js');
+    return {
+      model: MovieHallModel,
+      as: 'hall',
+      attributes: ['quality'], // we need the quality in all responses
+      required: !!opts.required,
+      where: opts.where,
+      // Composite-key join (theaterId, hallId)
+      on: {
+        [Op.and]: [
+          { '$ScreeningModel.theaterId$': { [Op.col]: 'hall.theaterId' } },
+          { '$ScreeningModel.hallId$': { [Op.col]: 'hall.hallId' } },
+        ],
+      },
+    };
+  }
+
   /* =========================================================
    * CRUD
    * =======================================================*/
 
-  /** Create a new screening and return a safe DTO */
+  /** Create a new screening and return a safe DTO (with quality) */
   async create(
     payload: CreateScreeningDTO,
     opts: ServiceOptions = {}
   ): Promise<ScreeningDTO> {
-    // Validate time + price constraints
     await this.validateScreeningTime(payload, opts);
-
-    // Ensure the hall exists and belongs to the given theater
     await this.validateHallReference(payload.theaterId, payload.hallId, opts);
 
-    // Check conflicts (same hall/theater around the target time)
     const conflicts = await this.checkSchedulingConflicts(
       payload.theaterId,
       payload.hallId,
@@ -107,16 +125,23 @@ export class ScreeningService {
       transaction: opts.transaction,
     });
 
+    // Reload with hall include to expose quality
+    await screening.reload({
+      include: [await this.buildHallInclude()],
+      transaction: opts.transaction,
+    });
+
     return toScreeningDTO(this.pickForDTO(screening));
   }
 
-  /** Retrieve a screening by ID (DTO or null) */
+  /** Retrieve a screening by ID (DTO or null, with quality) */
   async get(
     screeningId: string,
     opts: ServiceOptions = {}
   ): Promise<ScreeningDTO | null> {
     const screening = await ScreeningModel.findOne({
       where: { screeningId },
+      include: [await this.buildHallInclude()],
       transaction: opts.transaction,
     });
     return screening ? toScreeningDTO(this.pickForDTO(screening)) : null;
@@ -146,10 +171,8 @@ export class ScreeningService {
     });
     if (!screening) return null;
 
-    // Merge current + incoming for validation purposes
     const updatedData = { ...screening.get(), ...dto } as CreateScreeningDTO;
 
-    // If time/theater/hall changes, re-validate and re-check conflicts
     if (dto.startTime || dto.theaterId || dto.hallId) {
       await this.validateScreeningTime(updatedData, opts);
 
@@ -157,7 +180,7 @@ export class ScreeningService {
         updatedData.theaterId,
         updatedData.hallId,
         updatedData.startTime,
-        screeningId, // exclude current
+        screeningId,
         opts
       );
       if (conflicts.length > 0) {
@@ -167,7 +190,6 @@ export class ScreeningService {
       }
     }
 
-    // Only set provided keys
     const updatable: UpdateScreeningDTO = {};
     for (const key of Object.keys(dto) as (keyof UpdateScreeningDTO)[]) {
       if (dto[key] !== undefined) (updatable as any)[key] = dto[key];
@@ -175,6 +197,13 @@ export class ScreeningService {
 
     screening.set(updatable as any);
     await screening.save({ transaction: opts.transaction });
+
+    // Reload with hall include to expose quality
+    await screening.reload({
+      include: [await this.buildHallInclude()],
+      transaction: opts.transaction,
+    });
+
     return toScreeningDTO(this.pickForDTO(screening));
   }
 
@@ -196,7 +225,8 @@ export class ScreeningService {
 
   /**
    * List screenings with pagination, optional sorting, and filters.
-   * - Supports conditional join on hall to filter by quality.
+   * - Always includes hall quality.
+   * - If filtering by quality, join becomes INNER with where.
    */
   async list(
     optsList: ListOptions = {},
@@ -205,47 +235,33 @@ export class ScreeningService {
     const { page, limit, sortBy, sortDir } = normalizeListOptions(optsList);
     const where = buildScreeningWhere(optsList.filters);
 
-    // Conditional include for hall quality
     const needsHallJoin = requiresHallJoin(optsList.filters);
-    const includeOptions: any[] = [];
+    const include = [
+      await this.buildHallInclude({
+        required: needsHallJoin,
+        where: needsHallJoin
+          ? buildHallQualityWhere(optsList.filters?.quality)
+          : undefined,
+      }),
+    ];
 
-    if (needsHallJoin) {
-      const { MovieHallModel } = await import('../models/movie-hall.model.js');
-      const hallWhere = buildHallQualityWhere(optsList.filters?.quality);
-
-      includeOptions.push({
-        model: MovieHallModel,
-        as: 'hall',
-        where: hallWhere,
-        attributes: [],
-        required: true,
-        // Composite-key join (theaterId, hallId)
-        on: {
-          [Op.and]: [
-            { '$ScreeningModel.theaterId$': { [Op.col]: 'hall.theaterId' } },
-            { '$ScreeningModel.hallId$': { [Op.col]: 'hall.hallId' } },
-          ],
-        },
-      });
-    }
-
-    const queryOptions: any = {
+    const { rows, count } = await ScreeningModel.findAndCountAll({
       where,
+      include,
       offset: (page - 1) * limit,
       limit,
       order: buildOrder(sortBy as SortBy, sortDir as SortDir),
       transaction: opts.transaction,
-    };
+      distinct: true,
+    });
 
-    if (includeOptions.length) queryOptions.include = includeOptions;
-
-    const { rows, count } = await ScreeningModel.findAndCountAll(queryOptions);
     return this.paginate(rows, count, page, limit);
   }
 
   /**
    * Search by free-text query (q) plus structured filters.
-   * - Mirrors `list` but accepts a query string.
+   * - Always includes hall quality.
+   * - If filtering by quality, join becomes INNER with where.
    */
   async search(
     params: SearchParams,
@@ -255,46 +271,32 @@ export class ScreeningService {
     const where = buildScreeningWhere(params.filters, params.q);
 
     const needsHallJoin = requiresHallJoin(params.filters);
-    const includeOptions: any[] = [];
+    const include = [
+      await this.buildHallInclude({
+        required: needsHallJoin,
+        where: needsHallJoin
+          ? buildHallQualityWhere(params.filters?.quality)
+          : undefined,
+      }),
+    ];
 
-    if (needsHallJoin) {
-      const { MovieHallModel } = await import('../models/movie-hall.model.js');
-      const hallWhere = buildHallQualityWhere(params.filters?.quality);
-      includeOptions.push({
-        model: MovieHallModel,
-        as: 'hall',
-        where: hallWhere,
-        attributes: [],
-        required: true,
-        // Ensure composite-key join here too (consistent with list)
-        on: {
-          [Op.and]: [
-            { '$ScreeningModel.theaterId$': { [Op.col]: 'hall.theaterId' } },
-            { '$ScreeningModel.hallId$': { [Op.col]: 'hall.hallId' } },
-          ],
-        },
-      });
-    }
-
-    const queryOptions: any = {
+    const { rows, count } = await ScreeningModel.findAndCountAll({
       where,
+      include,
       offset: (page - 1) * limit,
       limit,
       order: buildOrder(sortBy as SortBy, sortDir as SortDir),
       transaction: opts.transaction,
-    };
+      distinct: true,
+    });
 
-    if (includeOptions.length) queryOptions.include = includeOptions;
-
-    const { rows, count } = await ScreeningModel.findAndCountAll(queryOptions);
     return this.paginate(rows, count, page, limit);
   }
 
   /* =========================================================
-   * SPECIALIZED QUERIES
+   * SPECIALIZED QUERIES (all include hall quality)
    * =======================================================*/
 
-  /** Get screenings by movie */
   async getByMovie(
     movieId: string,
     optsList: Omit<ListOptions, 'filters'> = {},
@@ -305,16 +307,17 @@ export class ScreeningService {
 
     const { rows, count } = await ScreeningModel.findAndCountAll({
       where,
+      include: [await this.buildHallInclude()],
       offset: (page - 1) * limit,
       limit,
       order: buildOrder(sortBy as SortBy, sortDir as SortDir),
       transaction: opts.transaction,
+      distinct: true,
     });
 
     return this.paginate(rows, count, page, limit);
   }
 
-  /** Get screenings by theater */
   async getByTheater(
     theaterId: string,
     optsList: Omit<ListOptions, 'filters'> = {},
@@ -325,16 +328,17 @@ export class ScreeningService {
 
     const { rows, count } = await ScreeningModel.findAndCountAll({
       where,
+      include: [await this.buildHallInclude()],
       offset: (page - 1) * limit,
       limit,
       order: buildOrder(sortBy as SortBy, sortDir as SortDir),
       transaction: opts.transaction,
+      distinct: true,
     });
 
     return this.paginate(rows, count, page, limit);
   }
 
-  /** Get screenings by hall */
   async getByHall(
     theaterId: string,
     hallId: string,
@@ -346,84 +350,65 @@ export class ScreeningService {
 
     const { rows, count } = await ScreeningModel.findAndCountAll({
       where,
+      include: [await this.buildHallInclude()],
       offset: (page - 1) * limit,
       limit,
       order: buildOrder(sortBy as SortBy, sortDir as SortDir),
       transaction: opts.transaction,
+      distinct: true,
     });
 
     return this.paginate(rows, count, page, limit);
   }
 
-  /** Get screenings by hall quality */
   async getByQuality(
     quality: HallQuality,
     optsList: Omit<ListOptions, 'filters'> = {},
     opts: ServiceOptions = {}
   ): Promise<PaginatedResponse<ScreeningDTO>> {
     const { page, limit, sortBy, sortDir } = normalizeListOptions(optsList);
-    const { MovieHallModel } = await import('../models/movie-hall.model.js');
 
     const { rows, count } = await ScreeningModel.findAndCountAll({
       include: [
-        {
-          model: MovieHallModel,
-          as: 'hall',
-          where: { quality },
-          attributes: [],
+        await this.buildHallInclude({
           required: true,
-          on: {
-            [Op.and]: [
-              { '$ScreeningModel.theaterId$': { [Op.col]: 'hall.theaterId' } },
-              { '$ScreeningModel.hallId$': { [Op.col]: 'hall.hallId' } },
-            ],
-          },
-        },
+          where: { quality },
+        }),
       ],
       offset: (page - 1) * limit,
       limit,
       order: buildOrder(sortBy as SortBy, sortDir as SortDir),
       transaction: opts.transaction,
+      distinct: true,
     });
 
     return this.paginate(rows, count, page, limit);
   }
 
-  /** Get screenings by multiple hall qualities */
   async getByQualities(
     qualities: HallQuality[],
     optsList: Omit<ListOptions, 'filters'> = {},
     opts: ServiceOptions = {}
   ): Promise<PaginatedResponse<ScreeningDTO>> {
     const { page, limit, sortBy, sortDir } = normalizeListOptions(optsList);
-    const { MovieHallModel } = await import('../models/movie-hall.model.js');
 
     const { rows, count } = await ScreeningModel.findAndCountAll({
       include: [
-        {
-          model: MovieHallModel,
-          as: 'hall',
-          where: { quality: { [Op.in]: qualities } },
-          attributes: [],
+        await this.buildHallInclude({
           required: true,
-          on: {
-            [Op.and]: [
-              { '$ScreeningModel.theaterId$': { [Op.col]: 'hall.theaterId' } },
-              { '$ScreeningModel.hallId$': { [Op.col]: 'hall.hallId' } },
-            ],
-          },
-        },
+          where: { quality: { [Op.in]: qualities } },
+        }),
       ],
       offset: (page - 1) * limit,
       limit,
       order: buildOrder(sortBy as SortBy, sortDir as SortDir),
       transaction: opts.transaction,
+      distinct: true,
     });
 
     return this.paginate(rows, count, page, limit);
   }
 
-  /** Get screenings by date range */
   async getByDateRange(
     startDate: Date,
     endDate: Date,
@@ -435,16 +420,17 @@ export class ScreeningService {
 
     const { rows, count } = await ScreeningModel.findAndCountAll({
       where,
+      include: [await this.buildHallInclude()],
       offset: (page - 1) * limit,
       limit,
       order: buildOrder(sortBy as SortBy, sortDir as SortDir),
       transaction: opts.transaction,
+      distinct: true,
     });
 
     return this.paginate(rows, count, page, limit);
   }
 
-  /** Get screenings on a specific date */
   async getByDate(
     date: Date,
     optsList: Omit<ListOptions, 'filters'> = {},
@@ -455,16 +441,17 @@ export class ScreeningService {
 
     const { rows, count } = await ScreeningModel.findAndCountAll({
       where,
+      include: [await this.buildHallInclude()],
       offset: (page - 1) * limit,
       limit,
       order: buildOrder(sortBy as SortBy, sortDir as SortDir),
       transaction: opts.transaction,
+      distinct: true,
     });
 
     return this.paginate(rows, count, page, limit);
   }
 
-  /** Get upcoming screenings */
   async getUpcoming(
     fromTime: Date = new Date(),
     optsList: Omit<ListOptions, 'filters'> = {},
@@ -475,16 +462,17 @@ export class ScreeningService {
 
     const { rows, count } = await ScreeningModel.findAndCountAll({
       where,
+      include: [await this.buildHallInclude()],
       offset: (page - 1) * limit,
       limit,
       order: buildOrder(sortBy as SortBy, sortDir as SortDir),
       transaction: opts.transaction,
+      distinct: true,
     });
 
     return this.paginate(rows, count, page, limit);
   }
 
-  /** Get past screenings */
   async getPast(
     beforeTime: Date = new Date(),
     optsList: Omit<ListOptions, 'filters'> = {},
@@ -495,16 +483,17 @@ export class ScreeningService {
 
     const { rows, count } = await ScreeningModel.findAndCountAll({
       where,
+      include: [await this.buildHallInclude()],
       offset: (page - 1) * limit,
       limit,
       order: buildOrder(sortBy as SortBy, sortDir as SortDir),
       transaction: opts.transaction,
+      distinct: true,
     });
 
     return this.paginate(rows, count, page, limit);
   }
 
-  /** Get multiple specific screenings */
   async getMultiple(
     screeningIds: string[],
     optsList: Omit<ListOptions, 'filters'> = {},
@@ -515,10 +504,12 @@ export class ScreeningService {
 
     const { rows, count } = await ScreeningModel.findAndCountAll({
       where,
+      include: [await this.buildHallInclude()],
       offset: (page - 1) * limit,
       limit,
       order: buildOrder(sortBy as SortBy, sortDir as SortDir),
       transaction: opts.transaction,
+      distinct: true,
     });
 
     return this.paginate(rows, count, page, limit);
@@ -528,7 +519,6 @@ export class ScreeningService {
    * SCHEDULING & AVAILABILITY
    * =======================================================*/
 
-  /** Check for scheduling conflicts in a hall around a given start time */
   async checkSchedulingConflicts(
     theaterId: string,
     hallId: string,
@@ -538,7 +528,6 @@ export class ScreeningService {
   ): Promise<ScreeningConflict[]> {
     const endTime = this.calculateEndTime(startTime, DEFAULT_MOVIE_DURATION);
 
-    // Fetch potentially conflicting screenings in a 6-hour window
     const potentialConflicts = await ScreeningModel.findAll({
       where: {
         theaterId,
@@ -564,7 +553,6 @@ export class ScreeningService {
         DEFAULT_MOVIE_DURATION
       );
 
-      // Overlap checks
       const overlaps =
         (startTime >= existing.startTime && startTime < existingEnd) ||
         (endTime > existing.startTime && endTime <= existingEnd) ||
@@ -582,10 +570,9 @@ export class ScreeningService {
           },
           proposedScreening: { startTime, endTime },
         });
-        continue; // If overlapping, no need to check gap
+        continue;
       }
 
-      // Minimum gap checks
       const gapBefore =
         Math.abs(startTime.getTime() - existingEnd.getTime()) / (1000 * 60);
       const gapAfter =
@@ -614,7 +601,6 @@ export class ScreeningService {
     return conflicts;
   }
 
-  /** Fast boolean availability check using conflict detector */
   async isSlotAvailable(
     theaterId: string,
     hallId: string,
@@ -632,7 +618,6 @@ export class ScreeningService {
     return conflicts.length === 0;
   }
 
-  /** Find available time slots for a hall on a given date */
   async findAvailableSlots(
     theaterId: string,
     hallId: string,
@@ -640,7 +625,6 @@ export class ScreeningService {
     duration: number = DEFAULT_MOVIE_DURATION,
     opts: ServiceOptions = {}
   ): Promise<TimeSlot[]> {
-    // All screenings that day for the hall, ordered by time
     const existingScreenings = await ScreeningModel.findAll({
       where: {
         ...buildScreeningsByHallWhere(theaterId, hallId),
@@ -651,12 +635,10 @@ export class ScreeningService {
     });
 
     const available: TimeSlot[] = [];
-
-    // Theater opening/closing assumptions (tweak if needed)
     const dayStart = new Date(date);
-    dayStart.setHours(8, 0, 0, 0); // 08:00
+    dayStart.setHours(8, 0, 0, 0);
     const dayEnd = new Date(date);
-    dayEnd.setHours(23, 0, 0, 0); // 23:00
+    dayEnd.setHours(23, 0, 0, 0);
 
     let current = dayStart;
 
@@ -664,7 +646,6 @@ export class ScreeningService {
       const gapMinutes =
         (screening.startTime.getTime() - current.getTime()) / (1000 * 60);
 
-      // If we can fit a slot of `duration` + minimum gap before the next screening
       if (gapMinutes >= duration + MIN_SCREENING_GAP) {
         const slotEnd = new Date(
           screening.startTime.getTime() - MIN_SCREENING_GAP * 60 * 1000
@@ -674,7 +655,6 @@ export class ScreeningService {
         }
       }
 
-      // Move current pointer to end-of-this-screening + gap
       current = this.calculateEndTime(
         screening.startTime,
         DEFAULT_MOVIE_DURATION
@@ -682,7 +662,6 @@ export class ScreeningService {
       current = new Date(current.getTime() + MIN_SCREENING_GAP * 60 * 1000);
     }
 
-    // Tail slot until closing
     if (current < dayEnd) {
       const remain = (dayEnd.getTime() - current.getTime()) / (1000 * 60);
       if (remain >= duration) {
@@ -697,7 +676,7 @@ export class ScreeningService {
    * ANALYTICS & REPORTING
    * =======================================================*/
 
-  /** Get theater schedule for a specific date */
+  /** Get theater schedule for a specific date (now includes quality) */
   async getTheaterSchedule(
     theaterId: string,
     date: Date,
@@ -708,6 +687,7 @@ export class ScreeningService {
         ...buildScreeningsByTheaterWhere(theaterId),
         ...buildScreeningsByDateWhere(date),
       },
+      include: [await this.buildHallInclude()],
       order: [['startTime', 'asc']],
       transaction: opts.transaction,
     });
@@ -715,18 +695,19 @@ export class ScreeningService {
     return {
       theaterId,
       date,
-      screenings: screenings.map((s) => ({
+      screenings: screenings.map((s: any) => ({
         screeningId: s.screeningId,
         movieId: s.movieId,
         hallId: s.hallId,
         startTime: s.startTime,
         endTime: this.calculateEndTime(s.startTime, DEFAULT_MOVIE_DURATION),
         price: s.price,
+        quality: s.hall?.quality as HallQuality | undefined,
       })),
     };
   }
 
-  /** Get movie showtimes across all theaters (optional date window) */
+  /** Get movie showtimes across all theaters (optional date window) — includes quality */
   async getMovieShowtimes(
     movieId: string,
     dateFrom?: Date,
@@ -744,23 +725,25 @@ export class ScreeningService {
 
     const screenings = await ScreeningModel.findAll({
       where,
+      include: [await this.buildHallInclude()],
       order: [['startTime', 'asc']],
       transaction: opts.transaction,
     });
 
     return {
       movieId,
-      screenings: screenings.map((s) => ({
+      screenings: screenings.map((s: any) => ({
         screeningId: s.screeningId,
         theaterId: s.theaterId,
         hallId: s.hallId,
         startTime: s.startTime,
         price: s.price,
+        quality: s.hall?.quality as HallQuality | undefined,
       })),
     };
   }
 
-  /** Aggregate stats (counts, price range, busy hours, etc.) */
+  /** Aggregate stats (unchanged) */
   async getStats(opts: ServiceOptions = {}): Promise<{
     total: number;
     upcoming: number;
@@ -926,11 +909,6 @@ export class ScreeningService {
    * BULK OPERATIONS
    * =======================================================*/
 
-  /**
-   * Initialize database with screenings for all theaters and halls
-   * - Optionally clears existing month data.
-   * - Generates evenly spaced daily shows with basic pricing logic.
-   */
   async initializeDatabase(
     options: {
       year?: number;
@@ -962,7 +940,6 @@ export class ScreeningService {
       clearExisting = true,
     } = options;
 
-    // Movie pool
     const availableMovieIds = await this.getDefaultMovieIds(opts);
     if (availableMovieIds.length === 0) {
       throw new ValidationError(
@@ -970,7 +947,6 @@ export class ScreeningService {
       );
     }
 
-    // Theater + halls
     const theaters = await this.getAllTheatersWithHalls(opts);
     if (theaters.length === 0) {
       throw new ValidationError(
@@ -990,7 +966,6 @@ export class ScreeningService {
 
     let totalScreenings = 0;
 
-    // Optionally clear existing screenings in month across all halls
     if (clearExisting) {
       const monthStart = new Date(year, month - 1, 1);
       const monthEnd = new Date(year, month, 0);
@@ -1000,7 +975,6 @@ export class ScreeningService {
       });
     }
 
-    // Generate per hall
     for (const theater of theaters) {
       const theaterResult = {
         theaterId: theater.theaterId,
@@ -1051,16 +1025,11 @@ export class ScreeningService {
     return { totalScreenings, theaterResults };
   }
 
-  /**
-   * Generate screenings for a month for a specific theater and hall
-   * - Clears existing month data for that hall first.
-   * - Spreads shows by 3h gaps from a starting hour.
-   */
   async generateMonthlySchedule(
     theaterId: string,
     hallId: string,
     year: number,
-    month: number, // 1-12
+    month: number,
     options: {
       screeningsPerDay?: number;
       startHour?: number;
@@ -1075,10 +1044,9 @@ export class ScreeningService {
       startHour = 10,
       movieIds = [],
       basePrice = 12.5,
-      skipConflictCheck = true, // in bulk, skip per-item conflict checks
+      skipConflictCheck = true,
     } = options;
 
-    // Basic guards
     if (month < 1 || month > 12)
       throw new ValidationError('Month must be between 1 and 12');
     if (
@@ -1088,7 +1056,6 @@ export class ScreeningService {
       throw new ValidationError('Year must be within reasonable range');
     }
 
-    // Clear existing month for this hall
     const monthStart = new Date(year, month - 1, 1);
     const monthEnd = new Date(year, month, 0);
     await ScreeningModel.destroy({
@@ -1100,7 +1067,6 @@ export class ScreeningService {
       transaction: opts.transaction,
     });
 
-    // Determine movie pool
     let moviePool = movieIds;
     if (moviePool.length === 0) moviePool = await this.getDefaultMovieIds(opts);
     if (moviePool.length === 0)
@@ -1116,11 +1082,9 @@ export class ScreeningService {
 
     const now = new Date();
 
-    // Iterate days of the target month
     for (let day = 1; day <= monthEnd.getDate(); day++) {
       const currentDate = new Date(year, month - 1, day);
 
-      // Skip fully past days (but allow same-month past hours filtering below)
       if (
         currentDate < now &&
         !(
@@ -1131,29 +1095,21 @@ export class ScreeningService {
         continue;
       }
 
-      // Create N shows (default 4) spaced by ~3 hours
       for (let i = 0; i < screeningsPerDay; i++) {
         const hourOffset = i * 3;
         const startTime = new Date(currentDate);
         startTime.setHours(startHour + hourOffset, 0, 0, 0);
-
-        // Guard late shows (>22:00)
         if (startTime.getHours() > 22) continue;
-
-        // Skip if in the past (same-day/hour constraint)
         if (startTime < now) continue;
 
-        // Round-robin movie selection
         const movieId = moviePool[i % moviePool.length];
 
-        // Basic pricing strategy: matinee < base < evening
         let price = basePrice;
         const hour = startTime.getHours();
         if (hour >= 18) price = basePrice * 1.3;
         else if (hour <= 12) price = basePrice * 0.8;
         price = Math.round(price * 100) / 100;
 
-        // Sanity guard for price range
         if (price < 0 || price > 1000) {
           console.warn(
             `Invalid price ${price} for screening at ${startTime.toISOString()}`
@@ -1171,7 +1127,6 @@ export class ScreeningService {
       }
     }
 
-    // Bulk insert for performance (optionally skipping per-item validation/conflict checks)
     let created: ScreeningModel[] = [];
     try {
       if (skipConflictCheck) {
@@ -1197,11 +1152,18 @@ export class ScreeningService {
       throw new ValidationError('Failed to create monthly schedule');
     }
 
-    // Map to DTOs
-    return created.map((m) => toScreeningDTO(this.pickForDTO(m)));
+    // Reload all with hall include in one go would be ideal, but bulkCreate returns full instances already.
+    // We map through pickForDTO which reads .hall if present; to get quality here, do a follow-up fetch by IDs:
+    const ids = created.map((c) => c.screeningId);
+    const reloaded = await ScreeningModel.findAll({
+      where: { screeningId: { [Op.in]: ids } },
+      include: [await this.buildHallInclude()],
+      transaction: opts.transaction,
+    });
+
+    return reloaded.map((m) => toScreeningDTO(this.pickForDTO(m)));
   }
 
-  /** Clear all screenings for a specific month/hall */
   async clearMonthlySchedule(
     theaterId: string,
     hallId: string,
@@ -1229,7 +1191,6 @@ export class ScreeningService {
    * VALIDATION
    * =======================================================*/
 
-  /** Validate screening constraints (time window, price range) */
   private async validateScreeningTime(
     screening: CreateScreeningDTO,
     _opts: ServiceOptions = {}
@@ -1238,13 +1199,11 @@ export class ScreeningService {
     const minutesDiff =
       (screening.startTime.getTime() - now.getTime()) / (1000 * 60);
 
-    // Allow up to 30 minutes in the past (for slight delays/updates), else reject
     if (minutesDiff < -30) {
       throw new ValidationError('Screening start time cannot be in the past');
     }
 
-    // Valid hours: 06:00–23:59 and 00:00–01:59 (i.e., invalid if 02:00–05:59)
-    // FIXED: previous condition used an impossible &&; correct is hour >= 2 && hour < 6
+    // Valid hours: 06:00–23:59 and 00:00–01:59 (invalid if 02:00–05:59)
     const hour = screening.startTime.getHours();
     if (hour >= 2 && hour < 6) {
       throw new ValidationError(
@@ -1252,7 +1211,6 @@ export class ScreeningService {
       );
     }
 
-    // Price guards
     if (screening.price < 0)
       throw new ValidationError('Screening price cannot be negative');
     if (screening.price > 1000)
@@ -1263,17 +1221,14 @@ export class ScreeningService {
    * HELPERS
    * =======================================================*/
 
-  /** Compute end time from start + duration (minutes) */
   private calculateEndTime(startTime: Date, durationMinutes: number): Date {
     return new Date(startTime.getTime() + durationMinutes * 60 * 1000);
   }
 
-  /** Compute duration in minutes */
   private calculateDuration(startTime: Date, endTime: Date): number {
     return (endTime.getTime() - startTime.getTime()) / (1000 * 60);
   }
 
-  /** Convert raw rows into a paginated DTO response */
   private paginate(
     rows: ScreeningModel[],
     count: number,
@@ -1285,19 +1240,14 @@ export class ScreeningService {
       1,
       Math.ceil(count / Math.max(1, limit || DEFAULT_LIMIT))
     );
-    return {
-      items,
-      page,
-      limit,
-      total: count,
-      totalItems: count,
-      totalPages,
-    };
+    return { items, page, limit, total: count, totalItems: count, totalPages };
   }
 
-  /** Pick only safe fields for DTO mapping */
+  /** Pick only safe fields for DTO mapping (now includes hall.quality) */
   private pickForDTO(model: ScreeningModel) {
-    const s = model.get() as ScreeningAttributes;
+    const s = model.get() as ScreeningAttributes & {
+      hall?: { quality?: HallQuality };
+    };
     return {
       screeningId: s.screeningId,
       movieId: s.movieId,
@@ -1307,10 +1257,10 @@ export class ScreeningService {
       price: s.price,
       createdAt: s.createdAt,
       updatedAt: s.updatedAt,
+      quality: s?.hall?.quality, // <-- NEW
     };
   }
 
-  /** Validate that a hall reference exists and belongs to the theater */
   private async validateHallReference(
     theaterId: string,
     hallId: string,
@@ -1339,7 +1289,6 @@ export class ScreeningService {
    * SUPPORTING LOOKUPS (internal)
    * =======================================================*/
 
-  /** Resolve a small pool of movie IDs for schedule generation */
   private async getDefaultMovieIds(
     opts: ServiceOptions = {}
   ): Promise<string[]> {
@@ -1354,7 +1303,6 @@ export class ScreeningService {
       return movies.map((m: any) => m.movieId);
     } catch (error) {
       console.warn('Could not fetch movies from database, using fallback IDs');
-      // Replace with real IDs in non-dev environments
       return [
         'a1b2c3d4-e5f6-4789-a012-b3c4d5e6f789',
         'f8e7d6c5-b4a3-4921-8765-432109876543',
@@ -1363,7 +1311,6 @@ export class ScreeningService {
     }
   }
 
-  /** Fetch all theaters with their halls */
   private async getAllTheatersWithHalls(
     opts: ServiceOptions = {}
   ): Promise<Array<{ theaterId: string; halls: Array<{ hallId: string }> }>> {
