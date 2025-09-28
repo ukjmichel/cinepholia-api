@@ -1,6 +1,8 @@
 import { Sequelize, ModelCtor } from 'sequelize-typescript';
 import { config } from './env.js';
 import { MovieTheaterModel } from '../models/movie-theater.model.js';
+import { MovieHallModel } from '../models/movie-hall.model.js';
+import { ScreeningModel } from '../models/screening.model.js';
 
 let models: ModelCtor<any>[] = [];
 
@@ -31,7 +33,14 @@ export async function loadModels() {
 
   const { MovieModel } = await import('../models/movie.model.js');
 
-  models = [UserModel, AuthorizationModel, MovieModel,MovieTheaterModel];
+  models = [
+    UserModel,
+    AuthorizationModel,
+    MovieModel,
+    MovieTheaterModel,
+    MovieHallModel,
+    ScreeningModel
+  ];
 
   sequelize.addModels(models);
 }

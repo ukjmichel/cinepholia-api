@@ -46,7 +46,7 @@ export interface MovieTheaterAttributes {
 }
 
 // Definition of the MovieTheaterModel
-@Table({ tableName: 'movie_theater', timestamps: true })
+@Table({ tableName: 'movie_theaters', timestamps: true })
 export class MovieTheaterModel
   extends Model<MovieTheaterAttributes, MovieTheaterAttributes>
   implements MovieTheaterAttributes

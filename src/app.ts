@@ -30,6 +30,7 @@ import userRouter from './routes/user.route.js';
 import authRouter from './routes/auth.route.js';
 import movieRouter from './routes/movie.route.js';
 import movieTheaterRouter from './routes/movie-theater.route.js';
+import movieHallRouter from './routes/movie-hall.route.js';
 
 const app = express();
 
@@ -51,6 +52,7 @@ app.use('/api/auth', authRouter); // Authentication/login/logout/refresh.
 app.use('/api/users', userRouter); // User CRUD, profile, search, etc.
 app.use('/api/movies', movieRouter);
 app.use('/api/movie-theaters', movieTheaterRouter);
+app.use('/api/movie-halls', movieHallRouter);
 
 // Centralized error handler (keep this LAST).
 app.use(errorHandler as ErrorRequestHandler);
