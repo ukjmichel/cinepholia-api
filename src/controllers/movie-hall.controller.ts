@@ -6,6 +6,7 @@
 
 import { Request, Response, NextFunction } from 'express';
 import movieHallService from '../services/movie-hall.service.js';
+import { sequelize } from '../config/db.js';
 import type {
   CreateMovieHallDTO,
   UpdateMovieHallDTO,
@@ -27,6 +28,7 @@ export class MovieHallController {
     res: Response,
     next: NextFunction
   ): Promise<void> => {
+    const transaction = await sequelize.transaction();
     try {
       const hallData: CreateMovieHallDTO = req.body;
 
@@ -51,13 +53,20 @@ export class MovieHallController {
         );
       }
 
-      const hall = await movieHallService.create(hallData);
+      const hall = await movieHallService.create(hallData, { transaction });
+
+      await transaction.commit();
 
       res.status(201).json({
         message: 'Movie hall created successfully',
         data: { hall },
       });
     } catch (error) {
+      try {
+        await transaction.rollback();
+      } catch {
+        // optionally log rollback error
+      }
       next(error);
     }
   };
@@ -93,6 +102,7 @@ export class MovieHallController {
     res: Response,
     next: NextFunction
   ): Promise<void> => {
+    const transaction = await sequelize.transaction();
     try {
       const { theaterId, hallId } = req.params;
       const updateData: UpdateMovieHallDTO = req.body;
@@ -109,7 +119,12 @@ export class MovieHallController {
         }
       }
 
-      const hall = await movieHallService.update(theaterId, hallId, updateData);
+      const hall = await movieHallService.update(
+        theaterId,
+        hallId,
+        updateData,
+        { transaction }
+      );
 
       if (!hall) {
         throw new NotFoundError(
@@ -117,11 +132,18 @@ export class MovieHallController {
         );
       }
 
+      await transaction.commit();
+
       res.status(200).json({
         message: 'Movie hall updated successfully',
         data: { hall },
       });
     } catch (error) {
+      try {
+        await transaction.rollback();
+      } catch {
+        // optionally log rollback error
+      }
       next(error);
     }
   };
@@ -132,9 +154,12 @@ export class MovieHallController {
     res: Response,
     next: NextFunction
   ): Promise<void> => {
+    const transaction = await sequelize.transaction();
     try {
       const { theaterId, hallId } = req.params;
-      const deleted = await movieHallService.remove(theaterId, hallId);
+      const deleted = await movieHallService.remove(theaterId, hallId, {
+        transaction,
+      });
 
       if (!deleted) {
         throw new NotFoundError(
@@ -142,11 +167,18 @@ export class MovieHallController {
         );
       }
 
+      await transaction.commit();
+
       res.status(200).json({
         message: 'Movie hall deleted successfully',
         data: null,
       });
     } catch (error) {
+      try {
+        await transaction.rollback();
+      } catch {
+        // optionally log rollback error
+      }
       next(error);
     }
   };
@@ -634,6 +666,7 @@ export class MovieHallController {
     res: Response,
     next: NextFunction
   ): Promise<void> => {
+    const transaction = await sequelize.transaction();
     try {
       const { theaterId, hallId } = req.params;
       const { seatsLayout } = req.body;
@@ -653,7 +686,8 @@ export class MovieHallController {
       const hall = await movieHallService.updateLayout(
         theaterId,
         hallId,
-        seatsLayout
+        seatsLayout,
+        { transaction }
       );
 
       if (!hall) {
@@ -662,11 +696,18 @@ export class MovieHallController {
         );
       }
 
+      await transaction.commit();
+
       res.status(200).json({
         message: 'Hall layout updated successfully',
         data: { hall },
       });
     } catch (error) {
+      try {
+        await transaction.rollback();
+      } catch {
+        // optionally log rollback error
+      }
       next(error);
     }
   };

@@ -6,6 +6,7 @@
 
 import { Request, Response, NextFunction } from 'express';
 import movieTheaterService from '../services/movie-theater.service.js';
+import { sequelize } from '../config/db.js';
 import type {
   CreateMovieTheaterDTO,
   UpdateMovieTheaterDTO,
@@ -25,6 +26,7 @@ export class MovieTheaterController {
     res: Response,
     next: NextFunction
   ): Promise<void> => {
+    const transaction = await sequelize.transaction();
     try {
       const theaterData: CreateMovieTheaterDTO = req.body;
 
@@ -32,13 +34,22 @@ export class MovieTheaterController {
         throw new BadRequestError('Theater ID is required');
       }
 
-      const theater = await movieTheaterService.create(theaterData);
+      const theater = await movieTheaterService.create(theaterData, {
+        transaction,
+      });
+
+      await transaction.commit();
 
       res.status(201).json({
         message: 'Movie theater created successfully',
         data: { theater },
       });
     } catch (error) {
+      try {
+        await transaction.rollback();
+      } catch {
+        // optionally log rollback error
+      }
       next(error);
     }
   };
@@ -72,21 +83,31 @@ export class MovieTheaterController {
     res: Response,
     next: NextFunction
   ): Promise<void> => {
+    const transaction = await sequelize.transaction();
     try {
       const { theaterId } = req.params;
       const updateData: UpdateMovieTheaterDTO = req.body;
 
-      const theater = await movieTheaterService.update(theaterId, updateData);
+      const theater = await movieTheaterService.update(theaterId, updateData, {
+        transaction,
+      });
 
       if (!theater) {
         throw new NotFoundError('Movie theater not found');
       }
+
+      await transaction.commit();
 
       res.status(200).json({
         message: 'Movie theater updated successfully',
         data: { theater },
       });
     } catch (error) {
+      try {
+        await transaction.rollback();
+      } catch {
+        // optionally log rollback error
+      }
       next(error);
     }
   };
@@ -97,19 +118,29 @@ export class MovieTheaterController {
     res: Response,
     next: NextFunction
   ): Promise<void> => {
+    const transaction = await sequelize.transaction();
     try {
       const { theaterId } = req.params;
-      const deleted = await movieTheaterService.remove(theaterId);
+      const deleted = await movieTheaterService.remove(theaterId, {
+        transaction,
+      });
 
       if (!deleted) {
         throw new NotFoundError('Movie theater not found');
       }
+
+      await transaction.commit();
 
       res.status(200).json({
         message: 'Movie theater deleted successfully',
         data: null,
       });
     } catch (error) {
+      try {
+        await transaction.rollback();
+      } catch {
+        // optionally log rollback error
+      }
       next(error);
     }
   };

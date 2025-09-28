@@ -39,7 +39,7 @@ export async function loadModels() {
     MovieModel,
     MovieTheaterModel,
     MovieHallModel,
-    ScreeningModel
+    ScreeningModel,
   ];
 
   sequelize.addModels(models);
