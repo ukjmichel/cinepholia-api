@@ -19,6 +19,7 @@ import {
   validateGetUpcomingBookings,
   validateBookingStatus,
 } from '../validators/booking.validator.js';
+import { generateTicket } from '../controllers/generate-ticket.controller.js';
 
 const router = Router();
 
@@ -130,6 +131,13 @@ router.patch(
   decodeJwtToken,
   validateBookingIdParam,
   bookingController.cancelBooking
+);
+
+router.get(
+  '/:bookingId/ticket',
+  validateBookingIdParam,
+  decodeJwtToken,
+  generateTicket
 );
 
 export default router;
