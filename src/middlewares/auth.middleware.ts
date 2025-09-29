@@ -67,6 +67,19 @@ export async function decodeJwtToken(
   }
 }
 
+export function requireAuthenticated(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): void {
+  const user = (req as any as AuthBag).user;
+  if (!user) {
+    next(new UnauthorizedError('Authentication required'));
+    return;
+  }
+  next();
+}
+
 export function requireAdmin(
   req: Request,
   res: Response,
@@ -117,12 +130,10 @@ export function requireSelfOrAdmin(
     return next();
   }
 
-  res
-    .status(403)
-    .json({
-      message: 'Forbidden: you can only act on your own account',
-      data: null,
-    });
+  res.status(403).json({
+    message: 'Forbidden: you can only act on your own account',
+    data: null,
+  });
 }
 
 export const getJwtPayload = (req: Request) =>

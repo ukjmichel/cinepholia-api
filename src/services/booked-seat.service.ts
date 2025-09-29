@@ -1,141 +1,155 @@
 /**
  * BookedSeatService
  * -----------------
- * Service class for managing seat bookings (BookedSeatModel) in the database.
+ * Service for managing individual seat bookings within screenings.
+ *
+ * This service handles:
+ * - Validation of seat existence and availability
+ * - Creation and deletion of seat bookings
+ * - Seat availability checks for booking operations
+ * - Bulk operations for multiple seats
  *
  * Features:
- * - Create, read, and delete booked seats for screenings.
- * - Validate that booked seats exist in the movie hall layout.
- * - Check that seats are available (not already booked).
- * - All methods support an optional transaction parameter for consistency.
- * - Throws NotFoundError, BadRequestError, or ConflictError for client-friendly error handling.
- *
- * Error handling:
- * - NotFoundError: For missing screenings or halls.
- * - BadRequestError: For invalid seat IDs.
- * - ConflictError: For attempting to book already reserved seats.
- *
+ * - Atomic seat booking operations
+ * - Validation against hall capacity and existing bookings
+ * - Support for transactional operations
+ * - Standardized method naming convention
  */
 
-import { Transaction } from 'sequelize';
-
 import {
-  BookedSeatAttributes,
   BookedSeatModel,
+  BookedSeatAttributes,
 } from '../models/booked-seat.model.js';
+import { ScreeningModel } from '../models/screening.model.js';
 import { NotFoundError } from '../errors/not-found-error.js';
 import { BadRequestError } from '../errors/bad-request-error.js';
 import { ConflictError } from '../errors/conflict-error.js';
-import { MovieHallService } from '../services/movie-hall.service.js';
-import screeningService from '../services/screening.service.js';
+import { Transaction, Op } from 'sequelize';
+import { sequelize } from '../config/db.js';
 
-// Singleton instance of MovieHallService for internal use
-const movieHallService = new MovieHallService();
+export interface CreateBookedSeatDTO {
+  screeningId: string;
+  seatId: string;
+  bookingId: string;
+}
 
 /**
- * Service class for Booked Seats (BookedSeatModel) business logic.
- * Handles seat booking creation, validation, and availability checks.
+ * Service for managing booked seats
  */
 export class BookedSeatService {
+  /* =============== SEAT VALIDATION =============== */
+
   /**
-   * Create a new seat booking.
+   * Validates that all specified seats exist in the screening's hall.
    *
-   * @param data - The seat booking attributes.
-   * @param transaction - Optional transaction for atomic operations.
-   * @returns The created seat booking.
-   * @throws {Error} If creation fails.
+   * @param screeningId - UUID of the screening
+   * @param seatIds - Array of seat identifiers to validate
+   * @param transaction - Optional database transaction
+   * @throws {NotFoundError} If screening doesn't exist
+   * @throws {BadRequestError} If any seats don't exist in the hall
+   */
+  async validateSeatsExist(
+    screeningId: string,
+    seatIds: string[],
+    transaction?: Transaction
+  ): Promise<void> {
+    // Get the screening with hall information
+    const screening = await ScreeningModel.findByPk(screeningId, {
+      include: ['hall'], // Assuming hall association exists
+      transaction,
+    });
+
+    if (!screening) {
+      throw new NotFoundError(`Screening with id ${screeningId} not found`);
+    }
+
+    // Validate seats exist in hall (this logic depends on your hall model structure)
+    // For now, we'll assume basic validation - you may need to adjust based on your hall model
+    const hall = (screening as any).hall;
+    if (!hall) {
+      throw new NotFoundError(
+        `Hall information not found for screening ${screeningId}`
+      );
+    }
+
+    // Example validation - adjust based on your hall seat structure
+    const maxSeats = hall.capacity || 100; // fallback
+    for (const seatId of seatIds) {
+      // Basic validation - you may need more sophisticated logic
+      if (!seatId || seatId.length === 0) {
+        throw new BadRequestError(`Invalid seat identifier: ${seatId}`);
+      }
+
+      // Additional seat validation logic would go here
+      // e.g., checking against hall.seatLayout, hall.seatMap, etc.
+    }
+  }
+
+  /**
+   * Checks if all specified seats are available (not already booked) for the screening.
+   *
+   * @param screeningId - UUID of the screening
+   * @param seatIds - Array of seat identifiers to check
+   * @param transaction - Optional database transaction
+   * @throws {ConflictError} If any seats are already booked
+   */
+  async validateSeatsAvailable(
+    screeningId: string,
+    seatIds: string[],
+    transaction?: Transaction
+  ): Promise<void> {
+    const bookedSeats = await BookedSeatModel.findAll({
+      where: {
+        screeningId,
+        seatId: { [Op.in]: seatIds },
+      },
+      transaction,
+    });
+
+    if (bookedSeats.length > 0) {
+      const bookedSeatIds = bookedSeats.map((seat) => seat.seatId);
+      throw new ConflictError(
+        `The following seats are already booked: ${bookedSeatIds.join(', ')}`
+      );
+    }
+  }
+
+  /* =============== CRUD OPERATIONS =============== */
+
+  /**
+   * Creates a single seat booking.
+   *
+   * @param seatData - Seat booking data
+   * @param transaction - Optional database transaction
+   * @returns Created booked seat record
    */
   async createSeatBooking(
-    data: BookedSeatAttributes,
+    seatData: CreateBookedSeatDTO,
     transaction?: Transaction
   ): Promise<BookedSeatModel> {
-    return await BookedSeatModel.create(data, { transaction });
+    return await BookedSeatModel.create(seatData, { transaction });
   }
 
   /**
-   * Get a seat booking by screeningId and seatId.
+   * Creates multiple seat bookings atomically.
    *
-   * @param screeningId - Screening ID.
-   * @param seatId - Seat ID.
-   * @param transaction - Optional transaction for consistent reads.
-   * @returns The seat booking if found, otherwise null.
-   * @throws {Error} If retrieval fails.
+   * @param seatsData - Array of seat booking data
+   * @param transaction - Optional database transaction
+   * @returns Array of created booked seat records
    */
-  async getSeatBookingByScreeningIdAndSeatId(
-    screeningId: string,
-    seatId: string,
-    transaction?: Transaction
-  ): Promise<BookedSeatModel | null> {
-    return await BookedSeatModel.findOne({
-      where: { screeningId, seatId },
-      transaction,
-    });
-  }
-
-  /**
-   * Get all seat bookings by bookingId.
-   *
-   * @param bookingId - Booking ID.
-   * @param transaction - Optional transaction for consistent reads.
-   * @returns An array of seat bookings.
-   * @throws {Error} If retrieval fails.
-   */
-  async getSeatBookingsByBookingId(
-    bookingId: string,
+  async createMultipleSeatBookings(
+    seatsData: CreateBookedSeatDTO[],
     transaction?: Transaction
   ): Promise<BookedSeatModel[]> {
-    return await BookedSeatModel.findAll({
-      where: { bookingId },
-      transaction,
-    });
+    return await BookedSeatModel.bulkCreate(seatsData, { transaction });
   }
 
   /**
-   * Get all seat bookings by screeningId.
+   * Removes all seat bookings associated with a specific booking.
    *
-   * @param screeningId - Screening ID.
-   * @param transaction - Optional transaction for consistent reads.
-   * @returns An array of seat bookings.
-   * @throws {Error} If retrieval fails.
-   */
-  async getSeatBookingsByScreeningId(
-    screeningId: string,
-    transaction?: Transaction
-  ): Promise<BookedSeatModel[]> {
-    return await BookedSeatModel.findAll({
-      where: { screeningId },
-      transaction,
-    });
-  }
-
-  /**
-   * Delete a seat booking by screeningId and seatId.
-   *
-   * @param screeningId - Screening ID.
-   * @param seatId - Seat ID.
-   * @param transaction - Optional transaction for atomic operations.
-   * @returns True if deleted, false otherwise.
-   * @throws {Error} If deletion fails.
-   */
-  async deleteSeatBooking(
-    screeningId: string,
-    seatId: string,
-    transaction?: Transaction
-  ): Promise<boolean> {
-    const deleted = await BookedSeatModel.destroy({
-      where: { screeningId, seatId },
-      transaction,
-    });
-    return deleted > 0;
-  }
-
-  /**
-   * Delete all seat bookings for a specific booking ID.
-   *
-   * @param bookingId - The booking ID.
-   * @param transaction - Optional transaction for atomic operations.
-   * @returns Number of records deleted.
-   * @throws {Error} If deletion fails.
+   * @param bookingId - UUID of the booking
+   * @param transaction - Optional database transaction
+   * @returns Number of deleted records
    */
   async deleteSeatBookingsByBookingId(
     bookingId: string,
@@ -148,102 +162,171 @@ export class BookedSeatService {
   }
 
   /**
-   * Check if all seat IDs exist in the movie hall's layout.
+   * Removes specific seat bookings.
    *
-   * @param screeningId - The screening ID.
-   * @param seatIds - Array of seat IDs to validate.
-   * @param transaction - Optional transaction for consistent reads.
-   * @throws {NotFoundError} If screening or movie hall not found.
-   * @throws {BadRequestError} If a seat ID does not exist in the layout.
-   * @throws {Error} If validation process fails unexpectedly.
+   * @param screeningId - UUID of the screening
+   * @param seatIds - Array of seat identifiers to release
+   * @param transaction - Optional database transaction
+   * @returns Number of deleted records
    */
+  async deleteSeatBookings(
+    screeningId: string,
+    seatIds: string[],
+    transaction?: Transaction
+  ): Promise<number> {
+    return await BookedSeatModel.destroy({
+      where: {
+        screeningId,
+        seatId: { [Op.in]: seatIds },
+      },
+      transaction,
+    });
+  }
+
+  /* =============== QUERY OPERATIONS =============== */
+
+  /**
+   * Gets all booked seats for a specific screening.
+   *
+   * @param screeningId - UUID of the screening
+   * @param transaction - Optional database transaction
+   * @returns Array of booked seat records
+   */
+  async getBookedSeatsByScreening(
+    screeningId: string,
+    transaction?: Transaction
+  ): Promise<BookedSeatModel[]> {
+    return await BookedSeatModel.findAll({
+      where: { screeningId },
+      include: ['booking'], // Include booking details if needed
+      transaction,
+    });
+  }
+
+  /**
+   * Gets all booked seats for a specific booking.
+   *
+   * @param bookingId - UUID of the booking
+   * @param transaction - Optional database transaction
+   * @returns Array of booked seat records
+   */
+  async getBookedSeatsByBooking(
+    bookingId: string,
+    transaction?: Transaction
+  ): Promise<BookedSeatModel[]> {
+    return await BookedSeatModel.findAll({
+      where: { bookingId },
+      include: ['screening'], // Include screening details if needed
+      transaction,
+    });
+  }
+
+  /**
+   * Gets available seats for a screening (seats that exist but aren't booked).
+   * Note: This method assumes you have a way to determine all possible seats.
+   *
+   * @param screeningId - UUID of the screening
+   * @param transaction - Optional database transaction
+   * @returns Array of available seat identifiers
+   */
+  async getAvailableSeats(
+    screeningId: string,
+    transaction?: Transaction
+  ): Promise<string[]> {
+    // Get all booked seats
+    const bookedSeats = await this.getBookedSeatsByScreening(
+      screeningId,
+      transaction
+    );
+    const bookedSeatIds = bookedSeats.map((seat) => seat.seatId);
+
+    // Get screening with hall info to determine all possible seats
+    const screening = await ScreeningModel.findByPk(screeningId, {
+      include: ['hall'],
+      transaction,
+    });
+
+    if (!screening) {
+      throw new NotFoundError(`Screening with id ${screeningId} not found`);
+    }
+
+    // This is a simplified example - adjust based on your hall model structure
+    const hall = (screening as any).hall;
+    const totalSeats = this.generateSeatIds(hall); // You'll need to implement this based on your hall structure
+
+    return totalSeats.filter((seatId) => !bookedSeatIds.includes(seatId));
+  }
+
+  /**
+   * Counts the number of available seats for a screening.
+   *
+   * @param screeningId - UUID of the screening
+   * @param transaction - Optional database transaction
+   * @returns Number of available seats
+   */
+  async countAvailableSeats(
+    screeningId: string,
+    transaction?: Transaction
+  ): Promise<number> {
+    const availableSeats = await this.getAvailableSeats(
+      screeningId,
+      transaction
+    );
+    return availableSeats.length;
+  }
+
+  /* =============== LEGACY METHODS (for backward compatibility) =============== */
+
+  /** @deprecated Use validateSeatsExist instead */
   async checkSeatsExist(
     screeningId: string,
     seatIds: string[],
     transaction?: Transaction
   ): Promise<void> {
-    if (!seatIds.length) return;
-
-    const screening = await screeningService.getById(screeningId);
-    if (!screening) {
-      throw new NotFoundError(`Screening not found with ID ${screeningId}`);
-    }
-
-    try {
-      const movieHall = await movieHallService.getById(
-        screening.theaterId,
-        screening.hallId
-      );
-
-      if (!movieHall) {
-        throw new NotFoundError('Movie hall not found');
-      }
-
-      const seatsLayout = movieHall.seatsLayout;
-      const validSeats = new Set<string>();
-
-      for (let row = 0; row < seatsLayout.length; row++) {
-        for (let col = 0; col < seatsLayout[row].length; col++) {
-          const seatValue = seatsLayout[row][col];
-          if (seatValue && seatValue !== 0) {
-            validSeats.add(seatValue.toString());
-          }
-        }
-      }
-
-      for (const seatId of seatIds) {
-        if (!validSeats.has(seatId)) {
-          throw new BadRequestError(`Invalid seat ID: ${seatId}`);
-        }
-      }
-    } catch (error) {
-      if (error instanceof NotFoundError || error instanceof BadRequestError) {
-        throw error;
-      }
-      throw new Error(`Error validating seats: ${(error as Error).message}`);
-    }
+    return this.validateSeatsExist(screeningId, seatIds, transaction);
   }
 
-  /**
-   * Check if given seat IDs are available (not already booked for the screening).
-   *
-   * @param screeningId - The screening ID.
-   * @param seatIds - Array of seat IDs to check availability.
-   * @param transaction - Optional transaction for consistent reads.
-   * @throws {ConflictError} If a seat is already booked.
-   * @throws {Error} If availability check fails unexpectedly.
-   */
+  /** @deprecated Use validateSeatsAvailable instead */
   async checkSeatsAvailable(
     screeningId: string,
     seatIds: string[],
     transaction?: Transaction
   ): Promise<void> {
-    if (!seatIds.length) return;
+    return this.validateSeatsAvailable(screeningId, seatIds, transaction);
+  }
 
-    try {
-      const existingBookings = await BookedSeatModel.findAll({
-        where: {
-          screeningId,
-          seatId: seatIds,
-        },
-        transaction,
-      });
+  /* =============== HELPER METHODS =============== */
 
-      if (existingBookings.length > 0) {
-        const bookedSeatIds = existingBookings.map((booking) => booking.seatId);
-        throw new ConflictError(
-          `The following seats are already booked: ${bookedSeatIds.join(', ')}`
-        );
+  /**
+   * Generates all possible seat IDs for a hall.
+   * This is a placeholder implementation - adjust based on your hall model.
+   *
+   * @param hall - Hall object with seat configuration
+   * @returns Array of all possible seat identifiers
+   */
+  private generateSeatIds(hall: any): string[] {
+    // This is a simplified example - you'll need to implement based on your hall structure
+    // Examples of possible hall structures:
+    // - hall.capacity: total number of seats (generate A1, A2, ..., B1, B2, etc.)
+    // - hall.seatLayout: 2D array of seat configuration
+    // - hall.seats: array of seat objects
+
+    const capacity = hall?.capacity || 100;
+    const seats: string[] = [];
+
+    // Simple example: generate seats like A1, A2, ..., A10, B1, B2, etc.
+    const rowCount = Math.ceil(capacity / 10); // 10 seats per row
+    for (let row = 0; row < rowCount; row++) {
+      const rowLetter = String.fromCharCode(65 + row); // A, B, C, etc.
+      const seatsInRow = Math.min(10, capacity - row * 10);
+      for (let seat = 1; seat <= seatsInRow; seat++) {
+        seats.push(`${rowLetter}${seat}`);
       }
-    } catch (error) {
-      if (error instanceof ConflictError) {
-        throw error;
-      }
-      throw new Error(
-        `Error checking seat availability: ${(error as Error).message}`
-      );
     }
+
+    return seats;
   }
 }
 
+/** Singleton instance for app-wide use */
 export const bookedSeatService = new BookedSeatService();

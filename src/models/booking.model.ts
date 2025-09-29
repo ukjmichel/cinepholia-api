@@ -19,7 +19,7 @@
  *
  * Associated Interfaces:
  *   - BookingAttributes: structure of a booking in the database.
- *   - BookingCreationAttributes: optional fields during creation (bookingId, status, bookingDate).
+ *   - BookingCreationAttributes: optional fields during creation (bookingId, status, bookingDate, timestamps).
  *
  * Uses:
  *   - Creation, update, and management of booking statuses.
@@ -35,17 +35,17 @@ import {
   DataType,
   ForeignKey,
   BelongsTo,
+  HasMany,
   Index,
   Default,
 } from 'sequelize-typescript';
 import { Optional } from 'sequelize';
 import { UserModel } from './user.model.js';
 import { ScreeningModel } from './screening.model.js';
+import { BookedSeatModel } from './booked-seat.model.js';
 import { BookingStatus } from '../interfaces/booking.js';
 
-
-
-// Complete structure of a booking
+// Complete structure of a booking including timestamps
 export interface BookingAttributes {
   bookingId: string;
   userId: string;
@@ -54,11 +54,16 @@ export interface BookingAttributes {
   totalPrice: number;
   status: BookingStatus;
   bookingDate: Date;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 // Optional fields during creation (e.g., auto-generated)
 export interface BookingCreationAttributes
-  extends Optional<BookingAttributes, 'bookingId' | 'status' | 'bookingDate'> {}
+  extends Optional<
+    BookingAttributes,
+    'bookingId' | 'status' | 'bookingDate' | 'createdAt' | 'updatedAt'
+  > {}
 
 // Definition of the BookingModel
 @Table({ tableName: 'bookings', timestamps: true })
@@ -117,9 +122,9 @@ export class BookingModel
   declare totalPrice: number;
 
   // Booking status (default value: "pending")
-  @Default('pending')
+  @Default('PENDING')
   @Column({
-    type: DataType.ENUM('PENDING','USED','CANCELLED'),
+    type: DataType.ENUM('PENDING', 'USED', 'CANCELLED'),
     allowNull: false,
   })
   declare status: BookingStatus;
@@ -131,6 +136,10 @@ export class BookingModel
     defaultValue: DataType.NOW,
   })
   declare bookingDate: Date;
+
+  // Automatic timestamps (creation and update)
+  declare readonly createdAt: Date;
+  declare readonly updatedAt: Date;
 
   // Relationship: the booking belongs to a user
   @BelongsTo(() => UserModel, {
@@ -145,4 +154,12 @@ export class BookingModel
     targetKey: 'screeningId',
   })
   declare screening: ScreeningModel;
+
+  // Relationship: the booking has many booked seats
+  @HasMany(() => BookedSeatModel, {
+    foreignKey: 'bookingId',
+    sourceKey: 'bookingId',
+    as: 'bookedSeats',
+  })
+  declare bookedSeats: BookedSeatModel[];
 }

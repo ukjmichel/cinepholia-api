@@ -1,95 +1,135 @@
-// src/routes/booking.routes.ts
-import express from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
+import { bookingController } from '../controllers/booking.controller.js';
+import { validationResult } from 'express-validator';
 import {
-  createBooking,
-  updateBooking,
-  deleteBooking,
-  getAllBookings,
-  getBookingsByUser,
-  getBookingsByScreening,
-  getBookingsByStatus,
-  searchBooking,
-  markBookingAsUsed,
-  cancelBooking,
-  getBookingById,
-  getUpcomingBookingsByUser,
-} from '../controllers/booking.controller.js';
+  decodeJwtToken,
+  requireAdmin,
+  requireSelfOrAdmin,
+  requireStaffOrAdmin,
+} from '../middlewares/auth.middleware.js';
+import {
+  validateCreateBooking,
+  validateBookingIdParam,
+  validateUpdateBooking,
+  validateListBookings,
+  validateSearchBookings,
+  validateGetBookingsByUser,
+  validateGetBookingsByScreening,
+  validateGetBookingsByStatus,
+  validateGetUpcomingBookings,
+  validateBookingStatus,
+} from '../validators/booking.validator.js';
 
-import { userIdParamValidator } from '../validators/user.validator.js';
-import { decodeJwtToken } from '../middlewares/auth.middleware.js';
+const router = Router();
 
-const bookingRouter = express.Router();
+/* =============== MAIN CRUD ENDPOINTS =============== */
 
+/** List bookings - Staff/Admin only */
+router.get(
+  '/',
+  decodeJwtToken,
+  requireStaffOrAdmin,
+  validateListBookings,
+  bookingController.listBookings
+);
 
+/** Search bookings - Staff/Admin only */
+router.get(
+  '/search',
+  decodeJwtToken,
+  requireStaffOrAdmin,
+  validateSearchBookings,
+  bookingController.searchBookings
+);
 
-/** --------------------------
- * Routes
- * -------------------------- */
+/** Create a new booking - Authenticated users */
+router.post(
+  '/',
+  decodeJwtToken,
+  validateCreateBooking,
+  bookingController.createBooking
+);
 
-// Create booking (auth required)
-bookingRouter.post('/', decodeJwtToken, createBooking);
+/** Get single booking by ID - Owner or Staff/Admin */
+router.get(
+  '/:bookingId',
+  decodeJwtToken,
+  requireSelfOrAdmin,
+  validateBookingIdParam,
+  bookingController.getBooking
+);
 
-// ----- Specific routes before generic :bookingId -----
+/** Update booking - Owner or Admin */
+router.patch(
+  '/:bookingId',
+  decodeJwtToken,
+  validateUpdateBooking,
+  bookingController.updateBooking
+);
 
-// Search (staff/admin)
-bookingRouter.get('/search', decodeJwtToken, searchBooking);
-// All bookings (admin)
-bookingRouter.get('/', decodeJwtToken,  getAllBookings);
+/** Delete booking - Owner or Admin */
+router.delete(
+  '/:bookingId',
+  decodeJwtToken,
+  validateBookingIdParam,
+  bookingController.deleteBooking
+);
 
-// User’s bookings (self or admin)
-bookingRouter.get(
+/* =============== SPECIALIZED QUERY ENDPOINTS =============== */
+
+/** Get bookings by user - Owner or Staff/Admin */
+router.get(
   '/user/:userId',
   decodeJwtToken,
-  
-  userIdParamValidator,
-  getBookingsByUser
+  requireSelfOrAdmin,
+  validateGetBookingsByUser,
+  bookingController.getBookingsByUser
 );
 
-// Upcoming for user (self or admin)
-bookingRouter.get(
+/** Get upcoming bookings for user - Owner or Staff/Admin */
+router.get(
   '/user/:userId/upcoming',
   decodeJwtToken,
-  
-  userIdParamValidator,
- 
-  getUpcomingBookingsByUser
+  requireSelfOrAdmin,
+  validateGetUpcomingBookings,
+  bookingController.getUpcomingBookingsByUser
 );
 
-// By screening (staff/admin)
-bookingRouter.get(
+/** Get bookings by screening - Staff/Admin only */
+router.get(
   '/screening/:screeningId',
   decodeJwtToken,
-  
-
-  getBookingsByScreening
+  requireStaffOrAdmin,
+  validateGetBookingsByScreening,
+  bookingController.getBookingsByScreening
 );
 
-// By status (staff/admin)
-bookingRouter.get(
+/** Get bookings by status - Staff/Admin only */
+router.get(
   '/status/:status',
   decodeJwtToken,
-  getBookingsByStatus
+  requireStaffOrAdmin,
+  validateGetBookingsByStatus,
+  bookingController.getBookingsByStatus
 );
 
-// ----- BookingId-scoped (auth; ownership enforced in controllers) -----
+/* =============== STATUS MANAGEMENT ENDPOINTS =============== */
 
-// Read single booking (owner or staff/admin) — controller should enforce ownership
-bookingRouter.get('/:bookingId', decodeJwtToken,  getBookingById);
-
-// Update booking (owner or admin)
-bookingRouter.patch('/:bookingId', decodeJwtToken,  updateBooking);
-
-// Mark as used (staff/admin, e.g., scan at entrance)
-bookingRouter.patch(
-  '/:bookingId/used',
+/** Mark booking as used - Staff/Admin only */
+router.patch(
+  '/:bookingId/use',
   decodeJwtToken,
-  markBookingAsUsed
+  requireStaffOrAdmin,
+  validateBookingIdParam,
+  bookingController.markBookingAsUsed
 );
 
-// Cancel booking (owner or staff/admin)
-bookingRouter.patch('/:bookingId/cancel', decodeJwtToken,  cancelBooking);
+/** Cancel booking - Owner or Staff/Admin */
+router.patch(
+  '/:bookingId/cancel',
+  decodeJwtToken,
+  validateBookingIdParam,
+  bookingController.cancelBooking
+);
 
-// Delete booking (owner or admin)
-bookingRouter.delete('/:bookingId', decodeJwtToken,  deleteBooking);
-
-export default bookingRouter;
+export default router;

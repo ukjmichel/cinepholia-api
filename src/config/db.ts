@@ -5,6 +5,7 @@ import { MovieHallModel } from '../models/movie-hall.model.js';
 import { ScreeningModel } from '../models/screening.model.js';
 import { BookingModel } from '../models/booking.model.js';
 import { BookedSeatModel } from '../models/booked-seat.model.js';
+import { UserTokenModel } from '../models/user-token.model.js';
 
 let models: ModelCtor<any>[] = [];
 
@@ -43,7 +44,8 @@ export async function loadModels() {
     MovieHallModel,
     ScreeningModel,
     BookingModel,
-    BookedSeatModel
+    BookedSeatModel,
+    UserTokenModel
   ];
 
   sequelize.addModels(models);

@@ -1,24 +1,4 @@
-/**
- * Sequelize Model for Booked Seats in Screenings.
- *
- * This model manages the association between individual seat reservations
- * and screenings for a cinema application. Each record represents a seat
- * that has been booked for a particular screening as part of a booking.
- *
- * Key Fields:
- * - screeningId: The unique identifier for the screening (foreign key).
- * - seatId: The unique identifier for the seat within the screening.
- * - bookingId: The unique identifier for the booking (foreign key).
- *
- * Associations:
- * - Belongs to ScreeningModel (screeningId)
- * - Belongs to BookingModel (bookingId)
- *
- * Design:
- * - Composite primary key: (screeningId, seatId)
- * - No timestamps (as booking creation/update times are managed by BookingModel)
- * - CASCADE on delete for screeningId and bookingId (seats are released if screening or booking is deleted)
- */
+// Quick fix for current database schema
 import {
   Table,
   Model,
@@ -29,6 +9,7 @@ import {
   ForeignKey,
   BelongsTo,
 } from 'sequelize-typescript';
+import { Optional } from 'sequelize';
 import { ScreeningModel } from './screening.model.js';
 import { BookingModel } from './booking.model.js';
 
@@ -36,13 +17,21 @@ export interface BookedSeatAttributes {
   screeningId: string;
   seatId: string;
   bookingId: string;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
+export interface BookedSeatCreationAttributes
+  extends Optional<BookedSeatAttributes, 'createdAt' | 'updatedAt'> {}
+
 @Table({
-  tableName: 'booked_seat',
-  timestamps: false,
+  tableName: 'booked_seats',
+  timestamps: true,
 })
-export class BookedSeatModel extends Model<BookedSeatAttributes> {
+export class BookedSeatModel extends Model<
+  BookedSeatAttributes,
+  BookedSeatCreationAttributes
+> {
   @PrimaryKey
   @IsUUID(4)
   @ForeignKey(() => ScreeningModel)
@@ -72,9 +61,9 @@ export class BookedSeatModel extends Model<BookedSeatAttributes> {
   })
   bookingId!: string;
 
+  declare readonly createdAt: Date;
+  declare readonly updatedAt: Date;
+
   @BelongsTo(() => ScreeningModel)
   screening!: ScreeningModel;
-
-  @BelongsTo(() => BookingModel)
-  booking!: BookingModel;
 }

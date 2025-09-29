@@ -14,6 +14,7 @@
  * - `lastRequestAt` enforces rate limiting between token requests.
  * - `expiresAt` defines when the token becomes invalid (checked in queries).
  * - Cascade delete ensures tokens are removed when their user is deleted.
+ * - Automatic timestamps (createdAt, updatedAt) via timestamps: true.
  */
 
 import {
@@ -37,14 +38,19 @@ export interface UserTokenAttributes {
   expiresAt: Date;
   attempts: number; // failed validation attempts
   lastRequestAt?: Date; // last time a token was requested
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface UserTokenCreationAttributes
-  extends Optional<UserTokenAttributes, 'attempts' | 'lastRequestAt'> {}
+  extends Optional<
+    UserTokenAttributes,
+    'attempts' | 'lastRequestAt' | 'createdAt' | 'updatedAt'
+  > {}
 
 @Table({
   tableName: 'user_tokens',
-  timestamps: true,
+  timestamps: true, // Enables automatic createdAt and updatedAt
 })
 export class UserTokenModel
   extends Model<UserTokenAttributes, UserTokenCreationAttributes>
@@ -86,6 +92,10 @@ export class UserTokenModel
   /** Timestamp of the last token request (for rate limiting) */
   @Column({ type: DataType.DATE, allowNull: true })
   declare lastRequestAt?: Date;
+
+  /** Automatic timestamps (creation and update) */
+  declare readonly createdAt: Date;
+  declare readonly updatedAt: Date;
 
   /** Relation to User (cascade delete when user is removed) */
   @BelongsTo(() => UserModel, {
