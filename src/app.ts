@@ -35,6 +35,8 @@ import screeningRouter from './routes/screening.route.js';
 import bookingRouter from './routes/booking.route.js';
 import userTokenRouter from './routes/user-token.route.js';
 import contactRouter from './routes/contact.route.js';
+import bookingCommentRouter from './routes/booking-comment.route.js';
+import incidentReportRouter from './routes/incident-report.route.js';
 
 const app = express();
 
@@ -61,6 +63,8 @@ app.use('/api/movie-halls', movieHallRouter);
 app.use('/api/screenings', screeningRouter);
 app.use('/api/bookings', bookingRouter);
 app.use('/api/contact', contactRouter);
+app.use('/api', bookingCommentRouter);
+app.use('/api/incident-reports', incidentReportRouter);
 
 // Centralized error handler (keep this LAST).
 app.use(errorHandler as ErrorRequestHandler);

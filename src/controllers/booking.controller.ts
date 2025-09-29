@@ -324,15 +324,6 @@ export class BookingController {
     try {
       const booking = await bookingService.getById(req.params.bookingId);
 
-      // Optional: enforce ownership here as well if route doesn't already
-      const roles: string[] = Array.isArray((req as any).user?.roles)
-        ? (req as any).user.roles
-        : [];
-      const isStaffOrAdmin = roles.includes('staff') || roles.includes('admin');
-      if (!isStaffOrAdmin && !canActOnBooking(req, booking.userId)) {
-        res.status(403).json({ message: 'Forbidden', data: null });
-        return;
-      }
 
       res.status(200).json({
         message: 'Booking retrieved successfully',
