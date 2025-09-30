@@ -1,14 +1,19 @@
 /**
- * Sequelize Model for Movie Theater Hall (MovieHallModel).
+ * @module models/movie-hall.model.ts
+ * @description Sequelize Model for Movie Theater Halls.
  *
- * This model represents a cinema hall inside a movie theater, including layout and projection quality.
  *
- * Key Features:
- * - Composite primary key: theaterId + hallId
- * - seatsLayout: 2D array of seats (strings or numbers)
- * - quality: Type of projection (2D, 3D, IMAX, 4DX)
- * - BelongsTo: MovieTheaterModel
- * - HasMany: ScreeningModel (declared after class to avoid circular dependency)
+ * This file defines the `MovieHallModel` which represents a cinema hall inside a movie theater,
+ * including its seat layout and projection quality.
+ * It uses `sequelize-typescript` for entity declaration and relationship management.
+ *
+ * - Uses a composite primary key: `theaterId` + `hallId` to uniquely identify each hall.
+ * - The `seatsLayout` stores a 2D array representing rows and seats (strings or numbers).
+ * - The `quality` field defines the projection type (2D, 3D, IMAX, 4DX).
+ * - Each hall belongs to a movie theater via foreign key (`theaterId`).
+ * - Custom validators ensure data integrity for IDs and seat layout structure.
+ * - The relationships with MovieTheaterModel, ScreeningModel, and IncidentReportModel
+ *   are defined in associations.ts to prevent circular dependencies.
  */
 
 import {
@@ -18,31 +23,78 @@ import {
   PrimaryKey,
   DataType,
   ForeignKey,
-  BelongsTo,
-  HasMany,
 } from 'sequelize-typescript';
 
-/**
- * ⚠️ Important:
- * These imports are placed early to prevent circular dependency and temporal dead zone (TDZ) issues.
- * When decorators like @BelongsTo or @HasMany reference another model, that model must already be initialized.
- */
 import { MovieTheaterModel } from './movie-theater.model.js';
 import { ScreeningModel } from './screening.model.js';
-import { MovieHallAttributes, MovieHallCreationAttributes } from '../interfaces/movie-hall.js';
+import {
+  MovieHallAttributes,
+  MovieHallCreationAttributes,
+} from '../interfaces/movie-hall.js';
 
 /**
- * Hall quality type definition
+ * @typedef {('2D'|'3D'|'IMAX'|'4DX')} HallQuality
+ * @description Enumeration of available projection quality types for cinema halls
  */
 export type HallQuality = '2D' | '3D' | 'IMAX' | '4DX';
 
 /**
- * MovieHall attributes interface.
- */
-
-
-/**
- * Sequelize model definition for movie_halls table.
+ * @class MovieHallModel
+ * @extends {Model<MovieHallAttributes, MovieHallCreationAttributes>}
+ * @implements {MovieHallAttributes}
+ * @description Sequelize model for managing movie theater halls and their configurations
+ *
+ * This model uses a composite primary key (theaterId + hallId) to ensure each hall
+ * is uniquely identified within its parent theater. The seat layout is stored as
+ * a flexible 2D array structure that can accommodate various seating arrangements.
+ *
+ * @example
+ * // Creating a new movie hall with seat layout
+ * await MovieHallModel.create({
+ *   theaterId: 'theater-123',
+ *   hallId: 'hall-1',
+ *   seatsLayout: [
+ *     ['A1', 'A2', 'A3', 'A4', 'A5'],
+ *     ['B1', 'B2', 'B3', 'B4', 'B5'],
+ *     ['C1', 'C2', 'C3', 'C4', 'C5']
+ *   ],
+ *   quality: 'IMAX'
+ * });
+ *
+ * @example
+ * // Finding all halls in a specific theater
+ * const halls = await MovieHallModel.findAll({
+ *   where: { theaterId: 'theater-123' },
+ *   include: [{ model: MovieTheaterModel, as: 'theater' }]
+ * });
+ *
+ * @example
+ * // Finding a specific hall by composite key
+ * const hall = await MovieHallModel.findOne({
+ *   where: {
+ *     theaterId: 'theater-123',
+ *     hallId: 'hall-1'
+ *   }
+ * });
+ *
+ * @example
+ * // Updating hall quality
+ * await MovieHallModel.update(
+ *   { quality: '3D' },
+ *   {
+ *     where: {
+ *       theaterId: 'theater-123',
+ *       hallId: 'hall-1'
+ *     }
+ *   }
+ * );
+ *
+ * @example
+ * // Finding all IMAX halls across all theaters
+ * const imaxHalls = await MovieHallModel.findAll({
+ *   where: { quality: 'IMAX' },
+ *   include: [{ model: MovieTheaterModel, as: 'theater' }]
+ * });
  */
 @Table({ tableName: 'movie_halls', timestamps: true })
 export class MovieHallModel
@@ -50,8 +102,15 @@ export class MovieHallModel
   implements MovieHallAttributes
 {
   /**
-   * Foreign key and part of the composite primary key.
-   * Identifies the movie theater to which this hall belongs.
+   * @property {string} theaterId
+   * @description Theater identifier (composite primary key and foreign key to MovieTheaterModel)
+   * @type {string}
+   * @primary
+   * @required
+   * @minLength 2
+   * @maxLength 36
+   * @pattern Alphanumeric characters, underscores, and hyphens only
+   * @validate Must be 2-36 characters and contain only letters, numbers, underscores, or hyphens
    */
   @PrimaryKey
   @ForeignKey(() => MovieTheaterModel)
@@ -72,7 +131,15 @@ export class MovieHallModel
   declare theaterId: string;
 
   /**
-   * Hall identifier (unique per theater)
+   * @property {string} hallId
+   * @description Hall identifier unique within the theater (composite primary key)
+   * @type {string}
+   * @primary
+   * @required
+   * @minLength 1
+   * @maxLength 16
+   * @pattern Alphanumeric characters, underscores, and hyphens only
+   * @validate Must be 1-16 characters and contain only letters, numbers, underscores, or hyphens
    */
   @PrimaryKey
   @Column({
@@ -92,7 +159,33 @@ export class MovieHallModel
   declare hallId: string;
 
   /**
-   * Seat layout of the hall, stored as a 2D array of seat identifiers or numbers.
+   * @property {(string|number)[][]} seatsLayout
+   * @description 2D array representing the hall's seat layout
+   * @type {(string|number)[][]}
+   * @required
+   * @format JSON array of arrays
+   * @validate Must be a 2D array with non-empty rows; each seat must be a non-empty string or non-negative number
+   *
+   * @example
+   * // String-based seat identifiers
+   * [
+   *   ['A1', 'A2', 'A3'],
+   *   ['B1', 'B2', 'B3']
+   * ]
+   *
+   * @example
+   * // Numeric seat identifiers
+   * [
+   *   [1, 2, 3],
+   *   [4, 5, 6]
+   * ]
+   *
+   * @example
+   * // Mixed layout (strings and numbers)
+   * [
+   *   ['A1', 'A2', 0],  // 0 could represent an aisle or empty space
+   *   ['B1', 'B2', 'B3']
+   * ]
    */
   @Column({
     type: DataType.JSON,
@@ -125,7 +218,12 @@ export class MovieHallModel
   declare seatsLayout: (string | number)[][];
 
   /**
-   * Projection quality of the hall (e.g. 2D, 3D, IMAX, 4DX).
+   * @property {HallQuality} quality
+   * @description Projection quality and technology available in the hall
+   * @type {HallQuality}
+   * @required
+   * @default '2D'
+   * @enum ['2D', '3D', 'IMAX', '4DX']
    */
   @Column({
     type: DataType.ENUM('2D', '3D', 'IMAX', '4DX'),
@@ -135,25 +233,37 @@ export class MovieHallModel
   declare quality: HallQuality;
 
   /**
-   * Association: The hall belongs to a movie theater.
+   * @property {Date} createdAt
+   * @description Timestamp when the hall record was created
+   * @type {Date}
+   * @readonly
    */
-  @BelongsTo(() => MovieTheaterModel, {
-    foreignKey: 'theaterId',
-    targetKey: 'theaterId',
-    onDelete: 'CASCADE',
-    onUpdate: 'CASCADE',
-  })
+  declare readonly createdAt: Date;
+
+  /**
+   * @property {Date} updatedAt
+   * @description Timestamp when the hall record was last updated
+   * @type {Date}
+   * @readonly
+   */
+  declare readonly updatedAt: Date;
+
+  /**
+   * All associations are now defined in associations.ts
+   * This centralizes all relationships and prevents circular dependency issues
+   *
+   * @property {MovieTheaterModel} theater
+   * @description Associated movie theater that contains this hall
+   * @type {MovieTheaterModel}
+   * @relation BelongsTo (defined in associations.ts)
+   */
   declare theater: MovieTheaterModel;
 
   /**
-   * Association: The hall has many screenings (defined outside the class for circular safety).
+   * @property {ScreeningModel[]} screenings
+   * @description All movie screenings scheduled in this hall
+   * @type {ScreeningModel[]}
+   * @relation HasMany (defined in associations.ts)
    */
-  @HasMany(() => ScreeningModel)
   declare screenings: ScreeningModel[];
-
-  /**
-   * Automatic timestamps (creation and update)
-   */
-  declare readonly createdAt: Date;
-  declare readonly updatedAt: Date;
 }

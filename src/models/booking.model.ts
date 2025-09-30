@@ -1,5 +1,8 @@
 /**
- * Sequelize Model for Bookings (BookingModel).
+ * @module models/booking.model.ts
+ * @description Sequelize Model for Bookings (BookingModel).
+ *
+ * UPDATED: Removed @BelongsTo and @HasMany decorators - associations now defined in associations.ts
  *
  * This file defines the data model for bookings in the cinema application.
  * It manages the reservation of seats by users for a given screening.
@@ -13,7 +16,7 @@
  *  - The number of seats booked and the total price are stored with validations (required minimums).
  *  - The status of the booking ("pending", "used", "canceled") changes according to the booking lifecycle.
  *  - The booking date is automatically recorded.
- *  - @BelongsTo relationships with UserModel and ScreeningModel for easy access to the related user and screening.
+ *  - Relationships with UserModel, ScreeningModel, and BookedSeatModel are NOW defined in associations.ts
  *  - Indexes on userId and screeningId to optimize searches.
  *  - Timestamps (createdAt, updatedAt) are automatically added thanks to the `timestamps` option.
  *
@@ -34,8 +37,6 @@ import {
   PrimaryKey,
   DataType,
   ForeignKey,
-  BelongsTo,
-  HasMany,
   Index,
   Default,
 } from 'sequelize-typescript';
@@ -141,25 +142,12 @@ export class BookingModel
   declare readonly createdAt: Date;
   declare readonly updatedAt: Date;
 
-  // Relationship: the booking belongs to a user
-  @BelongsTo(() => UserModel, {
-    foreignKey: 'userId',
-    targetKey: 'userId',
-  })
+  /**
+   * @property {UserModel} user - Populated by associations.ts
+   * @property {ScreeningModel} screening - Populated by associations.ts
+   * @property {BookedSeatModel[]} bookedSeats - Populated by associations.ts
+   */
   declare user: UserModel;
-
-  // Relationship: the booking belongs to a screening
-  @BelongsTo(() => ScreeningModel, {
-    foreignKey: 'screeningId',
-    targetKey: 'screeningId',
-  })
   declare screening: ScreeningModel;
-
-  // Relationship: the booking has many booked seats
-  @HasMany(() => BookedSeatModel, {
-    foreignKey: 'bookingId',
-    sourceKey: 'bookingId',
-    as: 'bookedSeats',
-  })
   declare bookedSeats: BookedSeatModel[];
 }
