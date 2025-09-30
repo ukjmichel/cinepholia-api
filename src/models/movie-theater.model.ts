@@ -281,7 +281,8 @@ export class MovieTheaterModel
     allowNull: false,
     validate: {
       is: {
-        args: /^(\+?\d{1,3})?[-. ]?(\d{2,4}[-. ]?){2,5}\d{2,4}$/,
+        // More permissive regex that handles international formats
+        args: /^[\+]?[\d]+([\s\.\-][\d]+)*$/,
         msg: 'Phone number format is invalid',
       },
       len: {

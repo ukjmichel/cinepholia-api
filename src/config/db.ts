@@ -9,7 +9,7 @@ import { ScreeningModel } from '../models/screening.model.js';
 import { BookingModel } from '../models/booking.model.js';
 import { BookedSeatModel } from '../models/booked-seat.model.js';
 import { UserTokenModel } from '../models/user-token.model.js';
-import { IncidentReportModel } from '../models/incident-report.model.js';
+
 import { registerAssociations } from '../models/association.js';
 
 let models: ModelCtor<any>[] = [];
@@ -44,7 +44,6 @@ export function loadModels() {
     BookingModel,
     BookedSeatModel,
     UserTokenModel,
-    IncidentReportModel,
   ];
 
   sequelize.addModels(models);

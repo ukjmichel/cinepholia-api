@@ -1,18 +1,18 @@
 import { Sequelize } from 'sequelize-typescript';
 import { UserModel } from '../../models/user.model.js';
 import { AuthorizationModel } from '../../models/authorization.model.js';
+import { sequelize, loadModels } from '../../config/db.js';
+import { registerAssociations } from '../../models/association.js';
 
 describe('UserModel', () => {
-  let sequelize: Sequelize;
-
   beforeAll(async () => {
-    sequelize = new Sequelize({
-      dialect: 'sqlite',
-      storage: ':memory:',
-      logging: false,
-      models: [UserModel, AuthorizationModel],
-    });
+    // Load all models into Sequelize
+    loadModels();
 
+    // Register associations INSIDE beforeAll, after models are loaded
+    registerAssociations();
+
+    // Sync database with force:true for clean test environment
     await sequelize.sync({ force: true });
   });
 
