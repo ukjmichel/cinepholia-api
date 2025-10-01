@@ -18,7 +18,6 @@
  */
 
 import {
-  BookingComment,
   BookingCommentModel,
 } from '../models/booking-comment.schema.js';
 import { NotFoundError } from '../errors/not-found-error.js';
@@ -27,6 +26,7 @@ import { BookingModel } from '../models/booking.model.js';
 import { ScreeningModel } from '../models/screening.model.js';
 import { MovieModel } from '../models/movie.model.js';
 import { Op } from 'sequelize';
+import { BookingComment } from '../interfaces/booking-comment.js';
 
 export interface BookingCommentFilter {
   comment?: string;

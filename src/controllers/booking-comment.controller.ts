@@ -33,12 +33,13 @@
 
 import { Request, Response, NextFunction } from 'express';
 import { bookingCommentService } from '../services/booking-comment.service.js';
-import { BookingComment } from '../models/booking-comment.schema.js';
+
 import { UserModel } from '../models/user.model.js';
 import { BookingModel } from '../models/booking.model.js';
 import createDOMPurify from 'dompurify';
 import { JSDOM } from 'jsdom';
 import { BadRequestError } from '../errors/bad-request-error.js';
+import { BookingComment } from '../interfaces/booking-comment.js';
 
 // DOMPurify instance for sanitizing comments
 const { window } = new JSDOM('');

@@ -17,6 +17,7 @@
  */
 
 import mongoose, { Schema } from 'mongoose';
+import { BookingComment } from '../interfaces/booking-comment';
 
 /**
  * @typedef {('pending'|'confirmed')} CommentStatus
@@ -35,14 +36,7 @@ export type CommentStatus = 'pending' | 'confirmed';
  * @property {Date} [createdAt] - Timestamp when the comment was created (auto-generated)
  * @property {Date} [updatedAt] - Timestamp when the comment was last updated (auto-generated)
  */
-export interface BookingComment {
-  bookingId: string;
-  comment: string;
-  rating: number;
-  status: 'pending' | 'confirmed';
-  createdAt?: Date;
-  updatedAt?: Date;
-}
+
 
 /**
  * @constant {RegExp} uuidRegex
