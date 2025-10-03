@@ -9,6 +9,7 @@ import {
   uploadMiddleware,
   handleUploadErrors,
 } from '../middlewares/upload.middleware.js';
+import movieStatsRouter from './movie-stats.route.js';
 
 const movieRouter = Router();
 
@@ -52,9 +53,6 @@ movieRouter.delete(
   movieController.deleteMovie
 );
 
-/* =============== ERROR HANDLING =============== */
-
-// Handle upload errors through centralized error handler
-movieRouter.use(handleUploadErrors);
+movieRouter.use('/', movieStatsRouter);
 
 export default movieRouter;

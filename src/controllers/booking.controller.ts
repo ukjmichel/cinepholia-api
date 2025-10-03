@@ -11,6 +11,7 @@
  * - Transactional seat booking operations
  * - Enhanced error handling and validation
  * - Authorization and access control
+ * - Movie statistics tracking integration
  */
 
 import { Request, Response, NextFunction } from 'express';
@@ -20,6 +21,7 @@ import { sequelize } from '../config/db.js';
 import { bookingService } from '../services/booking.service.js';
 import { bookedSeatService } from '../services/booked-seat.service.js';
 import screeningService from '../services/screening.service.js';
+import movieStatsService from '../services/movie-stats.service.js';
 
 import { NotFoundError } from '../errors/not-found-error.js';
 import { BadRequestError } from '../errors/bad-request-error.js';
@@ -174,12 +176,10 @@ export class BookingController {
 
     // ---- Basic validation ----
     if (!userId || typeof userId !== 'string') {
-      res
-        .status(400)
-        .json({
-          message: 'userId is required and must be a string',
-          data: null,
-        });
+      res.status(400).json({
+        message: 'userId is required and must be a string',
+        data: null,
+      });
       return;
     }
     if (!screeningId || typeof screeningId !== 'string') {
@@ -226,12 +226,10 @@ export class BookingController {
         (screening as any).startTime ?? (screening as any).startsAt;
       if (startsAt && dayjs(startsAt).isBefore(dayjs())) {
         await t.rollback();
-        res
-          .status(400)
-          .json({
-            message: 'Screening already started or finished',
-            data: null,
-          });
+        res.status(400).json({
+          message: 'Screening already started or finished',
+          data: null,
+        });
         return;
       }
 
@@ -281,6 +279,26 @@ export class BookingController {
 
       await t.commit();
 
+      // 5) Update movie statistics (after transaction commits)
+      // Extract movieId from the screening
+      const movieId = (screening as any).movieId;
+      if (movieId) {
+        try {
+          // Add the number of seats booked to the stats
+          await movieStatsService.addBooking(
+            movieId,
+            seatsNumber,
+            new Date().toISOString().slice(0, 10)
+          );
+          console.log(
+            `Movie stats updated: added ${seatsNumber} bookings for movie ${movieId}`
+          );
+        } catch (statsError) {
+          // Log error but don't fail the booking
+          console.error('Failed to update movie stats:', statsError);
+        }
+      }
+
       res.status(201).json({
         message: 'Booking created successfully',
         data: null,
@@ -323,7 +341,6 @@ export class BookingController {
   ): Promise<void> => {
     try {
       const booking = await bookingService.getById(req.params.bookingId);
-
 
       res.status(200).json({
         message: 'Booking retrieved successfully',
@@ -396,6 +413,10 @@ export class BookingController {
         return;
       }
 
+      // Store booking details before deletion for stats update
+      const seatsNumber = booking.seatsNumber;
+      const screeningId = booking.screeningId;
+
       // Remove seat bookings first
       await bookedSeatService.deleteSeatBookingsByBookingId(bookingId, t);
 
@@ -410,6 +431,27 @@ export class BookingController {
       }
 
       await t.commit();
+
+      // Update movie statistics (after transaction commits)
+      try {
+        const screening = await screeningService.getById(screeningId);
+        const movieId = (screening as any)?.movieId;
+
+        if (movieId) {
+          await movieStatsService.removeBooking(
+            movieId,
+            seatsNumber,
+            new Date().toISOString().slice(0, 10)
+          );
+          console.log(
+            `Movie stats updated: removed ${seatsNumber} bookings for movie ${movieId}`
+          );
+        }
+      } catch (statsError) {
+        // Log error but don't fail the deletion
+        console.error('Failed to update movie stats:', statsError);
+      }
+
       res
         .status(200)
         .json({ message: 'Booking deleted successfully', data: null });
@@ -611,9 +653,34 @@ export class BookingController {
         return;
       }
 
+      // Store booking details before cancellation for stats update
+      const seatsNumber = booking.seatsNumber;
+      const screeningId = booking.screeningId;
+
       const updated = await bookingService.update(bookingId, {
         status: 'CANCELLED',
       });
+
+      // Update movie statistics (after status update)
+      try {
+        const screening = await screeningService.getById(screeningId);
+        const movieId = (screening as any)?.movieId;
+
+        if (movieId) {
+          await movieStatsService.removeBooking(
+            movieId,
+            seatsNumber,
+            new Date().toISOString().slice(0, 10)
+          );
+          console.log(
+            `Movie stats updated: removed ${seatsNumber} bookings for movie ${movieId} (cancelled)`
+          );
+        }
+      } catch (statsError) {
+        // Log error but don't fail the cancellation
+        console.error('Failed to update movie stats:', statsError);
+      }
+
       res.status(200).json({
         message: 'Booking cancelled successfully',
         data: updated,

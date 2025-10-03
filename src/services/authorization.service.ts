@@ -56,7 +56,7 @@ export class AuthorizationService {
   ): Promise<AuthorizationModel> {
     const auth = await AuthorizationModel.findOne({
       where: { userId },
-      include: [UserModel],
+      include: [{ model: UserModel, as: 'user' }], // ✅ Fixed
       transaction: options?.transaction,
     });
     if (!auth) throw new NotFoundError('Authorization not found for this user');
@@ -115,7 +115,7 @@ export class AuthorizationService {
     const { rows: authorizations, count: total } =
       await AuthorizationModel.findAndCountAll({
         where,
-        include: [UserModel],
+        include: [{ model: UserModel, as: 'user' }], // ✅ Fixed
         offset,
         limit: pageSize,
         order: [['createdAt', 'DESC']],
